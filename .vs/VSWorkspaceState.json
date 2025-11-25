@@ -1,0 +1,16 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\lib\\providers",
+    "\\lib\\screens",
+    "\\lib\\screens_veo",
+    "\\lib\\services",
+    "\\lib\\theme",
+    "\\lib\\view_model",
+    "\\lib\\view_model_naraku",
+    "\\lib\\view_model_veo",
+    "\\web"
+  ],
+  "SelectedNode": "\\web\\index.html",
+  "PreviewInSolutionExplorer": false
+}
