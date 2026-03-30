@@ -1,11 +1,10 @@
-// [RILIS BERSIH - IMPLEMENTASI TEMA DARK MODERN]
-// KATEGORI_TEMA_BARU NO_URUT_05
+// [RILIS FINAL - TIMELINE VEO: POLICY COMPLIANCE & DARK THEME]
+// KATEGORI_POLICY_UPDATE NO_URUT_04
 // NAMA FILE: lib/screens_veo/timeline_review_veo_screen.dart
 // TUJUAN:
-// - [FITUR] Menerapkan AppTheme.darkTheme ke halaman ini.
-// - [REFAKTOR] Menghapus warna hardcode dari AppBar.
-// - [ANTI-REGRESI] Mempertahankan semua warna fungsional/status
-// - (tombol Play, Render, Download, highlight scene, status error).
+// - [POLICY] Menambahkan tombol Lapor (Flag) per Scene untuk kepatuhan Google Play.
+// - [CRITICAL] Integrasi User ID untuk pelaporan.
+// - [MAINTENANCE] Mempertahankan Tema Dark Modern dan fitur Edit Prompt yang sudah ada.
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -25,6 +24,7 @@ import '../services_veo/firestore_veo_service.dart';
 import '../view_model_veo/timeline_veo_view_model.dart';
 import 'visual_setting_veo_screen.dart';
 import '../providers_veo/visual_settings_veo_provider.dart';
+import '../providers/user_provider.dart'; // [WAJIB] Untuk user.uid saat lapor
 
 // --- (Definisi Provider Tidak Berubah) ---
 final firestoreVeoServiceProvider =
@@ -749,8 +749,7 @@ class _TimelineReviewVeoScreenState
                                         child: Align(
                                           alignment: Alignment(
                                               0.0,
-                                              visualSettings
-                                                  .descriptionSettings
+                                              visualSettings.descriptionSettings
                                                   .verticalAlignment),
                                           child: FractionallySizedBox(
                                             widthFactor: visualSettings
@@ -823,7 +822,6 @@ class _TimelineReviewVeoScreenState
 
                     const Divider(height: 1, thickness: 1),
 
-// [PATCH 3 - UI FRONTEND (KATEGORI_EDIT_PROMPT)]
                     // (Timeline List dengan Editor Prompt Manual)
                     Expanded(
                       child: processedTimelineAsync.when(
@@ -878,16 +876,13 @@ class _TimelineReviewVeoScreenState
 
                                     final bool isSceneProcessing =
                                         scene.status == 'QUEUED_FOR_REFINE' ||
-                                        scene.status == 'IS_REFINING' ||
-                                        scene.status == 'QUEUED_FOR_VIDEO' ||
-                                        scene.status == 'GENERATING_VIDEO' ||
-                                        scene.status == 'PENDING_REFINEMENT' ||
-                                        // [PENTING] Status manual tidak ada lagi karena kita pakai PENDING_REFINEMENT
-                                        // Tapi status PENDING_MANUAL_REFIX dihapus dari backend, jadi aman.
-                                        false;
+                                            scene.status == 'IS_REFINING' ||
+                                            scene.status == 'QUEUED_FOR_VIDEO' ||
+                                            scene.status == 'GENERATING_VIDEO' ||
+                                            scene.status == 'PENDING_REFINEMENT' ||
+                                            false;
 
                                     // Logika Visibilitas Tombol Edit (Hanya jika ERROR)
-                                    // Menggunakan (?? '') untuk null safety (Anti-Regresi)
                                     final bool isError = (scene.status ?? '').startsWith('ERROR');
 
                                     return Card(
@@ -911,12 +906,13 @@ class _TimelineReviewVeoScreenState
                                               .read(selectedSceneVeoProvider
                                                   .notifier)
                                               .state = scene;
+                                          // Note: Tidak perlu set imageUrl di Veo
                                         },
                                         child: Padding(
                                           padding: const EdgeInsets.all(8.0),
                                           child: Row(
                                             children: [
-                                              // [KATEGORI_FITUR_UI] Nomor Urut Scene
+                                              // Nomor Urut Scene
                                               Container(
                                                 width: 32,
                                                 alignment: Alignment.centerLeft,
@@ -1016,14 +1012,13 @@ class _TimelineReviewVeoScreenState
                                                 ),
                                               ),
 
-                                              // [PERUBAHAN UTAMA: TOMBOL EDIT PROMPT]
+                                              // TOMBOL EDIT PROMPT (Jika Error)
                                               if (isError)
                                                 IconButton(
-                                                  icon: Icon(Icons.edit, // Ikon Edit
+                                                  icon: Icon(Icons.edit, 
                                                       color: Colors.orange[700]),
                                                   tooltip: 'Edit Prompt & Retry',
                                                   onPressed: () {
-                                                    // Persiapkan controller dengan prompt yang gagal (atau raw)
                                                     final TextEditingController _promptController = TextEditingController(
                                                       text: scene.refinedPrompt ?? scene.rawPrompt ?? ""
                                                     );
@@ -1041,7 +1036,6 @@ class _TimelineReviewVeoScreenState
                                                               'Generation failed. You can manually edit the prompt below to fix policy issues or improve quality.\n',
                                                               style: Theme.of(context).textTheme.bodyMedium
                                                              ),
-                                                             // [INPUT FIELD BARU]
                                                              TextField(
                                                                controller: _promptController,
                                                                maxLines: 5,
@@ -1077,13 +1071,12 @@ class _TimelineReviewVeoScreenState
                                                                 return;
                                                               }
 
-                                                              // [PANGGIL METODE SERVICE BARU]
                                                               ref.read(firestoreVeoServiceProvider)
-                                                                 .updateScenePromptAndRegenerate(
-                                                                    widget.projectId,
-                                                                    scene.id,
-                                                                    newPrompt // Kirim prompt editan user
-                                                                 );
+                                                               .updateScenePromptAndRegenerate(
+                                                                  widget.projectId,
+                                                                  scene.id,
+                                                                  newPrompt 
+                                                               );
                                                               Navigator.of(ctx).pop();
                                                             },
                                                           ),
@@ -1092,6 +1085,18 @@ class _TimelineReviewVeoScreenState
                                                     );
                                                   },
                                                 ),
+                                              
+                                              // [PATCH 2] TOMBOL LAPOR / FLAG
+                                              const SizedBox(width: 4),
+                                              IconButton(
+                                                icon: const Icon(Icons.flag_outlined, 
+                                                  color: Colors.redAccent, 
+                                                  size: 20
+                                                ),
+                                                tooltip: 'Lapor Konten Scene ${index + 1}',
+                                                onPressed: () => _showSceneReportDialog(scene, index),
+                                              ),
+
                                             ],
                                           ),
                                         ),
@@ -1239,14 +1244,13 @@ class _TimelineReviewVeoScreenState
                                                                 child: Row(
                                                                   children: [
                                                                     const SizedBox(
-                                                                      width: 20,
-                                                                      height:
-                                                                          20,
-                                                                      child:
-                                                                          CircularProgressIndicator(
-                                                                              strokeWidth:
-                                                                                  3),
-                                                                    ),
+                                                                        width: 20,
+                                                                        height:
+                                                                            20,
+                                                                        child:
+                                                                            CircularProgressIndicator(
+                                                                                strokeWidth:
+                                                                                    3)),
                                                                     const SizedBox(
                                                                         width:
                                                                             12),
@@ -1289,12 +1293,13 @@ class _TimelineReviewVeoScreenState
                                                                 ? null
                                                                 : () async {
                                                                     setDialogState(
-                                                                        () {
-                                                                      _isSaving =
-                                                                          true;
-                                                                      _loadingMessage =
-                                                                          "Saving render packet...";
-                                                                    });
+                                                                      () {
+                                                                        _isSaving =
+                                                                            true;
+                                                                        _loadingMessage =
+                                                                            "Saving render packet...";
+                                                                      },
+                                                                    );
                                                                     try {
                                                                       logger.info(
                                                                           "Step 1/2: Preparing and saving full render packet for ${widget.projectId}...");
@@ -1303,15 +1308,17 @@ class _TimelineReviewVeoScreenState
                                                                           widget
                                                                               .projectId);
                                                                       setDialogState(
-                                                                          () {
-                                                                        _loadingMessage =
-                                                                            "Triggering backend render...";
-                                                                      });
+                                                                        () {
+                                                                          _loadingMessage =
+                                                                              "Triggering backend render...";
+                                                                        },
+                                                                      );
                                                                       await Future
                                                                           .delayed(
-                                                                              const Duration(
-                                                                                  milliseconds:
-                                                                                      200));
+                                                                        const Duration(
+                                                                            milliseconds:
+                                                                                200),
+                                                                      );
                                                                       logger.info(
                                                                           "Step 2/2: Updating status to RENDER_READY for ${widget.projectId}...");
                                                                       await ref
@@ -1321,13 +1328,13 @@ class _TimelineReviewVeoScreenState
                                                                               widget
                                                                                   .projectId,
                                                                               {
-                                                                                'status':
-                                                                                    'RENDER_READY',
-                                                                                'renderStartedAt': FieldValue
-                                                                                    .serverTimestamp(),
-                                                                                'errorDetail': FieldValue
-                                                                                    .delete()
-                                                                              });
+                                                                            'status':
+                                                                                'RENDER_READY',
+                                                                            'renderStartedAt': FieldValue
+                                                                                .serverTimestamp(),
+                                                                            'errorDetail': FieldValue
+                                                                                .delete()
+                                                                          });
                                                                       logger.info(
                                                                           "Render trigger successful for ${widget.projectId}");
                                                                       if (mounted) {
@@ -1335,10 +1342,11 @@ class _TimelineReviewVeoScreenState
                                                                                 context)
                                                                             .pop();
                                                                         setState(
-                                                                            () {
-                                                                          _isTriggeringRender =
-                                                                              true;
-                                                                        });
+                                                                          () {
+                                                                            _isTriggeringRender =
+                                                                                true;
+                                                                          },
+                                                                        );
                                                                       }
                                                                     } catch (e) {
                                                                       logger.error(
@@ -1378,7 +1386,6 @@ class _TimelineReviewVeoScreenState
                         },
                       ),
                     ),
-// [AKHIR PATCH]
                   ],
                 ),
                 if (isProjectRendering)
@@ -1392,9 +1399,76 @@ class _TimelineReviewVeoScreenState
     );
   }
 
-// --- (Widget _VideoThumbnailItem Tidak Berubah) ---
-} // Akhir _TimelineReviewScreenState
+  // --- [PATCH START] FEATURE: REPORT PER SCENE ---
+  void _showSceneReportDialog(SceneVeo scene, int index) {
+    final TextEditingController reasonController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("Lapor Scene ${index + 1} (Veo)"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Apakah video atau narasi scene ini melanggar kebijakan?",
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                hintText: "Alasan (SARA, Kekerasan, dll)...",
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Batal"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              final user = ref.read(firestoreUserProvider).valueOrNull;
+              final userId = user?.uid ?? 'anonymous'; 
 
+              FirebaseFirestore.instance.collection('reports').add({
+                'projectId': widget.projectId,
+                'sceneId': scene.id,
+                'content': scene.videoUrl, // URL Video Veo
+                'contentType': 'veo_video',
+                'reason': reasonController.text.isEmpty ? 'No reason provided' : reasonController.text,
+                'reportedAt': FieldValue.serverTimestamp(),
+                'userId': userId,
+                'feature': 'Timeline Review Veo', 
+              }).then((_) {
+                if (mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Laporan dikirim. Terima kasih."),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              });
+            },
+            child: const Text("Lapor", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+  // --- [PATCH END] ---
+
+} // Akhir _TimelineReviewVeoScreenState
+
+// --- (Widget _VideoThumbnailItem Tidak Berubah) ---
 class _VideoThumbnailItem extends StatefulWidget {
   final String videoUrl;
   const _VideoThumbnailItem({required this.videoUrl});
@@ -1453,7 +1527,6 @@ class _VideoThumbnailItemState extends State<_VideoThumbnailItem> {
     );
   }
 }
-// --- [AKHIR PERBAIKAN] ---
 
 // --- (Dummy Logger Tidak Berubah) ---
 class _DummyLoggerVeo {

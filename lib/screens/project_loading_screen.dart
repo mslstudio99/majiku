@@ -1,24 +1,24 @@
-// KATEGORI_PENYESUAIAN_TEMA NO_URUT_01
-// NAMA FILE: lib/screens/project_loading_screen.dart
-// TUJUAN: Menyesuaikan file agar mematuhi AppTheme "Dark Modern"
-// dengan menghapus gaya hardcode yang bertentangan.
+//====================================================================================================//
+// NAMA FILE: LIB/SCREENS/PROJECT_LOADING_SCREEN.DART                                                 //
+// DESKRIPSI: RUANG TUNGGU GENERASI ASET (HANYA MENGAWASI HINGGA ASSETS_COMPLETE / REFINEMENT)        //
+//====================================================================================================//
 
+//No ke-1: IMPORTS & DEPENDENCIES //
+//Deklarasi pustaka, provider, dan layar tujuan. //
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// --- KATEGORI_MODIFIKASI: Perbaikan Impor Ambigue & Penambahan Dependensi ---
-// (Impor Anda sudah benar dan dipertahankan)
 import 'package:majiku/providers/timeline_providers.dart';
 import 'package:majiku/services/firestore_service.dart';
 import 'package:majiku/view_model/timeline_view_model.dart' hide firestoreServiceProvider, projectStreamProvider;
 import 'package:majiku/providers/visual_settings_provider.dart' hide firestoreServiceProvider, projectStreamProvider;
-// --- AKHIR MODIFIKASI ---
 
 import 'package:majiku/screens/timeline_review_screen.dart';
 import 'package:majiku/models/video_project.dart';
+//----------------------------------------------------------------------------------------------------//
 
-// --- KATEGORI_ARSITEKTUR: Model Data untuk Tampilan Loading ---
-/// Model data internal untuk mendefinisikan setiap langkah di layar loading.
+//No ke-2: LOADING STAGES MODEL & DATA //
+//Mendefinisikan tahapan loading HANYA untuk fase aset. //
 class _LoadingStage {
   final String title;
   final String description;
@@ -33,9 +33,8 @@ class _LoadingStage {
   });
 }
 
-/// Definisi 5 tahapan sesuai tabel yang Anda berikan.
+// Menghapus Stage 5 (Rendering) karena proses rendering terjadi di Timeline Screen
 final List<_LoadingStage> _loadingStages = [
-  // Tahap 1: Analysis & Blueprint
   _LoadingStage(
     title: "Analysis & Blueprint",
     description: "The application is processing your text input and preparing a content blueprint.",
@@ -46,17 +45,15 @@ final List<_LoadingStage> _loadingStages = [
       "PROCESSING_REFINEMENT"
     },
   ),
-  // Tahap 2: Visual Asset Generating
   _LoadingStage(
     title: "Visual Asset Generating",
     description: "Generation and adjustment of content narrative images/clips.",
     icon: Icons.image_search_outlined,
     technicalStatuses: {"ASSETS_READY", "GENERATING_VISUALS"},
   ),
-  // Tahap 3: Audio Synthesis
   _LoadingStage(
     title: "Audio Synthesis",
-    description: "Creating voiceovers (narration) and adding intro music.",
+    description: "Creating voiceovers (narration).",
     icon: Icons.mic_external_on_outlined,
     technicalStatuses: {
       "PENDING_AUDIO_GENERATION",
@@ -65,50 +62,36 @@ final List<_LoadingStage> _loadingStages = [
       "PROCESSING_AUTO_RETRY"
     },
   ),
-  // Tahap 4: Finalizing & Packaging (Hard Stop untuk "Settings")
   _LoadingStage(
-    title: "Finalizing & Packaging",
-    description: "Combine visual and audio elements, and create complementary thumbnails.",
+    title: "Finalizing Assets",
+    description: "Combine visual and audio elements, and preparing timeline.",
     icon: Icons.inventory_2_outlined,
-    // --- PERBAIKAN V6 (TAHAP 3) ---
     technicalStatuses: {
       "PENDING_THUMBNAIL",
       "GENERATING_THUMBNAIL",
-      "ASSETS_COMPLETE" // <-- PERBAIKAN V6: Ini adalah status "Jeda" baru kita
+      "ASSETS_COMPLETE", 
+      "CREATE_RENDER_PACKET" 
     },
-    // --- AKHIR PERBAIKAN ---
-  ),
-  // Tahap 5: Video Rendering (Hanya untuk "Directly" atau setelah pemicu manual)
-  _LoadingStage(
-    title: "Video Rendering",
-    description: "The process of merging all assets into a complete video file (final output stage).",
-    icon: Icons.movie_creation_outlined,
-    // --- PERBAIKAN V6 (TAHAP 5) ---
-    technicalStatuses: {"RENDER_START", "RENDERING"}, // <-- Menggunakan RENDER_START
-    // --- AKHIR PERBAIKAN ---
   ),
 ];
 
-/// Helper 'Mapper' untuk mengubah Status Teknis menjadi Indeks Tahap (0-4)
 int _getStageIndexFromStatus(String? status) {
   if (status == null) return 0;
   for (int i = 0; i < _loadingStages.length; i++) {
     if (_loadingStages[i].technicalStatuses.contains(status)) {
-      return i; // Mengembalikan indeks 0-4
+      return i; 
     }
   }
   
-  // Menangani status yang tidak ada di map (Selesai, Error, atau Awal)
-  // --- PERBAIKAN V6: Tambahkan status selesai baru ---
-  if (status == "ASSETS_COMPLETE") return _loadingStages.length; // Selesai Fase 1
-  if (status == "RENDER_COMPLETED") return _loadingStages.length; // Selesai Fase 2 (Ganti dari COMPLETED)
-  // --- AKHIR PERBAIKAN ---
-  if (status.startsWith("ERROR_")) return -1; // Flag untuk Error
+  if (status == "ASSETS_COMPLETE" || status == "CREATE_RENDER_PACKET") return _loadingStages.length; 
+  if (status != null && (status.startsWith("ERROR_") || status == "ASSETS_NEED_REFINEMENT")) return -1; 
   
-  return 0; // Default ke tahap pertama jika status tidak dikenal
+  return 0; 
 }
-// --- AKHIR KATEGORI_ARSITEKTUR ---
+//----------------------------------------------------------------------------------------------------//
 
+//No ke-3: MAIN CLASS & STATE INITIALIZATION //
+//Deklarasi stateful widget dan pengunci navigasi ganda. //
 class ProjectLoadingScreen extends ConsumerStatefulWidget {
   final String projectId;
 
@@ -122,12 +105,10 @@ class ProjectLoadingScreen extends ConsumerStatefulWidget {
 }
 
 class _ProjectLoadingScreenState extends ConsumerState<ProjectLoadingScreen> {
-  
   bool _isMounted = false;
   
-  // --- KATEGORI_FITUR_DIALOG NO_URUT_01: State untuk mencegah dialog ganda ---
-  bool _isDialogShown = false;
-  // --- AKHIR FITUR ---
+  // Flag ini digunakan agar pushReplacement hanya dipanggil satu kali
+  bool _hasNavigated = false;
 
   @override
   void initState() {
@@ -140,88 +121,23 @@ class _ProjectLoadingScreenState extends ConsumerState<ProjectLoadingScreen> {
     _isMounted = false;
     super.dispose();
   }
+//----------------------------------------------------------------------------------------------------//
 
-  // --- KATEGORI_FITUR_DIALOG NO_URUT_02: Fungsi untuk menampilkan dialog ---
-  /// Menampilkan dialog konfirmasi saat Fase 1 selesai (ASSETS_COMPLETE)
-  void _showCompletionDialog(BuildContext context, WidgetRef ref, VideoProject project) {
-    showDialog(
-      context: context,
-      // Mencegah dialog ditutup dengan klik di luar
-      barrierDismissible: false, 
-      builder: (dialogContext) {
-        
-        // --- KATEGORI_PENYEDERHANAAN: Hapus StatefulBuilder ---
-        // (Tidak perlu lagi karena tombol Render dihapus)
-        return AlertDialog(
-          // KATEGORI_PENYESUAIAN_TEMA: Gaya AlertDialog (title, content)
-          // kini akan diwarisi dari AppTheme (colorScheme.surface / cardBg)
-          title: const Text("Proses Selesai"),
-          content: const Text("The media preparation process is now complete. You can now proceed to the settings and timeline."),
-          actions: <Widget>[
-            // --- KATEGORI_PENYEDERHANAAN: Hanya Tombol Timeline ---
-            // Tombol 1: Pengaturan & Timeline
-            ElevatedButton( 
-              // --- KATEGORI_PENYESUAIAN_TEMA ---
-              // MENGHAPUS style hardcode (Colors.blueAccent).
-              // Tombol ini sekarang akan otomatis menggunakan
-              // elevatedButtonTheme (PrimaryColor/Ungu) dari AppTheme.
-              // style: ElevatedButton.styleFrom(
-              //   backgroundColor: Colors.blueAccent,
-              //   foregroundColor: Colors.white,
-              // ),
-              // --- AKHIR PENYESUAIAN_TEMA ---
-              onPressed: () {
-                // 1. Tutup dialog
-                Navigator.of(dialogContext).pop();
-                // 2. Navigasi ke TimelineReviewScreen
-                if (_isMounted) {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (context) => TimelineReviewScreen(projectId: widget.projectId),
-                    ),
-                  );
-                }
-              },
-              child: const Text(
-                "Pengaturan & Timeline",
-                // KATEGORI_PENYESUAIAN_TEMA: TextStyle di dalam tombol
-                // kini akan diwarisi dari AppTheme (elevatedButtonTheme.textStyle)
-                // style: TextStyle(fontWeight: FontWeight.bold), 
-              ),
-            ),
-            
-            // Tombol 2: Render (Merah)
-            // --- KATEGORI_PENYEDERHANAAN: Tombol Render DIHAPUS ---
-            // --- AKHIR PENYEDERHANAAN ---
-          ],
-        );
-        // --- AKHIR PENYEDERHANAAN ---
-      },
-    );
-  }
-  // --- AKHIR FITUR ---
-
+//No ke-4: BUILD METHOD & GATEKEEPER ROUTING LOGIC //
+//Memantau stream, mengeksekusi perpindahan layar saat aset selesai atau bermasalah. //
   @override
   Widget build(BuildContext context) {
-    // Tonton (watch) status proyek secara real-time
     final projectAsync = ref.watch(projectStreamProvider(widget.projectId));
 
     return projectAsync.when(
       loading: () => Scaffold(
-        // KATEGORI_PENYESUAIAN_TEMA: Latar belakang Scaffold
-        // kini akan diwarisi dari AppTheme (scaffoldBackgroundColor / Hitam)
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(), // Akan menggunakan colorScheme.primary (Ungu)
+            children: const [
+              CircularProgressIndicator(), 
               SizedBox(height: 16),
-              Text(
-                "Memuat status proyek...",
-                // KATEGORI_PENYESUAIAN_TEMA: Gaya teks
-                // kini akan diwarisi dari AppTheme (textTheme.bodyMedium / Putih)
-                // style: TextStyle(fontSize: 16),
-              ),
+              Text("Memuat status proyek..."),
             ],
           ),
         ),
@@ -235,25 +151,21 @@ class _ProjectLoadingScreenState extends ConsumerState<ProjectLoadingScreen> {
               children: [
                 Icon(
                   Icons.error_outline,
-                  // --- KATEGORI_PENYESUAIAN_TEMA ---
-                  color: Theme.of(context).colorScheme.error, // Menggunakan warna error tema
-                  // --- AKHIR PENYESUAIAN_TEMA ---
+                  color: Theme.of(context).colorScheme.error, 
                   size: 60
                 ),
                 const SizedBox(height: 16),
                 Text(
                   "Gagal memuat proyek",
-                  style: Theme.of(context).textTheme.headlineSmall, // Mewarisi dari tema
+                  style: Theme.of(context).textTheme.headlineSmall, 
                   textAlign: TextAlign.center,
                 ),
                 Text(
                   error.toString(),
-                  textAlign: TextAlign.center, // Mewarisi bodyMedium dari tema
+                  textAlign: TextAlign.center, 
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
-                  // KATEGORI_PENYESUAIAN_TEMA: Tombol akan otomatis
-                  // menggunakan elevatedButtonTheme (Ungu)
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text("Kembali"),
                 ),
@@ -263,11 +175,9 @@ class _ProjectLoadingScreenState extends ConsumerState<ProjectLoadingScreen> {
         ),
       ),
       data: (project) {
-        // --- KATEGORI_PERBAIKAN_NULL_SAFETY NO_URUT_01 ---
-        // Tangani kasus di mana stream mengembalikan data null
         if (project == null) {
           return Scaffold(
-            appBar: AppBar(title: const Text("Error")), // Akan menggunakan appBarTheme
+            appBar: AppBar(title: const Text("Error")), 
             body: const Center(
               child: Padding(
                 padding: EdgeInsets.all(16.0),
@@ -279,54 +189,64 @@ class _ProjectLoadingScreenState extends ConsumerState<ProjectLoadingScreen> {
             ),
           );
         }
-        // Mulai dari sini, 'project' dijamin non-nullable.
-        // --- AKHIR PERBAIKAN ---
 
-        // --- KATEGORI_LOGIKA_NAVIGASI (PASIF & DIALOG) ---
-        final String? currentStatus = project.status; // <-- Aman
+        final String? currentStatus = project.status; 
         final int currentStageIndex = _getStageIndexFromStatus(currentStatus);
 
-        // --- KATEGORI_FITUR_DIALOG NO_URUT_03: Pemicu Dialog ---
-        // --- PERBAIKAN V6: Pemicu dialog HANYA saat Fase 1 selesai ---
-        // Aturan: Jika Fase 1 Selesai (ASSETS_COMPLETE)
-        // DAN dialog belum pernah ditampilkan
-        if (currentStatus == "ASSETS_COMPLETE" && !_isDialogShown) {
-        // --- AKHIR PERBAIKAN V6 ---
-          // 1. Set flag agar dialog tidak muncul lagi jika build ulang
-          _isDialogShown = true;
+        // --- SKENARIO 1: HAPPY PATH (SEMUA ASET SELESAI) ---
+        // Jika status mencapai ASSETS_COMPLETE atau CREATE_RENDER_PACKET, lempar ke Timeline.
+        // Timeline yang akan memutuskan dan mengeksekusi Auto-Render.
+        if ((currentStatus == "ASSETS_COMPLETE" || currentStatus == "CREATE_RENDER_PACKET" || currentStatus == "RENDER_START" || currentStatus == "RENDERING" || currentStatus == "RENDER_COMPLETED") && !_hasNavigated) {
+          _hasNavigated = true; 
           
-          // 2. Panggil dialog setelah frame selesai di-build
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (_isMounted) {
-              debugPrint("[ProjectLoadingScreen] Status '$currentStatus' terdeteksi. Menampilkan dialog pilihan...");
-              _showCompletionDialog(context, ref, project); // <-- Aman
+              debugPrint("🚀 [Loading Gatekeeper] Aset Selesai. Meneruskan ke Timeline...");
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => TimelineReviewScreen(projectId: widget.projectId),
+                ),
+              );
             }
           });
         }
-        // --- AKHIR FITUR ---
+		
+        // --- SKENARIO 2: ERROR/FALLBACK PATH (MANUAL REFINEMENT) ---
+        // Jika ada aset yang gagal (ASSETS_NEED_REFINEMENT atau status ERROR)
+        if ((currentStatus == "ASSETS_NEED_REFINEMENT" || (currentStatus != null && currentStatus.startsWith("ERROR_"))) && !_hasNavigated) {
+          _hasNavigated = true; 
+          
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_isMounted) {
+              debugPrint("⚠️ [Loading Gatekeeper] Masalah aset terdeteksi. Melempar ke Timeline untuk Manual Fallback.");
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Terdapat aset yang gagal diproses. Silakan perbaiki secara manual di Timeline.'),
+                  backgroundColor: Colors.redAccent,
+                  duration: Duration(seconds: 5),
+                ),
+              );
+              
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => TimelineReviewScreen(projectId: widget.projectId),
+                ),
+              );
+            }
+          });
+        }
         
-        // Tampilkan UI Error jika status error
-        if (currentStageIndex == -1) {
-          return _buildErrorUI(context, project); // <-- Aman
+        // Tampilkan UI Error bawaan jika status fatal dan belum ter-routing
+        if (currentStageIndex == -1 && !_hasNavigated) {
+          return _buildErrorUI(context, project); 
         }
 
-        // Bangun UI Stepper (jika masih dalam proses)
+        // Tampilan UI Stepper selama aset masih di-generate (menunggu)
         return Scaffold(
           appBar: AppBar(
-            // --- KATEGORI_PENYESUAIAN_TEMA ---
-            // MENGHAPUS backgroundColor: Colors.transparent dan elevation: 0.
-            // AppBar sekarang akan otomatis menggunakan appBarTheme
-            // (appBarBg / Abu-abu Gelap) dari AppTheme.
-            // backgroundColor: Colors.transparent,
-            // elevation: 0,
-            // --- AKHIR PENYESUAIAN_TEMA ---
             automaticallyImplyLeading: false, 
-            title: const Text(
-              "Mempersiapkan Proyek...",
-              // KATEGORI_PENYESUAIAN_TEMA: Gaya teks
-              // kini akan diwarisi dari AppTheme (appBarTheme.titleTextStyle)
-              // style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+            title: const Text("Mempersiapkan Proyek..."),
             centerTitle: true,
           ),
           body: Padding(
@@ -335,7 +255,7 @@ class _ProjectLoadingScreenState extends ConsumerState<ProjectLoadingScreen> {
               children: [
                 Center(
                   child: Text(
-                    "Your video is being processed",
+                    "Your video is being processed, wait a minutes..",
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -346,60 +266,54 @@ class _ProjectLoadingScreenState extends ConsumerState<ProjectLoadingScreen> {
                 Text(
                   "This process may take a few minutes. You will be automatically redirected once the assets are ready.",
                   textAlign: TextAlign.center,
-                  // --- KATEGORI_PENYESUAIAN_TEMA ---
-                  // Menggunakan textTheme.bodyMedium (textSecondary) dari AppTheme
-                  // untuk konsistensi, menggantikan Colors.grey hardcode.
                   style: Theme.of(context).textTheme.bodyMedium,
-                  // style: TextStyle(fontSize: 15, color: Colors.grey),
-                  // --- AKHIR PENYESUAIAN_TEMA ---
                 ),
                 const SizedBox(height: 32),
                 const Center(
-                  child: CircularProgressIndicator(), // Akan menggunakan colorScheme.primary (Ungu)
+                  child: CircularProgressIndicator(),
                 ),
                 const SizedBox(height: 32), 
 
-                // --- KATEGORI_UI: Stepper Modern ---
-                Stepper(
-                  // KATEGORI_PENYESUAIAN_TEMA: Stepper akan otomatis
-                  // menggunakan warna tema (primary, background, surface)
-                  // dari AppTheme.
-                  controlsBuilder: (context, details) => const SizedBox.shrink(),
-                  currentStep: currentStageIndex > 4 ? 4 : currentStageIndex, 
-                  steps: List.generate(_loadingStages.length, (index) {
-                    final stage = _loadingStages[index];
-                    StepState state = StepState.disabled; 
-                    
-                    if (index < currentStageIndex) {
-                      state = StepState.complete; // Selesai
-                    } else if (index == currentStageIndex) {
-                      state = StepState.indexed; // Sedang berlangsung (aktif)
-                    }
+                Expanded(
+                  child: Theme(
+                    data: Theme.of(context).copyWith(
+                      canvasColor: Colors.transparent,
+                    ),
+                    child: Stepper(
+                      controlsBuilder: (context, details) => const SizedBox.shrink(),
+                      currentStep: currentStageIndex >= _loadingStages.length ? _loadingStages.length - 1 : currentStageIndex, 
+                      steps: List.generate(_loadingStages.length, (index) {
+                        final stage = _loadingStages[index];
+                        StepState state = StepState.disabled; 
+                        
+                        if (index < currentStageIndex) {
+                          state = StepState.complete; 
+                        } else if (index == currentStageIndex) {
+                          state = StepState.indexed; 
+                        }
 
-                    if (currentStageIndex > 4 && index == 4) {
-                      state = StepState.complete;
-                    }
+                        if (currentStageIndex >= _loadingStages.length && index == _loadingStages.length - 1) {
+                          state = StepState.complete;
+                        }
 
-                    return Step(
-                      title: Text(
-                        stage.title,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ), // Gaya Stepper Title tetap di-hardcode agar menonjol
-                      ),
-                      subtitle: Text(stage.description, style: const TextStyle(fontSize: 14),), // Gaya Stepper Subtitle tetap
-                      content: const SizedBox.shrink(), 
-                      isActive: index == currentStageIndex,
-                      state: state,
-                    );
-                  }),
+                        return Step(
+                          title: Text(
+                            stage.title,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ), 
+                          ),
+                          subtitle: Text(stage.description, style: const TextStyle(fontSize: 14)), 
+                          content: const SizedBox.shrink(), 
+                          isActive: index == currentStageIndex || index < currentStageIndex,
+                          state: state,
+                        );
+                      }),
+                    ),
+                  ),
                 ),
-                // --- AKHIR KATEGORI_UI ---
-                const Spacer(),
                 TextButton(
-                  // KATEGORI_PENYESUAIAN_TEMA: TextButton akan otomatis
-                  // menggunakan colorScheme.primary (Ungu) untuk teksnya.
                   onPressed: () {
                     Navigator.of(context).pop();
                   },
@@ -412,8 +326,10 @@ class _ProjectLoadingScreenState extends ConsumerState<ProjectLoadingScreen> {
       },
     );
   }
+//----------------------------------------------------------------------------------------------------//
 
-  /// Helper untuk membangun UI jika status proyek adalah ERROR
+//No ke-5: ERROR UI HELPER //
+//Fungsi pembangunan UI jika terjadi error fatal sebelum masuk ke Timeline. //
   Widget _buildErrorUI(BuildContext context, VideoProject project) {
     return Scaffold(
       body: Center(
@@ -424,15 +340,13 @@ class _ProjectLoadingScreenState extends ConsumerState<ProjectLoadingScreen> {
             children: [
               Icon(
                 Icons.error_outline,
-                // --- KATEGORI_PENYESUAIAN_TEMA ---
-                color: Theme.of(context).colorScheme.error, // Menggunakan warna error tema
-                // --- AKHIR PENYESUAIAN_TEMA ---
+                color: Theme.of(context).colorScheme.error, 
                 size: 60
               ),
               const SizedBox(height: 16),
               Text(
                 "Proses Gagal",
-                style: Theme.of(context).textTheme.headlineSmall, // Mewarisi dari tema
+                style: Theme.of(context).textTheme.headlineSmall, 
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
@@ -441,9 +355,7 @@ class _ProjectLoadingScreenState extends ConsumerState<ProjectLoadingScreen> {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  // --- KATEGORI_PENYESUAIAN_TEMA ---
-                  color: Theme.of(context).colorScheme.error, // Menggunakan warna error tema
-                  // --- AKHIR PENYESUAIAN_TEMA ---
+                  color: Theme.of(context).colorScheme.error, 
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -451,15 +363,11 @@ class _ProjectLoadingScreenState extends ConsumerState<ProjectLoadingScreen> {
               Text(
                 project.errorDetail ?? "Tidak ada detail error.",
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14), // Mewarisi bodyMedium dari tema
+                style: const TextStyle(fontSize: 14), 
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                // KATEGORI_PENYESUAIAN_TEMA: Tombol akan otomatis
-                // menggunakan elevatedButtonTheme (Ungu)
                 onPressed: () {
-                  // Arahkan ke TimelineReviewScreen agar pengguna bisa melihat
-                  // scene yang error (jika ada) atau mencoba render ulang.
                   Navigator.of(context).pushReplacement(
                     MaterialPageRoute(
                       builder: (context) => TimelineReviewScreen(projectId: widget.projectId),
@@ -475,3 +383,4 @@ class _ProjectLoadingScreenState extends ConsumerState<ProjectLoadingScreen> {
     );
   }
 }
+//----------------------------------------------------------------------------------------------------//

@@ -1,72 +1,60 @@
-// [RILIS UTUH - INTEGRASI AUTH + PERBAIKAN DOWNLOAD]
-// KATEGORI_NARAKU_TOKEN NO_URUT_18
-// Lokasi: lib/view_model_naraku/generator_gambar_thumbnail_view_model.dart
-// TUJUAN:
-// - [FITUR] Mengirimkan Firebase Auth ID Token (JWT) di header.
-// - [REFAKTOR] Menyuntikkan 'Ref' ke ViewModel.
-// - [PERBAIKAN] Logika downloadImage() diubah untuk memaksa download (cross-origin).
+// [RILIS UTUH - INTEGRASI STABLE DIFFUSION 3.5 LARGE]
+// KATEGORI_NARAKU_TOKEN NO_URUT_20
+// TUJUAN: Mengganti Imagen dengan SD 3.5 Engine (Cloud Run) secara transparan.
 
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:ui';
-import 'dart:html' as html;
+import 'dart:typed_data';
 
-// [IMPOR BARU UNTUK OTENTIKASI]
+import 'package:path_provider/path_provider.dart';
+import 'dart:html' if (dart.library.io) '../utils/html_stub.dart' as html;
+
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
-import '../view_model/auth_view_model.dart'; // Untuk authStateChangesProvider
+import '../view_model/auth_view_model.dart'; 
 
-// [IMPOR BARU UNTUK DOWNLOAD BLOB]
-import 'dart:typed_data'; // Diperlukan untuk Uint8List
-
-// --- KATEGORI_INTEGRASI_THUMBNAIL NO_URUT_01: Data Localization ---
-// (Tidak Berubah)
+// --- HELPER LOKALISASI (TETAP SAMA) ---
 class GambarThumbnailLocalizationHelper {
   static const Map<String, Map<String, String>> translations = {
     'id': {
       'generatorTitle': "Generator Gambar Thumbnail",
       'promptLabel': "Masukkan Narasi Panjang Anda:",
-      'promptPlaceholder':
-          "Contoh: Seekor naga emas terbang di atas kerajaan yang terapung di awan...",
+      'promptPlaceholder': "Contoh: Seekor naga emas terbang di atas kerajaan...",
       'labelStyle': "Gaya Visual:",
-      'styleRealistic': "Realistic",
-      'styleCartoon3d': "Kartun 3D",
-      'styleCartoon2d': "Kartun 2D",
       'labelRatio': "Rasio Gambar:",
-      'btnGenerate': "Buat Gambar Thumbnail",
-      'outputTitle': "Hasil Gambar Thumbnail",
-      'outputPlaceholder': "Gambar yang digenerasi akan muncul disini...",
-      'btnDownload': "Download Gambar",
+      'btnGenerate': "Buat Gambar SD 3.5",
+      'outputTitle': "Hasil Gambar Majiku Engine",
+      'outputPlaceholder': "Gambar sedang dilukis oleh SD 3.5 Large...",
+      'btnDownload': "Simpan ke Galeri",
       'btnClear': "Hapus Hasil",
       'alertNoInput': "Silakan masukkan narasi terlebih dahulu.",
-      'statusGenerating': "Memproses...",
-      'statusLoading': "Sedang membuat gambar, mohon tunggu...",
-      'statusDownloadSuccess': "Download dimulai!",
+      'statusGenerating': "Mesin Berputar...",
+      'statusLoading': "SD 3.5 sedang menggambar, mohon tunggu sekitar 30 detik...",
+      'statusDownloadSuccess': "Gambar disimpan di: {path}",
       'statusDownloadFailed': "Gagal mengunduh gambar.",
-      'alertApiError': "Terjadi kesalahan: {message}",
+      'alertApiError': "Terjadi kesalahan mesin: {message}",
     },
     'en': {
       'generatorTitle': "Thumbnail Image Generator",
-      'promptLabel': "Enter Your Long Narrative:",
-      'promptPlaceholder':
-          "Example: A golden dragon flies over a kingdom floating in the clouds...",
+      'promptLabel': "Enter Your Narrative:",
+      'promptPlaceholder': "Example: A golden dragon flies over a kingdom...",
       'labelStyle': "Visual Style:",
-      'styleRealistic': "Realistic",
-      'styleCartoon3d': "3D Cartoon",
-      'styleCartoon2d': "2D Cartoon",
       'labelRatio': "Image Ratio:",
-      'btnGenerate': "Create Thumbnail Image",
-      'outputTitle': "Generated Thumbnail Image",
-      'outputPlaceholder': "Generated image will appear here...",
+      'btnGenerate': "Create SD 3.5 Image",
+      'outputTitle': "Majiku Engine Result",
+      'outputPlaceholder': "SD 3.5 Large is painting your image...",
       'btnDownload': "Download Image",
       'btnClear': "Clear Results",
       'alertNoInput': "Please enter a narrative first.",
-      'statusGenerating': "Processing...",
-      'statusLoading': "Generating image, please wait...",
-      'statusDownloadSuccess': "Download started!",
+      'statusGenerating': "Engine Spinning...",
+      'statusLoading': "SD 3.5 is painting, please wait ~30 seconds...",
+      'statusDownloadSuccess': "Image saved to: {path}",
       'statusDownloadFailed': "Failed to download image.",
-      'alertApiError': "An error occurred: {message}",
+      'alertApiError': "Engine Error: {message}",
     }
   };
 
@@ -77,15 +65,14 @@ class GambarThumbnailLocalizationHelper {
     return translationMap[key] ?? key;
   }
 }
-// --- AKHIR DATA LOKALISASI ---
 
-/// KATEGORI_INTEGRASI_THUMBNAIL NO_URUT_02
-// (State Class Tidak Berubah)
+// --- STATE CLASS ---
 @immutable
 class GeneratorGambarThumbnailState {
   final bool isLoading;
-  final String generatedImageUrl;
+  final String generatedImageUrl; // Sekarang bisa berisi URL atau Base64
   final String? errorMessage;
+  final String? successMessage;
   final String loadingText;
   final String selectedStyle;
   final String selectedRatio;
@@ -94,6 +81,7 @@ class GeneratorGambarThumbnailState {
     this.isLoading = false,
     this.generatedImageUrl = '',
     this.errorMessage,
+    this.successMessage,
     this.loadingText = '',
     this.selectedStyle = "Hyperrealistic Style",
     this.selectedRatio = "16:9",
@@ -103,8 +91,10 @@ class GeneratorGambarThumbnailState {
     bool? isLoading,
     String? generatedImageUrl,
     String? errorMessage,
+    String? successMessage,
     String? loadingText,
     bool clearError = false,
+    bool clearSuccess = false,
     String? selectedStyle,
     String? selectedRatio,
   }) {
@@ -112,6 +102,7 @@ class GeneratorGambarThumbnailState {
       isLoading: isLoading ?? this.isLoading,
       generatedImageUrl: generatedImageUrl ?? this.generatedImageUrl,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
+      successMessage: clearSuccess ? null : successMessage ?? this.successMessage,
       loadingText: loadingText ?? this.loadingText,
       selectedStyle: selectedStyle ?? this.selectedStyle,
       selectedRatio: selectedRatio ?? this.selectedRatio,
@@ -119,23 +110,19 @@ class GeneratorGambarThumbnailState {
   }
 }
 
-/// KATEGORI_INTEGRASI_THUMBNAIL NO_URUT_03 (DIMODIFIKASI)
+// --- VIEW MODEL ---
 class GeneratorGambarThumbnailViewModel
     extends StateNotifier<GeneratorGambarThumbnailState> {
   final TextEditingController narrativeController = TextEditingController();
-
-  // [BARU] Tambahkan Ref untuk mengakses provider lain
   final Ref _ref;
 
-  // [MODIFIKASI] Terima Ref di constructor
   GeneratorGambarThumbnailViewModel(this._ref)
       : super(const GeneratorGambarThumbnailState());
 
-  // (URL Cloud Function Tidak Berubah)
-  final String _cloudFunctionUrl =
-      "https://asia-southeast2-majiku-5b07e.cloudfunctions.net/generatorGambarThumbnail";
+  // URL ENGINE BARU (SD 3.5 LARGE)
+  final String _engineUrl = "https://majiku-sd35-engine-595802795623.asia-southeast1.run.app/generate";
+  final String _engineApiKey = "031284";
 
-  // (Metode setStyle & setRatio Tidak Berubah)
   void setStyle(String? value) {
     if (value == null) return;
     state = state.copyWith(selectedStyle: value);
@@ -150,134 +137,126 @@ class GeneratorGambarThumbnailViewModel
     if (state.isLoading) return;
     final narrative = narrativeController.text.trim();
 
-    // (Validasi Tidak Berubah)
     if (narrative.isEmpty) {
       state = state.copyWith(
-          errorMessage:
-              GambarThumbnailLocalizationHelper.get('alertNoInput'),
+          errorMessage: GambarThumbnailLocalizationHelper.get('alertNoInput'),
           clearError: false);
       return;
     }
 
     state = state.copyWith(
-        isLoading: true, clearError: true, loadingText: 'GENERATING');
+        isLoading: true, clearError: true, clearSuccess: true, loadingText: 'GENERATING');
 
     try {
-      // --- [LOGIKA TOKEN BARU - LANGKAH 2A] ---
-      final authUser = _ref.read(authStateChangesProvider).value;
-      if (authUser == null) {
-        throw Exception("Sesi pengguna tidak ditemukan. Harap login ulang.");
-      }
-      final idToken = await authUser.getIdToken(true);
-      // --- [AKHIR LOGIKA TOKEN BARU] ---
+      // Prompt engineering sederhana: menggabungkan narasi dan gaya pilihan user
+      final combinedPrompt = "$narrative, ${state.selectedStyle}, 8k resolution, cinematic lighting";
 
-      // (Payload Body Tidak Berubah)
       final body = jsonEncode({
-        'data': {
-          'narrativeValue': narrative,
-          'selectedStyle': state.selectedStyle,
-          'selectedRatio': state.selectedRatio,
-        }
+        'prompt': combinedPrompt,
+        'aspectRatio': state.selectedRatio,
       });
 
       final response = await http
           .post(
-            Uri.parse(_cloudFunctionUrl),
+            Uri.parse(_engineUrl),
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer $idToken', // [MODIFIKASI]
+              'Authorization': 'Bearer $_engineApiKey',
             },
             body: body,
           )
-          .timeout(const Duration(seconds: 300));
+          .timeout(const Duration(seconds: 300)); // SD 3.5 butuh waktu lebih lama
 
       if (response.statusCode == 200) {
         final responseBody = jsonDecode(response.body);
-        final resultUrl = responseBody['data'];
+        
+        // Mengambil data Base64 dari response engine
+        final base64String = responseBody['predictions'][0]['bytesBase64Encoded'];
 
-        if (resultUrl != null && (resultUrl as String).startsWith("http")) {
+        if (base64String != null) {
           state = state.copyWith(
             isLoading: false,
-            generatedImageUrl: resultUrl,
+            generatedImageUrl: base64String, // Kita simpan Base64 di sini
             loadingText: '',
           );
         } else {
-          throw Exception(
-              "Respons sukses, namun 'data' (URL) tidak ditemukan di body.");
+          throw Exception("Gagal mendapatkan data gambar dari mesin.");
         }
       } else {
-        final errorBody = jsonDecode(response.body);
-        final errorMessage = errorBody['error']?['message'] ??
-            'Error HTTP ${response.statusCode}';
-        if (response.statusCode == 402) {
-          throw Exception(errorMessage);
-        }
-        throw Exception(errorMessage);
+        throw Exception("Mesin SD 3.5 Error (${response.statusCode}): ${response.body}");
       }
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
         errorMessage: GambarThumbnailLocalizationHelper.get('alertApiError')
-            .replaceFirst(
-                '{message}', e.toString().replaceFirst('Exception: ', '')),
+            .replaceFirst('{message}', e.toString()),
         loadingText: '',
       );
     }
   }
 
-  // [KATEGORI_REFAKTOR_FITUR NO_URUT_03] Fungsi Download diperbarui (FIXED)
   Future<void> downloadImage() async {
     if (state.generatedImageUrl.isEmpty) return;
 
     try {
-      // 1. Unduh data gambar menggunakan http.get
-      final response = await http.get(Uri.parse(state.generatedImageUrl));
-
-      if (response.statusCode != 200) {
-        throw Exception(
-            'Gagal mengunduh data gambar. Status: ${response.statusCode}');
+      Uint8List bytes;
+      
+      // LOGIKA HYBRID: Cek apakah data ini Base64 (Engine Baru) atau URL (Legacy)
+      if (!state.generatedImageUrl.startsWith('http')) {
+        // Ini adalah Base64 dari SD 3.5
+        bytes = base64Decode(state.generatedImageUrl);
+      } else {
+        // Ini adalah URL lama (jika ada sisa-sisa Imagen)
+        final response = await http.get(Uri.parse(state.generatedImageUrl));
+        if (response.statusCode != 200) throw Exception('Gagal ambil URL');
+        bytes = response.bodyBytes;
       }
 
-      // 2. Dapatkan data mentah (raw bytes)
-      final Uint8List bytes = response.bodyBytes;
+      final String fileName = 'majiku_sd35_${DateTime.now().millisecondsSinceEpoch}.png';
 
-      // 3. Buat Blob (file di memori) dari data
-      final blob = html.Blob([bytes], 'image/png'); // Asumsi PNG
+      if (kIsWeb) {
+        final blob = html.Blob([bytes], 'image/png');
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        final anchorElement = html.AnchorElement(href: url);
+        anchorElement.download = fileName;
+        anchorElement.click();
+        html.Url.revokeObjectUrl(url);
+        
+        state = state.copyWith(
+          successMessage: GambarThumbnailLocalizationHelper.get('statusDownloadSuccess')
+              .replaceFirst('{path}', 'Downloads folder'),
+          clearError: true
+        );
+      } else if (Platform.isAndroid) {
+        final directory = await getApplicationDocumentsDirectory();
+        final String filePath = '${directory.path}/$fileName';
+        final File file = File(filePath);
+        await file.writeAsBytes(bytes);
 
-      // 4. Buat URL lokal untuk Blob tersebut
-      final url = html.Url.createObjectUrlFromBlob(blob);
-
-      // 5. Buat anchor tag <a> baru yang menunjuk ke URL LOKAL
-      final html.AnchorElement anchorElement = html.AnchorElement(href: url);
-
-      // 6. Atur nama file download
-      anchorElement.download = 'majiku_thumbnail.png'; // Nama file statis
-
-      // 7. Klik link secara virtual untuk memicu download
-      anchorElement.click();
-
-      // 8. Hapus URL lokal dari memori setelah selesai
-      html.Url.revokeObjectUrl(url);
+        state = state.copyWith(
+          successMessage: GambarThumbnailLocalizationHelper.get('statusDownloadSuccess')
+              .replaceFirst('{path}', filePath),
+          clearError: true
+        );
+      }
     } catch (e) {
       state = state.copyWith(
-          errorMessage:
-              GambarThumbnailLocalizationHelper.get('statusDownloadFailed'),
+          errorMessage: GambarThumbnailLocalizationHelper.get('statusDownloadFailed') + " ${e.toString()}",
           clearError: false);
     }
   }
 
-  // (Metode clearAll Tidak Berubah)
   void clearAll() {
     narrativeController.clear();
     state = state.copyWith(
       generatedImageUrl: '',
       clearError: true,
+      clearSuccess: true,
       selectedStyle: "Hyperrealistic Style",
       selectedRatio: "16:9",
     );
   }
 
-  // (Metode dispose Tidak Berubah)
   @override
   void dispose() {
     narrativeController.dispose();
@@ -285,12 +264,7 @@ class GeneratorGambarThumbnailViewModel
   }
 }
 
-/// KATEGORI_INTEGRASI_THUMBNAIL NO_URUT_04 (DIMODIFIKASI)
-final generatorGambarThumbnailViewModelProvider = StateNotifierProvider
-    .autoDispose<GeneratorGambarThumbnailViewModel,
-        GeneratorGambarThumbnailState>(
-  (ref) {
-    // [MODIFIKASI] Suntikkan 'ref' ke ViewModel
-    return GeneratorGambarThumbnailViewModel(ref);
-  },
+final generatorGambarThumbnailViewModelProvider = StateNotifierProvider.autoDispose<
+    GeneratorGambarThumbnailViewModel, GeneratorGambarThumbnailState>(
+  (ref) => GeneratorGambarThumbnailViewModel(ref),
 );

@@ -1,13 +1,15 @@
-// [RILIS FINAL - UI DRAWER FIX]
-// KATEGORI_UI_TWEAK NO_URUT_06
+// [RILIS FINAL - KISAH LEGENDA: POLICY COMPLIANT & FIRESTORE LOGIC]
+// KATEGORI_POLICY_UPDATE NO_URUT_05
 // Lokasi: lib/screens_naraku/generator_kisah_legenda_screen.dart
 // TUJUAN:
-// 1. Memperbaiki layout Drawer (Mengganti DrawerHeader dengan Container) agar rapi.
-// 2. Mempertahankan tema Dark Modern yang sudah ada.
+// 1. [FIX] Menggunakan user.uid untuk mencegah error getter.
+// 2. Menambahkan fitur Lapor (Flag) & Logic Firestore.
+// 3. Tombol aksi Text-Only (Hemat tempat).
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // [WAJIB] Untuk lapor konten
 
 // [IMPORT NAVIGASI]
 import '../screens/input_script_screen.dart';
@@ -18,7 +20,6 @@ import '../screens/project_dashboard_screen.dart';
 import './konsultan_ide_konten_screen.dart';
 import './generator_kisah_sejarah_screen.dart';
 import './generator_konten_umum_screen.dart';
-// import './generator_kisah_legenda_screen.dart'; // Halaman ini
 import './generator_kisah_islami_screen.dart';
 import './generator_kisah_horor_screen.dart';
 import './generator_kisah_custom_screen.dart';
@@ -28,7 +29,7 @@ import './generator_konten_short_screen.dart';
 // [IMPORT VM & MODELS]
 import '../view_model_naraku/generator_kisah_legenda_view_model.dart';
 import '../providers/user_provider.dart';
-import '../providers/config_provider.dart';
+import '../providers/config_provider.dart'; // Akses Bahasa
 import '../models/app_user.dart';
 import '../models/app_config.dart';
 
@@ -39,16 +40,21 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // [STATE & LOGIC]
     final state = ref.watch(generatorKisahLegendaViewModelProvider);
     final viewModel = ref.read(generatorKisahLegendaViewModelProvider.notifier);
     final AsyncValue<AppUser> userState = ref.watch(firestoreUserProvider);
     final AsyncValue<AppConfig> configState = ref.watch(appConfigProvider);
 
-    final String generatorTitle = KisahLegendaLocalizationHelper.get('generatorTitle');
-    
+    // [BAHASA]
+    final currentLocale = ref.watch(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     // [THEME SHORTCUT]
     final theme = Theme.of(context);
 
+    // [LISTENER ERROR]
     ref.listen<GeneratorKisahLegendaState>(
         generatorKisahLegendaViewModelProvider, (previous, next) {
       if (next.errorMessage != null && previous?.errorMessage == null) {
@@ -64,8 +70,8 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
     return Scaffold(
       // Background otomatis hitam dari Theme
       appBar: AppBar(
-        title: Text(generatorTitle),
-        // Style AppBar otomatis dari Theme
+        // [UI BERSIH] Judul dihapus di AppBar
+        title: null,
         actions: [
           TextButton.icon(
             icon: const Icon(Icons.dashboard_outlined),
@@ -85,7 +91,7 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
           ),
         ],
       ),
-      drawer: _buildNarakuDrawer(context),
+      drawer: _buildNarakuDrawer(context, t),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -98,12 +104,88 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
               state,
               userState,
               configState,
-              generatorTitle,
+              t,
             ),
             const SizedBox(height: 24),
-            _buildOutputCard(context, ref, viewModel, state),
+            _buildOutputCard(context, ref, viewModel, state, t),
           ],
         ),
+      ),
+    );
+  }
+
+  // --- [LOGIC REAL] LAPOR KONTEN KE FIRESTORE ---
+  void _showReportDialog(BuildContext context, WidgetRef ref, String content) {
+    final TextEditingController reasonController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Lapor Konten / Report"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Bantu kami menjaga keamanan. Mengapa konten ini tidak pantas?",
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                hintText: "Alasan (SARA, Kekerasan, dll)...",
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Batal"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              // [FIREBASE LOGIC] Simpan Laporan
+              final user = ref.read(firestoreUserProvider).valueOrNull;
+              
+              // [BUGFIX] Menggunakan .uid bukan .id
+              final userId = user?.uid ?? 'anonymous'; 
+
+              FirebaseFirestore.instance.collection('reports').add({
+                'content': content, 
+                'reason': reasonController.text.isEmpty ? 'No reason provided' : reasonController.text,
+                'reportedAt': FieldValue.serverTimestamp(),
+                'userId': userId,
+                'feature': 'Generator Kisah Legenda', // Penanda fitur
+              }).then((_) {
+                if (context.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Laporan berhasil dikirim. Terima kasih."),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              }).catchError((error) {
+                if (context.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Gagal mengirim laporan: $error"),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              });
+            },
+            child: const Text("Kirim Laporan", style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
@@ -116,7 +198,7 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
     GeneratorKisahLegendaState state,
     AsyncValue<AppUser> userState,
     AsyncValue<AppConfig> configState,
-    String generatorTitle,
+    String Function(String, String) t,
   ) {
     final theme = Theme.of(context);
     final charCounter = ValueNotifier<int>(viewModel.promptController.text.length);
@@ -135,15 +217,15 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
 
     final String buttonLabel;
     if (vmIsLoading) {
-      buttonLabel = KisahLegendaLocalizationHelper.get('btnProcessing');
+      buttonLabel = t('Weaving Legend...', 'Merajut Legenda...');
     } else if (providersAreLoading) {
-      buttonLabel = "Memuat...";
+      buttonLabel = t('Loading...', 'Memuat...');
     } else if (providersHaveError) {
       buttonLabel = "Error";
     } else if (!canAfford) {
-      buttonLabel = "Token Tidak Cukup";
+      buttonLabel = t('Insufficient Tokens', 'Token Tidak Cukup');
     } else {
-      buttonLabel = KisahLegendaLocalizationHelper.get('btnGenerate');
+      buttonLabel = t('GENERATE LEGEND', 'BUAT KISAH LEGENDA');
     }
 
     final bool isButtonDisabled = vmIsLoading || providersAreLoading || providersHaveError || !canAfford;
@@ -160,16 +242,18 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // [JUDUL FITUR DI SINI]
             Text(
-              KisahLegendaLocalizationHelper.get('generatorTitle'),
+              t('Legendary Story Generator', 'Generator Kisah Legenda'),
               style: theme.textTheme.headlineSmall,
             ),
             const SizedBox(height: 20),
+
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  KisahLegendaLocalizationHelper.get('promptLabel'),
+                  t('Topic / Region', 'Topik / Daerah Asal'),
                   style: theme.textTheme.bodyMedium,
                 ),
                 ValueListenableBuilder<int>(
@@ -196,8 +280,10 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
               maxLines: 3,
               maxLength: _maxPromptLength,
               enabled: !state.isLoading,
+              // Style teks mengikuti theme
+              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white),
               decoration: InputDecoration(
-                hintText: KisahLegendaLocalizationHelper.get('promptPlaceholder'),
+                hintText: t('e.g., The Origin of Lake Toba', 'Cth: Asal Usul Danau Toba'),
                 counterText: '',
                 filled: true,
                 // Fill warna Hitam (Scaffold BG)
@@ -215,7 +301,7 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              KisahLegendaLocalizationHelper.get('languageHint'),
+              t('Language will be auto-detected from your input.', 'Bahasa akan dideteksi otomatis dari input Anda.'),
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 20),
@@ -245,7 +331,7 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
                 disabledBackgroundColor: buttonColor,
                 disabledForegroundColor: Colors.white.withOpacity(0.7),
               ),
-              onPressed: isButtonDisabled ? null : () => viewModel.generateStory(generatorTitle),
+              onPressed: isButtonDisabled ? null : () => viewModel.generateStory(t('Legend Story', 'Kisah Legenda')), // Kirim Default Title
             ),
           ],
         ),
@@ -259,6 +345,7 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
     WidgetRef ref,
     GeneratorKisahLegendaViewModel viewModel,
     GeneratorKisahLegendaState state,
+    String Function(String, String) t,
   ) {
     final theme = Theme.of(context);
     final bool hasOutput = state.generatedStory.isNotEmpty;
@@ -269,7 +356,7 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
 
     String outputContent = hasOutput
         ? state.generatedStory
-        : KisahLegendaLocalizationHelper.get('outputPlaceholder');
+        : t('Result will appear here...', 'Hasil akan muncul di sini...');
 
     return Card(
       margin: EdgeInsets.zero,
@@ -278,9 +365,22 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              KisahLegendaLocalizationHelper.get('outputTitle'),
-              style: theme.textTheme.headlineSmall,
+            // [REVISI UI] Header dengan Tombol Lapor (Flag)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  t('Generated Legend', 'Kisah Hasil Generasi'),
+                  style: theme.textTheme.headlineSmall?.copyWith(fontSize: 18),
+                ),
+                // Tombol Lapor (Hanya muncul jika ada konten)
+                if (hasOutput)
+                  IconButton(
+                    icon: const Icon(Icons.flag_outlined, color: Colors.redAccent),
+                    tooltip: t('Report offensive content', 'Laporkan konten'),
+                    onPressed: () => _showReportDialog(context, ref, outputContent),
+                  ),
+              ],
             ),
             const SizedBox(height: 20),
             Container(
@@ -295,7 +395,7 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
               child: state.isLoading
                   ? Center(
                       child: Text(
-                          KisahLegendaLocalizationHelper.get('apiLoading'),
+                          t('Consulting elders...', 'Bertanya pada sesepuh...'),
                           style: TextStyle(
                               color: theme.textTheme.bodySmall?.color,
                               fontStyle: FontStyle.italic)))
@@ -314,11 +414,9 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
             // --- [HEADER & KONTROL OUTPUT] ---
             Row(
               children: [
-                // 1. TOMBOL COPY
+                // 1. TOMBOL COPY (Text Only)
                 Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.copy, size: 18),
-                    label: const Text('Copy'),
+                  child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       foregroundColor: copyColor,
@@ -335,25 +433,24 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                    KisahLegendaLocalizationHelper.get('btnCopied')),
+                                    t('Copied to clipboard!', 'Disalin ke papan klip!')),
                                 backgroundColor: Colors.green,
                               ),
                             );
                           },
+                    child: Text(t('Copy', 'Salin')),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 8), // Spasi diperkecil agar muat
                 
-                // 2. TOMBOL SEND
-                _buildSendToProjectButton(context, state),
+                // 2. TOMBOL SEND (Text Only)
+                _buildSendToProjectButton(context, state, t),
 
-                const SizedBox(width: 16),
+                const SizedBox(width: 8),
                 
-                // 3. TOMBOL CLEAR
+                // 3. TOMBOL CLEAR (Text Only)
                 Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    label: Text(KisahLegendaLocalizationHelper.get('btnClear')),
+                  child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       foregroundColor: clearColor,
@@ -363,6 +460,7 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
                       ),
                     ),
                     onPressed: !hasOutput ? null : viewModel.clearAll,
+                    child: Text(t('Clear', 'Hapus')),
                   ),
                 ),
               ],
@@ -373,8 +471,8 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
     );
   }
 
-  // --- Helper: Parsing Hasil Narasi ---
-  Map<String, String> _parseGeneratedContent(String rawContent) {
+  // --- Helper: Parsing Hasil Narasi Kasar ---
+  Map<String, String> _parseGeneratedContent(String rawContent, String defaultTitle) {
     if (rawContent.isEmpty) return {'title': '', 'script': ''};
     
     final lines = rawContent.split('\n');
@@ -383,11 +481,11 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
     
     for (int i = 0; i < lines.length; i++) {
       String line = lines[i].trim();
-      if (line.toLowerCase().startsWith('source:')) continue; 
+      if (line.toLowerCase().startsWith('source:')) continue;
       if (line.isNotEmpty) {
         rawTitle = line;
         startLine = i;
-        break; 
+        break;
       }
     }
     
@@ -396,8 +494,6 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
       script = lines.sublist(startLine + 1).join('\n').trim();
     }
     
-    String defaultTitle = "Kisah Legenda";
-    
     if (rawTitle.isEmpty && script.isNotEmpty) rawTitle = defaultTitle;
     else if (rawTitle.isEmpty && script.isEmpty) return {'title': '', 'script': ''};
     
@@ -405,33 +501,35 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
     return {'title': rawTitle, 'script': cleanedScript};
   }
 
-  // --- Helper: Dropdown Tombol Send (Themed) ---
+  // --- Helper: Dropdown Tombol Send (Themed - Text Only) ---
   Widget _buildSendToProjectButton(
-      BuildContext context, GeneratorKisahLegendaState state) {
+      BuildContext context, GeneratorKisahLegendaState state, String Function(String, String) t) {
     
     final theme = Theme.of(context);
-    final bool hasOutput = state.generatedStory.isNotEmpty; 
+    final bool hasOutput = state.generatedStory.isNotEmpty;
 
-    // Jika Kosong: Tombol Disabled
+    // Jika Kosong: Tombol Disabled (Text Only)
     if (!hasOutput) {
       return Expanded(
-        child: OutlinedButton.icon(
-          icon: const Icon(Icons.send_to_mobile, size: 18),
-          label: const Text("Send"),
+        child: OutlinedButton(
           style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 12), 
+            padding: const EdgeInsets.symmetric(vertical: 12),
             foregroundColor: theme.disabledColor,
-            side: BorderSide(color: theme.disabledColor), 
+            side: BorderSide(color: theme.disabledColor),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(30),
             ),
           ),
           onPressed: null,
+          child: Text(t('Send', 'Kirim')),
         ),
       );
     }
     
-    final Map<String, String> parsedData = _parseGeneratedContent(state.generatedStory);
+    final Map<String, String> parsedData = _parseGeneratedContent(
+        state.generatedStory,
+        t('Legend Story', 'Kisah Legenda')
+    );
     final String cleanTitle = parsedData['title']!;
     final String cleanScript = parsedData['script']!;
 
@@ -443,8 +541,9 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
       child: DropdownButtonHideUnderline(
         child: DropdownButtonFormField<String>(
           decoration: InputDecoration(
-            isDense: true, 
-            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            isDense: true,
+            // Padding Horizontal dikurangi (12)
+            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
             filled: true,
             fillColor: activeFillColor,
             // Border menyala dengan warna Secondary (Amber)
@@ -463,34 +562,21 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
           ),
           isExpanded: true,
           icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
-          hint: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(Icons.send_to_mobile, color: Colors.white, size: 18),
-              SizedBox(width: 8),
-              Text("Send", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ],
+          // Hint: Text Only Center
+          hint: Center(
+            child: Text(
+              t('Send', 'Kirim'), 
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+            )
           ),
           items: <DropdownMenuItem<String>>[
             DropdownMenuItem<String>(
               value: 'motion',
-              child: Row(
-                children: [
-                  Icon(Icons.image_search, size: 16, color: activeFillColor),
-                  const SizedBox(width: 8),
-                  const Text('To VMotion', style: TextStyle(fontSize: 14)),
-                ],
-              ),
+              child: Text('To VMotion', style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
             ),
             DropdownMenuItem<String>(
               value: 'veo',
-              child: Row(
-                children: [
-                  Icon(Icons.movie_filter, size: 16, color: activeFillColor),
-                  const SizedBox(width: 8),
-                  const Text('To VFootage', style: TextStyle(fontSize: 14)),
-                ],
-              ),
+              child: Text('To VFootage', style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
             ),
           ],
           onChanged: (String? value) {
@@ -506,21 +592,19 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
           },
           selectedItemBuilder: (context) {
              return [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.send_to_mobile, color: Colors.white, size: 18),
-                  SizedBox(width: 8),
-                  Text("Send", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ],
+              Center(
+                child: Text(
+                  t('Send', 'Kirim'), 
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis
+                ),
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.send_to_mobile, color: Colors.white, size: 18),
-                  SizedBox(width: 8),
-                  Text("Send", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ],
+              Center(
+                child: Text(
+                  t('Send', 'Kirim'), 
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis
+                ),
               ),
              ];
           },
@@ -530,41 +614,12 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
   }
 
   // --- Drawer (Dark Modern - Layout Fix) ---
-  Widget _buildNarakuDrawer(BuildContext context) {
+  Widget _buildNarakuDrawer(BuildContext context, String Function(String, String) t) {
     final theme = Theme.of(context);
 
-    void _goToKonsultan() {
+    void _navigate(Widget screen) {
       Navigator.pop(context);
-      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const KonsultanIdeKontenScreen()));
-    }
-    void _goToKontenUmum() {
-      Navigator.pop(context);
-      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKontenUmumScreen()));
-    }
-    void _goToNaraku() {
-      Navigator.pop(context);
-      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKontenShortScreen()));
-    }
-    void _goToKisahSejarah() {
-      Navigator.pop(context);
-      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKisahSejarahScreen()));
-    }
-    // void _goToKisahLegenda() { Navigator.pop(context); } // Halaman Ini
-    void _goToKisahIslami() {
-      Navigator.pop(context);
-      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKisahIslamiScreen()));
-    }
-    void _goToKisahHoror() {
-      Navigator.pop(context);
-      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKisahHororScreen()));
-    }
-    void _goToKisahCustom() {
-      Navigator.pop(context);
-      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKisahCustomScreen()));
-    }
-    void _goToGambarThumbnail() {
-      Navigator.pop(context);
-      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorGambarThumbnailScreen()));
+      Navigator.of(context).push(MaterialPageRoute(builder: (c) => screen));
     }
 
     Widget _menuItem(String title, IconData icon, Function() onTap, {bool isDisabled = false}) {
@@ -582,7 +637,7 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // [PERBAIKAN LAYOUT] Mengganti DrawerHeader dengan Container
+          // [PERBAIKAN LAYOUT] Mengganti DrawerHeader dengan Container agar rapi
           Container(
             padding: const EdgeInsets.fromLTRB(16, 50, 16, 20), 
             color: theme.appBarTheme.backgroundColor, 
@@ -590,9 +645,9 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
               children: [
                  Icon(Icons.movie_creation_outlined, color: theme.colorScheme.secondary, size: 32),
                  const SizedBox(width: 12),
-                 const Text(
-                  'Daftar Produk',
-                  style: TextStyle(
+                 Text(
+                  t('Product List', 'Daftar Produk'),
+                  style: const TextStyle(
                     color: Colors.white, 
                     fontSize: 22, 
                     fontWeight: FontWeight.bold
@@ -602,21 +657,21 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
             ),
           ),
           
-          _menuItem('Konsultan Ide Konten', Icons.lightbulb_outline, _goToKonsultan),
-          _menuItem('Generator Konten Umum', Icons.rate_review_outlined, _goToKontenUmum),
-          _menuItem('Generator Konten Short', Icons.movie_creation_outlined, _goToNaraku),
-          _menuItem('Generator Kisah Sejarah', Icons.account_balance_outlined, _goToKisahSejarah),
-          _menuItem('Generator Kisah Legenda', Icons.auto_stories_outlined, () {}, isDisabled: true), // Halaman Ini
-          _menuItem('Generator Kisah Islami', Icons.mosque_outlined, _goToKisahIslami),
-          _menuItem('Generator Kisah Horor', Icons.help_outline, _goToKisahHoror),
-          _menuItem('Generator Kisah Custom', Icons.theater_comedy_outlined, _goToKisahCustom),
+          _menuItem(t('Idea Consultant', 'Konsultan Ide Konten'), Icons.lightbulb_outline, () => _navigate(const KonsultanIdeKontenScreen())),
+          _menuItem(t('General Content', 'Generator Konten Umum'), Icons.rate_review_outlined, () => _navigate(const GeneratorKontenUmumScreen())),
+          _menuItem(t('Short Content', 'Generator Konten Short'), Icons.movie_creation_outlined, () => _navigate(const GeneratorKontenShortScreen())),
+          _menuItem(t('History Story', 'Generator Kisah Sejarah'), Icons.account_balance_outlined, () => _navigate(const GeneratorKisahSejarahScreen())),
+          _menuItem(t('Legend Story', 'Generator Kisah Legenda'), Icons.auto_stories_outlined, () {}, isDisabled: true), // Halaman Ini
+          _menuItem(t('Islamic Story', 'Generator Kisah Islami'), Icons.mosque_outlined, () => _navigate(const GeneratorKisahIslamiScreen())),
+          _menuItem(t('Horror Story', 'Generator Kisah Horor'), Icons.help_outline, () => _navigate(const GeneratorKisahHororScreen())),
+          _menuItem(t('Custom Story', 'Generator Kisah Custom'), Icons.theater_comedy_outlined, () => _navigate(const GeneratorKisahCustomScreen())),
           
           Divider(color: theme.dividerColor, height: 30),
           
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0), 
             child: Text(
-              'Create', 
+              t('Create', 'Buat'), 
               style: TextStyle(color: theme.disabledColor, fontSize: 14, fontWeight: FontWeight.w600)
             )
           ),
@@ -624,21 +679,15 @@ class GeneratorKisahLegendaScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.image_search, color: Colors.blueAccent),
             title: const Text('Create Video Motion', style: TextStyle(color: Colors.white)),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.of(context).push(MaterialPageRoute(builder: (context) => InputScriptScreen())); 
-            },
+            onTap: () => _navigate(const InputScriptScreen()),
           ),
           ListTile(
             leading: Icon(Icons.movie_filter, color: theme.primaryColor),
             title: const Text('Create Video Footage', style: TextStyle(color: Colors.white)),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.of(context).push(MaterialPageRoute(builder: (context) => InputScriptVeoScreen())); 
-            },
+            onTap: () => _navigate(InputScriptVeoScreen()),
           ),
           
-          _menuItem('Create Thumbnail', Icons.aspect_ratio_outlined, _goToGambarThumbnail),
+          _menuItem(t('Create Thumbnail', 'Buat Thumbnail'), Icons.aspect_ratio_outlined, () => _navigate(const GeneratorGambarThumbnailScreen())),
         ],
       ),
     );

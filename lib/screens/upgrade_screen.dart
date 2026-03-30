@@ -1,67 +1,25 @@
-// [RILIS BERSIH - UPGRADE SCREEN: NEW TAB PAYMENT & CONSISTENT UI]
-// KATEGORI_UX_IMPROVEMENT NO_URUT_08 (FIX 8.1 - OPEN NEW TAB)
-// Tujuan:
-// - [UX] Mengubah behavior launchUrl ke '_blank' agar halaman pembayaran terbuka di tab baru.
-// - [UI] Mempertahankan konsistensi warna tombol sesuai tier paket.
-// - [ANTI-REGRESI] Mempertahankan seluruh logika integrasi Duitku & Cloud Functions.
+// [RILIS BERSIH - UPGRADE SCREEN HYBRID FINAL v3]
+// KATEGORI_UX_IMPROVEMENT NO_URUT_12
+// Perbaikan: 
+// 1. Menampilkan harga REAL-TIME dari Google Play (Android) untuk kepatuhan kebijakan.
+// 2. Tetap menggunakan Duitku untuk Web.
+// 3. Menggunakan data Token/Tier dari AppConfig Provider.
 
+import 'dart:io'; 
+import 'package:flutter/foundation.dart' show kIsWeb; 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
-// Helper Class (Tidak Berubah)
-class PackageConfig {
-  final int amount;
-  final int tokens;
-  final String tier;
+// [PENTING] Import Model & Provider Pusat
+import '../models/app_config.dart';
+import '../providers/config_provider.dart';
+import '../providers/user_provider.dart'; 
 
-  PackageConfig({
-    required this.amount,
-    required this.tokens,
-    required this.tier,
-  });
-
-  factory PackageConfig.fromMap(Map<String, dynamic> map) {
-    return PackageConfig(
-      amount: (map['amount'] ?? 0).toInt(),
-      tokens: (map['tokens'] ?? 0).toInt(),
-      tier: map['tier'] ?? '',
-    );
-  }
-}
-
-class AppConfig {
-  final Map<String, PackageConfig> packages;
-
-  AppConfig({required this.packages});
-
-  factory AppConfig.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    final packagesData = data['packages'] as Map<String, dynamic>? ?? {};
-
-    final packages = packagesData.map(
-      (key, value) => MapEntry(
-        key,
-        PackageConfig.fromMap(value as Map<String, dynamic>),
-      ),
-    );
-    return AppConfig(packages: packages);
-  }
-
-  PackageConfig? getPackage(String key) {
-    return packages[key];
-  }
-}
-
-final appConfigProvider = StreamProvider<AppConfig>((ref) {
-  final firestore = FirebaseFirestore.instance;
-  final docStream = firestore.doc('config/token_settings').snapshots();
-
-  return docStream.map((doc) => AppConfig.fromFirestore(doc));
-});
+// [PENTING] Import Service Pembayaran Hybrid (Versi 3 - Support Fetch)
+import '../services/payment_hybrid_service.dart';
 
 // ==========================================================
 // WIDGET SCREEN
@@ -77,7 +35,10 @@ class UpgradeScreen extends ConsumerStatefulWidget {
 class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
   bool _isLoading = false;
   
-  final Map<String, String> paymentOptions = {
+  // Cache lokal untuk memicu rebuild saat harga Google selesai diload
+  bool _priceLoaded = false;
+  
+  final Map<String, String> paymentOptionsWeb = {
     'BC': 'BCA Virtual Account',
     'M2': 'Mandiri Virtual Account (HP)',
     'I1': 'BNI Virtual Account',
@@ -87,7 +48,40 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
     'VC': 'Kartu Kredit (Visa/Master/JCB)',
   };
 
-  Future<void> _handlePayment(String packageId, String paymentMethod) async {
+  // Helper Cek Platform
+  bool get _isAndroidNative => !kIsWeb && Platform.isAndroid;
+
+  @override
+  void initState() {
+    super.initState();
+    // [ANTI-REGRESI] Fetch harga Google saat layar dimuat (Khusus Android)
+    if (_isAndroidNative) {
+      _fetchGooglePrices();
+    }
+  }
+
+  /// Mengambil harga asli dari Google Play agar sesuai kebijakan "No Misleading Price"
+  Future<void> _fetchGooglePrices() async {
+    // Daftar ID Paket yang ada di Google Console
+    // Pastikan ID ini SAMA PERSIS dengan yang ada di Config/Database
+    final Set<String> productIds = {
+      'basic_monthly',
+      'standard_monthly',
+      'pro_monthly',
+    };
+
+    await PaymentHybridService().fetchProductDetails(productIds);
+
+    // Refresh UI setelah data terambil
+    if (mounted) {
+      setState(() {
+        _priceLoaded = true;
+      });
+    }
+  }
+
+  // --- [LOGIKA PEMBAYARAN: WEB (DUITKU)] ---
+  Future<void> _handlePaymentWeb(String packageId, String paymentMethod) async {
     if (_isLoading) return; 
 
     setState(() => _isLoading = true);
@@ -116,10 +110,10 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
       
       final uri = Uri.parse(paymentUrl);
 
-      // [MODIFIKASI PENTING] Menggunakan '_blank' untuk membuka tab baru
+      // Membuka di Tab Baru
       if (!await launchUrl(
           uri, 
-          webOnlyWindowName: '_blank', // Diubah dari '_self' ke '_blank'
+          webOnlyWindowName: '_blank', 
         )) {
         throw Exception('Tidak dapat membuka URL: $paymentUrl');
       }
@@ -149,7 +143,43 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
     }
   }
 
-  Future<void> _showPaymentMethods(String packageId, String packageTitle) async {
+  // --- [LOGIKA PEMBAYARAN: ANDROID (GOOGLE PLAY SUBSCRIPTION)] ---
+  Future<void> _handlePaymentAndroid(String packageId) async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
+    try {
+      // Panggil Service Hybrid V3
+      await PaymentHybridService().payWithGooglePlay(productId: packageId);
+      
+      // Feedback UI
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Menghubungkan ke Google Play Store...'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memuat Google Billing: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // --- [UI BOTTOM SHEET WEB] ---
+  Future<void> _showPaymentMethodsWeb(String packageId, String packageTitle, bool isIndo) async {
+    String t(String en, String id) => isIndo ? id : en;
+
     await showModalBottomSheet(
       context: context,
       constraints: BoxConstraints(
@@ -165,7 +195,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
                 child: Text(
-                  'Pilih Pembayaran ($packageTitle)', 
+                  '${t("Select Payment", "Pilih Pembayaran")} ($packageTitle)', 
                   style: Theme.of(bContext).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -174,7 +204,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 12.0),
                 child: Text(
-                  'Silakan pilih metode pembayaran yang Anda inginkan.',
+                  t("Please select your preferred payment method.", "Silakan pilih metode pembayaran yang Anda inginkan."),
                   style: Theme.of(bContext).textTheme.bodyMedium,
                 ),
               ),
@@ -182,16 +212,16 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
 
               Expanded(
                 child: ListView.builder(
-                  itemCount: paymentOptions.length,
+                  itemCount: paymentOptionsWeb.length,
                   itemBuilder: (context, index) {
-                    final key = paymentOptions.keys.elementAt(index);
-                    final value = paymentOptions[key]!;
+                    final key = paymentOptionsWeb.keys.elementAt(index);
+                    final value = paymentOptionsWeb[key]!;
                     return ListTile(
                       leading: const Icon(Icons.payment_outlined),
                       title: Text(value),
                       onTap: () {
                         Navigator.of(bContext).pop(); 
-                        _handlePayment(packageId, key); 
+                        _handlePaymentWeb(packageId, key); 
                       },
                     );
                   },
@@ -203,6 +233,43 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
         );
       },
     );
+  }
+
+  // --- [HELPER FORMAT HARGA & TEKS] ---
+  
+  /// Helper Display Harga:
+  /// - Jika Android: Prioritaskan Cache Google Play.
+  /// - Jika Web: Gunakan Config Database + Formatter.
+  String _getDisplayPrice({
+    required String packageId, 
+    required int dbAmount, 
+    required bool isIndo
+  }) {
+    if (_isAndroidNative) {
+      // Coba ambil string harga resmi dari Google (cth: "Rp 129.000,00")
+      final googlePrice = PaymentHybridService().getPriceFromCache(packageId);
+      if (googlePrice != null) {
+        return googlePrice;
+      }
+      // Jika belum load, return placeholder (jangan return harga tebakan)
+      return isIndo ? "Memuat..." : "Loading...";
+    }
+
+    // Fallback Web / Logic Lama
+    if (isIndo) {
+      return NumberFormat.currency(
+        locale: 'id_ID',
+        symbol: 'Rp ',
+        decimalDigits: 0,
+      ).format(dbAmount);
+    } else {
+      double amountInUsd = dbAmount / 15500;
+      return NumberFormat.currency(
+        locale: 'en_US',
+        symbol: '\$',
+        decimalDigits: 2, 
+      ).format(amountInUsd);
+    }
   }
 
   Widget _buildFeatureRow(BuildContext context, {required IconData icon, required String text}) {
@@ -227,14 +294,24 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
     BuildContext context, {
     required String packageId, 
     required String title,
-    required String price,
+    required int dbAmount, // Harga database (untuk Web)
     required String period,
     required String initialTokens,
     required String topUpPrice,
     required IconData icon,
     required Color iconColor,
+    required bool isIndo, 
     bool isRecommended = false,
   }) {
+    String t(String en, String id) => isIndo ? id : en;
+    
+    // Ambil harga yang BENAR (Google vs Web)
+    final displayPrice = _getDisplayPrice(
+      packageId: packageId, 
+      dbAmount: dbAmount, 
+      isIndo: isIndo
+    );
+
     return Card(
       elevation: isRecommended ? 8.0 : 2.0,
       shape: RoundedRectangleBorder(
@@ -266,10 +343,13 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
+                // Tampilan Harga
                 Text(
-                  price,
+                  displayPrice,
                   style: Theme.of(context).textTheme.displaySmall?.copyWith(
                         fontWeight: FontWeight.bold,
+                        // Jika teks "Memuat..." kecilkan font sedikit
+                        fontSize: displayPrice.length > 15 ? 24 : (isIndo ? 32 : 36), 
                       ),
                 ),
                 const SizedBox(width: 4),
@@ -285,21 +365,22 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
             _buildFeatureRow(
               context,
               icon: Icons.token_outlined,
-              text: 'Token Awal: $initialTokens',
+              text: '${t("Initial Tokens", "Token Awal")}: $initialTokens',
             ),
             _buildFeatureRow(
               context,
               icon: Icons.add_shopping_cart_outlined,
-              text: 'Harga Top-Up: $topUpPrice / 10.000 TM',
+              text: '${t("Top-Up Price", "Harga Top-Up")}: $topUpPrice / 10.000 TM',
             ),
             const SizedBox(height: 24),
             
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
+              child: ElevatedButton.icon(
+                icon: Icon(_isAndroidNative ? Icons.subscriptions : Icons.check_circle_outline, size: 18),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: iconColor, 
+                  backgroundColor: _isAndroidNative ? Colors.green[700] : iconColor, 
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8.0),
@@ -307,15 +388,23 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                 ),
                 onPressed: _isLoading 
                     ? null 
-                    : () => _showPaymentMethods(packageId, title), 
-                child: _isLoading
+                    : () {
+                        if (_isAndroidNative) {
+                          _handlePaymentAndroid(packageId);
+                        } else {
+                          _showPaymentMethodsWeb(packageId, title, isIndo); 
+                        }
+                      },
+                label: _isLoading
                     ? const SizedBox( 
                         height: 24,
                         width: 24,
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
                       )
                     : Text( 
-                        'Pilih Paket $title',
+                        _isAndroidNative 
+                           ? t("Subscribe with Google Play", "Langganan via Google Play")
+                           : '${t("Select", "Pilih Paket")} $title',
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
               ),
@@ -328,22 +417,24 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 1. [PENTING] Gunakan Provider Pusat (Global)
     final appConfigAsync = ref.watch(appConfigProvider);
+    
+    // 2. Watch Language State
+    final currentLocale = ref.watch(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+
+    String t(String en, String id) => isIndo ? id : en;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Upgrade Membership'),
+        title: Text(t("Membership Upgrade", "Upgrade Membership")),
       ),
       body: appConfigAsync.when(
         data: (config) {
-          final currencyFormat = NumberFormat.currency(
-            locale: 'id_ID',
-            symbol: 'Rp ',
-            decimalDigits: 0,
-          );
-          
-          final numberFormat = NumberFormat.decimalPattern('id_ID');
+          final numberFormat = NumberFormat.decimalPattern(isIndo ? 'id_ID' : 'en_US');
 
+          // Ambil data paket dari config (untuk Token & Tier)
           final basic = config.getPackage('basic_monthly');
           final standard = config.getPackage('standard_monthly');
           final pro = config.getPackage('pro_monthly');
@@ -352,52 +443,120 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
           final topupStandard = config.getPackage('topup_standard');
           final topupPro = config.getPackage('topup_pro');
 
+          // [FIX] Ambil harga DB untuk Web saja (Android pakai Fetch)
+          int basicAmount = basic?.amount ?? 95000;
+          int stdAmount = standard?.amount ?? 279000;
+          int proAmount = pro?.amount ?? 2700000;
+
+          // Harga TopUp Display (Hanya info teks, bisa pakai estimasi/logic lama untuk display web)
+          // Untuk display "Top-Up Price" di dalam kartu, kita gunakan format web dulu sebagai indikasi.
+          int basicTopup = topupBasic?.amount ?? 95000;
+          int stdTopup = topupStandard?.amount ?? 93000;
+          int proTopup = topupPro?.amount ?? 90000;
+
+          // Helper format uang lokal untuk info teks
+          String fmt(int val) {
+             if(isIndo) return NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0).format(val);
+             return NumberFormat.currency(locale: 'en_US', symbol: '\$', decimalDigits: 2).format(val/15500);
+          }
+
           return SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 
-                // Kartu Basic (Tombol Biru)
+                // Banner Google Tax (Android Only)
+                if (_isAndroidNative)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 24),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline, color: Colors.orange),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            t("Price includes Google Play subscription fees.", "Harga sudah termasuk biaya langganan Google Play."),
+                            style: const TextStyle(fontSize: 12, color: Colors.deepOrange),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // Info Banner USD (Web Only)
+                if (!isIndo && !_isAndroidNative)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: const [
+                          Icon(Icons.info_outline, size: 20, color: Colors.blue),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              "Prices are shown in USD for reference. Transaction will be processed in IDR.",
+                              style: TextStyle(fontSize: 12, color: Colors.blueGrey),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                // PLAN CARDS
                 _buildPlanCard(
                   context,
                   packageId: 'basic_monthly',
                   title: 'Basic',
-                  price: currencyFormat.format(basic?.amount ?? 95000),
-                  period: '/ bulan',
+                  dbAmount: basicAmount, // Web Only
+                  period: t('/ month', '/ bulan'),
                   initialTokens: '${numberFormat.format(basic?.tokens ?? 10000)} TM',
-                  topUpPrice: currencyFormat.format(topupBasic?.amount ?? 95000),
+                  topUpPrice: fmt(basicTopup), 
                   icon: Icons.looks_3_outlined,
                   iconColor: Colors.blue.shade700,
+                  isIndo: isIndo,
                 ),
                 const SizedBox(height: 20),
 
-                // Kartu Standard (Tombol Ungu)
                 _buildPlanCard(
                   context,
                   packageId: 'standard_monthly',
                   title: 'Standard',
-                  price: currencyFormat.format(standard?.amount ?? 279000),
-                  period: '/ bulan',
+                  dbAmount: stdAmount, // Web Only
+                  period: t('/ month', '/ bulan'),
                   initialTokens: '${numberFormat.format(standard?.tokens ?? 30000)} TM',
-                  topUpPrice: currencyFormat.format(topupStandard?.amount ?? 93000),
+                  topUpPrice: fmt(stdTopup),
                   icon: Icons.looks_two_outlined,
                   iconColor: Colors.purple.shade700,
                   isRecommended: true,
+                  isIndo: isIndo,
                 ),
                 const SizedBox(height: 20),
 
-                // Kartu Professional (Tombol Amber)
                 _buildPlanCard(
                   context,
                   packageId: 'pro_monthly',
                   title: 'Professional',
-                  price: currencyFormat.format(pro?.amount ?? 2700000),
-                  period: '/ bulan',
+                  dbAmount: proAmount, // Web Only
+                  period: t('/ month', '/ bulan'),
                   initialTokens: '${numberFormat.format(pro?.tokens ?? 300000)} TM',
-                  topUpPrice: currencyFormat.format(topupPro?.amount ?? 90000),
+                  topUpPrice: fmt(proTopup),
                   icon: Icons.workspace_premium_outlined,
                   iconColor: Colors.amber.shade800,
+                  isIndo: isIndo,
                 ),
               ],
             ),
@@ -409,7 +568,10 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Text(
-              'Gagal memuat data harga.\nError: ${err.toString()}',
+              t(
+                'Failed to load pricing data.\nError: ${err.toString()}',
+                'Gagal memuat data harga.\nError: ${err.toString()}',
+              ),
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.red.shade700),
             ),

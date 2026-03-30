@@ -1,79 +1,51 @@
-﻿// [RILIS UTUH - INTEGRASI AUTH TOKEN & OPSI PANJANG NARASI]
-// KATEGORI_NARAKU_TOKEN NO_URUT_04 (REVISI 2.0)
-// Lokasi: lib/view_model_naraku/generator_konten_short_view_model.dart
+﻿// [RILIS FINAL - HYBRID SPLIT STRATEGY]
+// KATEGORI_NARAKU_TOKEN NO_URUT_14
 // TUJUAN:
-// - [FITUR] Mengirimkan Firebase Auth ID Token (JWT).
-// - [FITUR] Mendukung opsi panjang narasi (lengthOption).
+// - [WEB] Menggunakan 'httpsCallable' (SDK) -> Terbukti SUKSES di Web.
+// - [ANDROID] Menggunakan 'http.post' (Manual) -> Solusi anti-macet di Android.
+// - [DATA] Memastikan 'currentTitle' terisi default jika kosong (Anti Error 400).
 
+import 'package:flutter/foundation.dart'; // Untuk kIsWeb
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
+
+// Import HTTP untuk Android
+import 'package:http/http.dart' as http; 
 import 'dart:convert';
-import 'dart:ui';
 
-// --- [IMPOR BARU UNTUK OTENTIKASI] ---
+// Import Cloud Functions untuk Web
+import 'package:cloud_functions/cloud_functions.dart'; 
+
+// Import Auth
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
-import '../view_model/auth_view_model.dart'; // Untuk authStateChangesProvider
-// --- [AKHIR IMPOR BARU] ---
+import '../view_model/auth_view_model.dart'; 
 
-// --- KATEGORI_INTEGRASI_KONTEN_SHORT NO_URUT_01: Data Localization Digabung ---
-// (Tidak Berubah)
 class NarakuLocalizationHelper {
   static const Map<String, Map<String, String>> translations = {
     'id': {
-      'generatorTitle': "Generator Konten Short",
-      'promptLabel': "Masukkan Judul atau Kata Kunci Anda:",
-      'promptPlaceholder': "contoh : Fakta Unik Gajah",
-      'languageHint':
-          "💡 Tips: Anda bisa menentukan bahasa output di akhir, contoh: ', dalam bahasa Inggris'",
-      'btnGenerate': "Buat Narasi",
-      'outputTitle': "Narasi yang Dibuat",
-      'outputPlaceholder': "Hasil Generasi Akan Muncul Disini...",
-      'btnCopy': "Salin Narasi",
-      'btnClear': "Hapus",
-      'alertNoInput':
-          "Silakan masukkan judul atau kata kunci terlebih dahulu.",
-      'statusGenerating': "Memproses...",
-      'statusLoading': "Sedang membuat narasi, mohon tunggu",
-      'statusCopySuccess': "Berhasil Disalin!",
+      'alertNoInput': "Silakan masukkan judul atau kata kunci terlebih dahulu.",
       'alertApiError': "Terjadi kesalahan: {message}",
     },
     'en': {
-      'generatorTitle': "Short Content Generator",
-      'promptLabel': "Enter Your Title or Keyword:",
-      'promptPlaceholder': "Example: Unique Elephant Facts",
-      'languageHint':
-          "💡 Tip: You can specify the output language at the end, e.g., ', in English'",
-      'btnGenerate': "Create Narrative",
-      'outputTitle': "Generated Narrative",
-      'outputPlaceholder': "Generated Results Will Appear Here...",
-      'btnCopy': "Copy Narrative",
-      'btnClear': "Clear",
       'alertNoInput': "Please enter a title or keyword first.",
-      'statusGenerating': "Processing...",
-      'statusLoading': "Generating narrative, please wait",
-      'statusCopySuccess': "Copied Successfully!",
       'alertApiError': "An error occurred: {message}",
     },
   };
 
   static String get(String key, {String? localeCode}) {
-    final lang = localeCode ?? PlatformDispatcher.instance.locale.languageCode;
+    final lang = localeCode ?? 'en'; 
     final langKey = lang == 'id' ? 'id' : 'en';
     final translationMap = translations[langKey] ?? translations['id']!;
     return translationMap[key] ?? key;
   }
 }
-// --- AKHIR DATA LOKALISASI DIGABUNG ---
 
-/// KATEGORI_INTEGRASI_KONTEN_SHORT NO_URUT_02
 @immutable
 class GeneratorKontenShortState {
   final bool isLoading;
   final String generatedNarrative;
   final String? errorMessage;
   final String loadingText;
-  // [BARU] Opsi Panjang Narasi (Default 1000)
   final int lengthOption;
 
   const GeneratorKontenShortState({
@@ -81,7 +53,7 @@ class GeneratorKontenShortState {
     this.generatedNarrative = '',
     this.errorMessage,
     this.loadingText = '',
-    this.lengthOption = 1000, // Default 1000
+    this.lengthOption = 1000,
   });
 
   GeneratorKontenShortState copyWith({
@@ -102,31 +74,26 @@ class GeneratorKontenShortState {
   }
 }
 
-/// KATEGORI_INTEGRASI_KONTEN_SHORT NO_URUT_03 (DIMODIFIKASI)
 class GeneratorKontenShortViewModel
     extends StateNotifier<GeneratorKontenShortState> {
   final TextEditingController promptController = TextEditingController();
-
-  // [BARU] Tambahkan Ref untuk mengakses provider lain
   final Ref _ref;
 
-  // [MODIFIKASI] Terima Ref di constructor
+  // URL Endpoint (Hanya dipakai Android)
+  final String _endpointUrl = 
+      "https://asia-southeast2-majiku-5b07e.cloudfunctions.net/generateKontenShort";
+
   GeneratorKontenShortViewModel(this._ref)
       : super(const GeneratorKontenShortState());
 
-  // (URL Cloud Function Tidak Berubah)
-  final String _cloudFunctionUrl =
-      "https://asia-southeast2-majiku-5b07e.cloudfunctions.net/generateKontenShort";
-
-  // [BARU] Metode untuk mengubah panjang narasi
   void setLengthOption(int length) {
     state = state.copyWith(lengthOption: length);
   }
 
-  /// [MODIFIKASI] - Mengirimkan Token Otentikasi & lengthOption
-  Future<void> generateNarrative(String currentTitle) async {
+  Future<void> generateNarrative(String? currentTitle) async {
     if (state.isLoading) return;
     final prompt = promptController.text.trim();
+    
     if (prompt.isEmpty) {
       state = state.copyWith(
           errorMessage: NarakuLocalizationHelper.get('alertNoInput'),
@@ -138,78 +105,123 @@ class GeneratorKontenShortViewModel
         isLoading: true, clearError: true, loadingText: 'GENERATING');
 
     try {
-      // --- [LOGIKA TOKEN BARU - LANGKAH 2A] ---
-      // 1. Dapatkan user saat ini dari provider auth
-      final authUser = _ref.read(authStateChangesProvider).value;
+      String? finalText;
 
-      if (authUser == null) {
-        throw Exception("Sesi pengguna tidak ditemukan. Harap login ulang.");
+      // [FIX PENTING] Handle Title Kosong (Penyebab Error 400 di Backend)
+      String safeTitle = currentTitle ?? "";
+      if (safeTitle.trim().isEmpty) {
+        // Jika kosong, gunakan 20 karakter pertama dari prompt atau default
+        safeTitle = prompt.length > 20 ? prompt.substring(0, 20) : "Konten Baru";
       }
 
-      // 2. Dapatkan ID Token (JWT) pengguna.
-      final idToken = await authUser.getIdToken(true);
-      // --- [AKHIR LOGIKA TOKEN BARU] ---
+      // Data Payload Murni
+      final Map<String, dynamic> payload = {
+        'promptValue': prompt,
+        'currentTitle': safeTitle,
+        'lengthOption': state.lengthOption,
+      };
 
-      // 1. Siapkan body (DITAMBAHKAN lengthOption)
-      final body = jsonEncode({
-        'data': {
-          'promptValue': prompt,
-          'currentTitle': currentTitle,
-          'lengthOption': state.lengthOption, // <-- Mengirim opsi panjang ke Backend
+      // ============================================================
+      // PERCABANGAN LOGIKA: WEB vs ANDROID
+      // ============================================================
+
+      if (kIsWeb) {
+        // [JALUR WEB] Gunakan SDK Resmi (httpsCallable)
+        // Ini sama persis dengan "Kode Awal" Anda yang sukses di Web.
+        // SDK akan otomatis membungkus payload dalam { data: ... }
+        
+        print("--- [WEB] Using httpsCallable SDK ---");
+        
+        final functions = FirebaseFunctions.instanceFor(region: "asia-southeast2");
+        final callable = functions.httpsCallable('generateKontenShort');
+
+        final result = await callable.call(payload); // Kirim payload langsung!
+
+        final data = result.data;
+        if (data is Map && data.containsKey('data')) {
+           finalText = data['data']; 
+        } else if (data is String) {
+           finalText = data;
         }
-      });
 
-      // 2. Lakukan panggilan HTTP POST
-      final response = await http.post(
-        Uri.parse(_cloudFunctionUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          // [MODIFIKASI] Kirim token otentikasi
-          'Authorization': 'Bearer $idToken',
-        },
-        body: body,
-      ).timeout(const Duration(seconds: 120)); // Timeout 2 menit
-
-      // 3. Tangani respons (tidak berubah)
-      if (response.statusCode == 200) {
-        final responseBody = jsonDecode(response.body);
-        final resultText = responseBody['data'];
-
-        if (resultText != null) {
-          // Sukses
-          state = state.copyWith(
-            isLoading: false,
-            generatedNarrative: resultText as String,
-            loadingText: '',
-          );
-        } else {
-          throw Exception(
-              "Respons sukses, namun 'data' tidak ditemukan di body.");
-        }
       } else {
-        // Tangani error dari server (misal: 400, 500)
-        final errorBody = jsonDecode(response.body);
-        final errorMessage =
-            errorBody['error']?['message'] ?? 'Error HTTP ${response.statusCode}';
-        // [PERBAIKAN] Jika token tidak cukup (402), tampilkan pesan
-        if (response.statusCode == 402) {
-          throw Exception(errorMessage); // Tampilkan pesan dari server (misal: "Token Tidak Cukup")
+        // [JALUR ANDROID] Gunakan HTTP Manual
+        // Agar tidak macet di Google Play Services.
+        
+        print("--- [ANDROID] Using HTTP Manual ---");
+
+        // 1. Ambil Token
+        final authUser = _ref.read(authStateChangesProvider).value;
+        if (authUser == null) throw Exception("User tidak login.");
+        final idToken = await authUser.getIdToken(true);
+
+        // 2. Bungkus Payload dengan key "data" (Single Wrap)
+        // Ini meniru apa yang dilakukan SDK Web secara manual.
+        final body = jsonEncode({
+          "data": payload 
+        });
+
+        // 3. Kirim
+        final response = await http.post(
+          Uri.parse(_endpointUrl),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $idToken',
+          },
+          body: body,
+        ).timeout(const Duration(seconds: 120));
+
+        print("Status Code: ${response.statusCode}");
+
+        if (response.statusCode == 200) {
+          final responseJson = jsonDecode(response.body);
+          // Hasil onCall HTTP ada di 'result' atau 'data'
+          final resultData = responseJson['result'] ?? responseJson['data'];
+          
+          if (resultData != null) {
+             if (resultData is String) {
+               finalText = resultData;
+             } else if (resultData is Map && resultData.containsKey('data')) {
+               finalText = resultData['data'];
+             } else {
+               finalText = resultData.toString();
+             }
+          } else {
+             // Fallback
+             final altData = responseJson['data'];
+             if (altData != null && altData is String) finalText = altData;
+          }
+        } else {
+           // Handle Error
+           final errorBody = jsonDecode(response.body);
+           final msg = errorBody['error']?['message'] ?? response.body;
+           throw Exception("Server Error (${response.statusCode}): $msg");
         }
-        throw Exception(errorMessage);
       }
+
+      // ============================================================
+
+      if (finalText != null && finalText.isNotEmpty) {
+        state = state.copyWith(
+          isLoading: false,
+          generatedNarrative: finalText,
+          loadingText: '',
+        );
+      } else {
+        throw Exception("Hasil generasi kosong.");
+      }
+
     } catch (e) {
-      // Menangkap error koneksi, timeout, atau parsing
+      print("--- ERROR: $e ---");
       state = state.copyWith(
         isLoading: false,
         errorMessage: NarakuLocalizationHelper.get('alertApiError')
-            .replaceFirst(
-                '{message}', e.toString().replaceFirst('Exception: ', '')),
+            .replaceFirst('{message}', e.toString()),
         loadingText: '',
       );
     }
   }
 
-  // (Metode clearNarrative & clearAll Tidak Berubah)
   void clearNarrative() {
     state = state.copyWith(generatedNarrative: '', clearError: true);
   }
@@ -219,7 +231,6 @@ class GeneratorKontenShortViewModel
     state = state.copyWith(generatedNarrative: '', clearError: true);
   }
 
-  // (Metode dispose Tidak Berubah)
   @override
   void dispose() {
     promptController.dispose();
@@ -227,11 +238,9 @@ class GeneratorKontenShortViewModel
   }
 }
 
-/// KATEGORI_INTEGRASI_KONTEN_SHORT NO_URUT_04 (DIMODIFIKASI)
 final generatorKontenShortViewModelProvider = StateNotifierProvider.autoDispose<
     GeneratorKontenShortViewModel, GeneratorKontenShortState>(
   (ref) {
-    // [MODIFIKASI] Suntikkan 'ref' ke ViewModel
     return GeneratorKontenShortViewModel(ref);
   },
 );

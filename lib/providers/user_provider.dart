@@ -1,124 +1,97 @@
-/*
-KATEGORI_ARSITEKTUR_BARU NO_URUT_02 (REVISI 3 - FINAL)
-Nama File: lib/providers/user_provider.dart
-Tujuan:
-- (Koreksi Kritis Final) Memperbaiki arsitektur provider yang salah menangani state loading.
-- Logika baru ini memastikan provider dokumen (_userDocumentStreamProvider)
-- menunggu (respects) state loading dari provider auth (authStateChangesProvider).
-*/
+//..................................................//
+// LIB/PROVIDERS/USER_PROVIDER.DART                 //
+//..................................................//
 
+//No ke-1...........................................//
+// IMPORT DEPENDENSI & SETUP AWAL                   //
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // --- Impor Dependensi ---
-import '../view_model/auth_view_model.dart'; // (Provider Auth yang ada)
-import '../models/app_user.dart'; // (Model User yang ada)
+import '../view_model/auth_view_model.dart'; // Provider Auth
+import '../models/app_user.dart'; // Model User 
 
-// --- Definisi Provider ---
+/*
+KATEGORI_ARSITEKTUR_BARU NO_URUT_02 (REVISI 4.2 - SENTRALISASI MUTLAK & ANTI RACE-CONDITION)
+Nama File: lib/providers/user_provider.dart
+Tujuan:
+- [FIX KRITIS] Menghapus MockDocSnapshot yang menjadi "Pencuri Start" dan merusak logika anti-fraud.
+- [SYNC] Menghubungkan AuthState dan FirestoreStream secara reaktif.
+- [KEAMANAN] Memaksa aplikasi menunggu validasi dari firestore_service.dart sebelum menampilkan profil.
+*/
+//..................................................//
 
-/// Provider 1: Menyediakan instance FirebaseFirestore (helper)
+//No ke-2...........................................//
+// FIREBASE FIRESTORE & DOCUMENT STREAM PROVIDER    //
+/// Provider 1: Menyediakan instance FirebaseFirestore
 final firestoreProvider = Provider<FirebaseFirestore>((ref) {
   return FirebaseFirestore.instance;
 });
 
-/// Provider 2: Stream Dokumen Pengguna (HANYA aktif saat login)
-/// [KOREKSI KUNCI]: Provider ini sekarang menggunakan .when() untuk
-/// menangani state loading/error dari provider auth dengan benar.
+/// Provider 2: Stream Dokumen Pengguna (Raw Firestore Stream)
+/// Menyederhanakan aliran data agar selalu sinkron dengan database asli.
 final _userDocumentStreamProvider =
-    StreamProvider.autoDispose<DocumentSnapshot<Map<String, dynamic>>>((ref) {
+    StreamProvider.autoDispose<DocumentSnapshot<Map<String, dynamic>>?>((ref) {
   
-  // Perhatikan provider status auth
   final authState = ref.watch(authStateChangesProvider);
   final db = ref.watch(firestoreProvider);
 
-  // Gunakan .when() untuk menangani SEMUA state dari provider auth
   return authState.when(
     data: (user) {
       if (user != null) {
-        // SUKSES: User login, BUKA stream ke dokumen 'users/[UID]'
+        // User login: Buka kran data dari Firestore secara realtime
         return db.collection('users').doc(user.uid).snapshots();
       } else {
-        // SUKSES: User logout, kembalikan stream snapshot kosong
-        return Stream.value(_EmptyDocumentSnapshot());
+        // User logout: Kran ditutup (null)
+        return Stream.value(null);
       }
     },
-    loading: () {
-      // LOADING: Auth masih loading, provider ini juga loading.
-      // Kembalikan stream yang tidak pernah emit (menjaga state loading)
-      return const Stream.empty();
-    },
-    error: (e, s) {
-      // ERROR: Auth error, teruskan error
-      return Stream.error(e);
-    },
+    loading: () => const Stream.empty(),
+    error: (e, s) => Stream.error(e),
   );
 });
+//..................................................//
 
-/// Provider 3: Provider AppUser (Provider Publik untuk UI)
-/// KUNCI UTAMA: Ini yang akan di-watch oleh UI.
-/// Menggabungkan state Auth dan state Dokumen Firestore.
-/// [KOREKSI KUNCI]: Logika ini sekarang disederhanakan karena provider
-/// di atas sudah menangani state loading auth.
+//No ke-3...........................................//
+// APP USER PROVIDER (PINTU UTAMA UI & ANTI-FRAUD)  //
+/// Provider 3: Provider AppUser
+/// [KUNCI]: Menggabungkan data Auth dan Firestore untuk menghasilkan model AppUser.
+/// Telah dibersihkan dari logika Mock yang merusak sistem Anti-Fraud.
 final firestoreUserProvider = StreamProvider.autoDispose<AppUser>((ref) {
   
-  // Perhatikan DUA provider sekaligus
   final authState = ref.watch(authStateChangesProvider);
   final docAsyncValue = ref.watch(_userDocumentStreamProvider);
 
-  // Ambil data user dari auth state (bisa null jika logout)
-  final authUser = authState.value;
-
-  // Skenario 1: authUser atau dokumen masih loading
-  if (authUser == null && authState.isLoading) {
-     return const Stream.empty(); // Auth masih loading
-  }
-  if (!docAsyncValue.hasValue) {
-     return const Stream.empty(); // Dokumen masih loading
+  // 1. Tangani State Loading (Tunggu sampai kran terbuka dari Auth dan Firestore)
+  if (authState.isLoading || docAsyncValue.isLoading) {
+    return const Stream.empty();
   }
 
-  // Skenario 2: Auth error atau Dokumen error
+  // 2. Tangani Error
   if (authState.hasError) return Stream.error(authState.error!);
   if (docAsyncValue.hasError) return Stream.error(docAsyncValue.error!);
-  
-  // Skenario 3: User Logout (authUser adalah null TAPI authState tidak loading)
+
+  final authUser = authState.value;
+  final docSnapshot = docAsyncValue.value;
+
+  // 3. Skenario: User Logout
   if (authUser == null) {
-    return Stream.value(AppUser.empty); // Kembalikan data kosong
+    return Stream.value(AppUser.empty);
   }
 
-  // Skenario 4: Sukses (User Login dan Dokumen Terbaca)
-  final doc = docAsyncValue.value;
-  if (doc != null) {
-    // Gabungkan data Auth (authUser) dan data Dokumen (doc)
-    final appUser = AppUser.fromFirestore(authUser, doc);
-    return Stream.value(appUser);
+  // 4. Skenario: Menunggu Validasi Anti-Fraud (DOKUMEN BELUM ADA)
+  // [MODIFIKASI KRITIS]: Jika dokumen belum ada, kita TIDAK BOLEH membuat dokumen bayangan (Mock).
+  // Kita harus me-return Stream.empty() yang mengindikasikan status "Menunggu/Loading".
+  // UI akan berputar loading sampai firestore_service.dart selesai melakukan Batch Commit
+  // untuk menulis data user dan device_claims secara utuh.
+  if (docSnapshot == null || !docSnapshot.exists) {
+    // Memaksa sistem menunggu "Hakim Tertinggi" selesai bekerja.
+    return const Stream.empty(); 
   }
-  
-  // Fallback (seharusnya tidak terjadi, tapi untuk keamanan)
-  return const Stream.empty();
+
+  // 5. Skenario: Sukses (Dokumen sah dan tervalidasi ditemukan)
+  // Data yang turun di sini sudah dijamin 100% melewati proses forensik hardwareId.
+  return Stream.value(AppUser.fromFirestore(authUser, docSnapshot));
 });
-
-// --- Helper Class (Diperlukan untuk state logout) ---
-// Kelas helper privat untuk mengembalikan DocumentSnapshot palsu yang "kosong".
-class _EmptyDocumentSnapshot implements DocumentSnapshot<Map<String, dynamic>> {
-  @override
-  bool get exists => false;
-
-  @override
-  Map<String, dynamic>? data() => null;
-  
-  @override
-  dynamic operator [](Object field) => null;
-
-  @override
-  dynamic get(Object field) => null;
-  @override
-  T? getAs<T>(String field) => null;
-  @override
-  String get id => '';
-  @override
-  DocumentReference<Map<String, dynamic>> get reference =>
-      throw UnimplementedError();
-  @override
-  SnapshotMetadata get metadata => throw UnimplementedError();
-}
+//..................................................//

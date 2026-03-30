@@ -1,21 +1,26 @@
+//..................................................//
+// LIB/MODELS/APP_USER.DART                         //
+//..................................................//
+
+//No ke-1...........................................//
+// MODEL PENGGUNA DAN KONVERSI FIRESTORE            //
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart' as firebase_auth; // Alias
+import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 
 /*
-KATEGORI_ARSITEKTUR_BARU NO_URUT_01 (REVISI FINAL 2.0)
+KATEGORI_ARSITEKTUR_BARU NO_URUT_01 (REVISI PARIPURNA 2.5 - SECURITY FIXED)
 Nama File: lib/models/app_user.dart
 Tujuan:
-- (Koreksi Kritis) Menghapus 'createdAt' (Timestamp) yang menyebabkan
-- error 'int64 not supported by dart 2 js' di Flutter Web.
+- [FIX KRITIS] Menghapus logika "Sinterklas" (Pemberian Token Lokal).
+- [SECURITY] Nilai token 100% bergantung pada Firestore. Default 0 mutlak jika belum ada.
+- [WEB-OPTIMIZED] Tetap tanpa Timestamp agar aman dideploy ke Hostinger/Web.
 */
-
 class AppUser {
   final String uid;
   final String email;
   final String? displayName;
   final String userTier;
   final int tokenBalance;
-  // final Timestamp createdAt; // <-- DIHAPUS (Penyebab error int64)
 
   const AppUser({
     required this.uid,
@@ -23,17 +28,15 @@ class AppUser {
     this.displayName,
     required this.userTier,
     required this.tokenBalance,
-    // required this.createdAt, // <-- DIHAPUS
   });
 
-  /// Helper: Membuat instance 'kosong' atau default
+  /// Helper: Membuat instance 'kosong' atau default (Initial State)
   static AppUser get empty {
     return const AppUser(
       uid: '',
       email: '',
       userTier: 'free', 
       tokenBalance: 0,
-      // createdAt: Timestamp(0, 0), // <-- DIHAPUS
     );
   }
 
@@ -42,31 +45,34 @@ class AppUser {
     firebase_auth.User authUser,
     DocumentSnapshot<Map<String, dynamic>> doc,
   ) {
-    final data = doc.data() ?? {}; 
+    // 1. Ambil data mentah dari dokumen
+    final Map<String, dynamic> data = doc.data() ?? {}; 
 
+    // 2. KEAMANAN TINGKAT TINGGI: Tidak ada lagi saldo bayangan lokal!
+    // Semua token 100% berasal dari database. Jika kosong/null, nilainya mutlak 0.
+    final int balance = (data['tokenBalance'] ?? 0).toInt();
+
+    // 3. Fallback untuk userTier
     final String tier = data['userTier'] as String? ?? 'free';
-    final int balance = data['tokenBalance'] as int? ?? 0;
-    // final Timestamp created = data['createdAt'] as Timestamp? ?? Timestamp.now(); // <-- DIHAPUS
 
     return AppUser(
-      // Data dari Firebase Auth
       uid: authUser.uid,
       email: authUser.email ?? '',
-      displayName: authUser.displayName,
-
-      // Data dari Dokumen Firestore
+      displayName: data['displayName'] as String? ?? authUser.displayName,
       userTier: tier,
       tokenBalance: balance,
-      // createdAt: created, // <-- DIHAPUS
     );
   }
 
-  /// Helper: Mengkonversi model AppUser ke Map untuk ditulis ke Firestore
+  /// Helper: Mengkonversi model AppUser ke Map untuk Firestore
   Map<String, dynamic> toFirestore() {
     return {
+      'uid': uid,
+      'email': email,
+      'displayName': displayName,
       'userTier': userTier,
       'tokenBalance': tokenBalance,
-      // 'createdAt': createdAt, // <-- DIHAPUS
     };
   }
 }
+//..................................................//

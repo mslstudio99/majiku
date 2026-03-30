@@ -1,14 +1,17 @@
-// [RILIS BERSIH - DASHBOARD DENGAN MODERN AUTO-DELETE ALERT]
-// KATEGORI_UI_UPDATE_05
+// [RILIS FINAL - DASHBOARD: NOTIFIKASI AUTO-DELETE NON-INTRUSIF]
+// KATEGORI_UI_UPDATE_07
 // Lokasi: lib/screens/project_dashboard_screen.dart
 // TUJUAN:
-// - [FITUR BARU] Menampilkan "Modern Alert Dialog" saat dashboard dibuka pertama kali.
-// - [UX] Mengingatkan user tentang penghapusan data otomatis mingguan.
-// - [ANTI-REGRESI] Semua fitur lama (Imagen, Veo, Token, Navigasi) tetap berjalan normal.
+// - [UX] Mengubah peringatan Auto-Delete dari Auto-Popup menjadi Tombol Notifikasi Manual.
+// - [UI] Menambahkan ikon peringatan di sebelah kiri judul "Majiku".
+// - [MAINTENANCE] Mempertahankan dukungan Bahasa dan Tema Dark Modern.
 
 import 'dart:ui'; // Diperlukan untuk ImageFilter (Blur Effect)
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+// --- [CONFIG] Provider Bahasa ---
+import '../providers/config_provider.dart';
 
 // --- [LAMA] Impor untuk Alur IMAGEN (Motion) ---
 import '../models/video_project.dart';
@@ -17,26 +20,25 @@ import 'input_script_screen.dart';
 import 'timeline_review_screen.dart';
 import 'project_loading_screen.dart';
 
-// --- [LAMA] KATEGORI_INTEGRASI_VEO NO_URUT_01: Impor Alur VEO (Footage) ---
+// --- [LAMA] Impor Alur VEO (Footage) ---
 import '../screens_veo/input_script_veo_screen.dart';
 import '../models_veo/video_project_veo.dart';
 import '../view_model_veo/dashboard_veo_view_model.dart';
 import '../screens_veo/project_loading_veo_screen.dart';
 import '../screens_veo/timeline_review_veo_screen.dart';
 
-// --- [PERBAIKAN] KATEGORI_INTEGRASI_KONTEN_SHORT NO_URUT_01: Impor Layar Baru ---
+// --- [BARU] Impor Layar Generator Short ---
 import '../screens_naraku/generator_konten_short_screen.dart';
 
-// --- [LAMA] KATEGORI_INTEGRASI_TOKEN: Impor Provider & Screen Baru ---
+// --- [LAMA] Integrasi Token & Akun ---
 import '../providers/user_provider.dart';
-import 'user_account_screen.dart'; // Screen tujuan navigasi
+import 'user_account_screen.dart'; 
 import 'upgrade_screen.dart';
 import 'top_up_screen.dart';
 
 // --- [BARU] Impor Tema Dark Modern ---
 import '../theme/app_theme.dart';
 
-// [PERUBAHAN] Diubah menjadi Stateful untuk menangani Lifecycle (InitState)
 class ProjectDashboardScreen extends ConsumerStatefulWidget {
   const ProjectDashboardScreen({super.key});
 
@@ -45,23 +47,23 @@ class ProjectDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen> {
-  // [LOGIKA SESI] Static variable agar notifikasi hanya muncul 1x per sesi aplikasi berjalan
-  static bool _hasShownAutoDeleteWarning = false;
-
+  
   @override
   void initState() {
     super.initState();
-    // Panggil notifikasi setelah frame pertama selesai dirender
-    if (!_hasShownAutoDeleteWarning) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _showModernAutoDeleteDialog();
-        _hasShownAutoDeleteWarning = true; // Tandai sudah muncul
-      });
-    }
+    // [PERUBAHAN UX] Dialog otomatis dihapus agar tidak mengganggu.
+    // Peringatan sekarang diakses via tombol notifikasi di AppBar.
   }
 
-  // --- [FITUR BARU] MODERN ALERT DIALOG ---
+  // --- [FITUR BARU] MODERN ALERT DIALOG (MULTI-LANGUAGE) ---
   void _showModernAutoDeleteDialog() {
+    // Ambil status bahasa saat dialog muncul (Snapshot)
+    final currentLocale = ref.read(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+
+    // Helper teks lokal
+    String t(String en, String id) => isIndo ? id : en;
+
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -109,14 +111,14 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
                   const SizedBox(height: 20),
                   
                   // 2. Judul
-                  const Text(
-                    "Auto-Delete Warning",
-                    style: TextStyle(
+                  Text(
+                    t("Auto-Delete Warning", "Peringatan Hapus Otomatis"),
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                       decoration: TextDecoration.none,
-                      fontFamily: 'Poppins', // Asumsi font aplikasi
+                      fontFamily: 'Poppins',
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -124,26 +126,32 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
                   
                   // 3. Pesan Body
                   Text(
-                    "Sistem akan otomatis menghapus data proyek setiap minggu untuk menjaga performa server.",
+                    t(
+                      "System will automatically delete project data every week to maintain server performance.", 
+                      "Sistem akan otomatis menghapus data proyek setiap minggu untuk menjaga performa server."
+                    ),
                     style: TextStyle(
                       color: Colors.grey[300],
                       fontSize: 14,
                       height: 1.5,
                       decoration: TextDecoration.none,
                       fontWeight: FontWeight.normal,
-                       fontFamily: 'Poppins',
+                      fontFamily: 'Poppins',
                     ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "Segera DOWNLOAD video hasil generasi Anda ke perangkat.",
+                    t(
+                      "Immediately DOWNLOAD your generated videos to your device.",
+                      "Segera DOWNLOAD video hasil generasi Anda ke perangkat."
+                    ),
                     style: TextStyle(
                       color: Colors.amber[200], // Highlight warna emas
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                       decoration: TextDecoration.none,
-                       fontFamily: 'Poppins',
+                      fontFamily: 'Poppins',
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -163,9 +171,9 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
                         ),
                         elevation: 4,
                       ),
-                      child: const Text(
-                        "Saya Mengerti",
-                        style: TextStyle(
+                      child: Text(
+                        t("I Understand", "Saya Mengerti"),
+                        style: const TextStyle(
                           fontSize: 16, 
                           fontWeight: FontWeight.bold
                         ),
@@ -191,15 +199,18 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
     );
   }
 
-  // --- [LAMA] FUNGSI HELPER UNTUK IMAGEN (Motion) ---
-  Widget _buildStatus(BuildContext context, VideoProject project) {
+  // --- FUNGSI HELPER UNTUK IMAGEN (Motion) ---
+  Widget _buildStatus(BuildContext context, VideoProject project, bool isIndo) {
     final String status = project.status ?? 'UNKNOWN';
+
+    // Helper lokal untuk status
+    String t(String en, String id) => isIndo ? id : en;
 
     if (status == 'RENDER_COMPLETED' &&
         project.finalVideoUrl != null &&
         project.finalVideoUrl!.isNotEmpty) {
       return Text(
-        'Render Success',
+        t('Render Success', 'Render Berhasil'),
         style: TextStyle(
           color: Colors.green.shade700,
           fontWeight: FontWeight.bold,
@@ -209,15 +220,17 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
 
     return Text('Status: $status');
   }
-  // --- AKHIR HELPER IMAGEN ---
 
-  // --- [LAMA] FUNGSI HELPER UNTUK VEO (Footage) ---
-  Widget _buildStatusVeo(BuildContext context, VideoProjectVeo project) {
+  // --- FUNGSI HELPER UNTUK VEO (Footage) ---
+  Widget _buildStatusVeo(BuildContext context, VideoProjectVeo project, bool isIndo) {
     final String status = project.status ?? 'UNKNOWN';
+
+    // Helper lokal untuk status
+    String t(String en, String id) => isIndo ? id : en;
 
     if (status == 'ASSETS_COMPLETE') {
       return Text(
-        'Assets Ready',
+        t('Assets Ready', 'Aset Siap'),
         style: TextStyle(
           color: Colors.green.shade700,
           fontWeight: FontWeight.bold,
@@ -226,9 +239,9 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
     }
 
     if (status == 'RENDER_READY') {
-      return const Text(
-        'Ready to Render',
-        style: TextStyle(
+      return Text(
+        t('Ready to Render', 'Siap Render'),
+        style: const TextStyle(
           color: Colors.blueAccent,
           fontWeight: FontWeight.bold,
         ),
@@ -239,7 +252,7 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
         project.finalVideoUrl != null &&
         project.finalVideoUrl!.isNotEmpty) {
       return Text(
-        'Render Success',
+        t('Render Success', 'Render Berhasil'),
         style: TextStyle(
           color: Colors.green.shade700,
           fontWeight: FontWeight.bold,
@@ -249,7 +262,7 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
 
     if (status.startsWith('ERROR_')) {
       return Text(
-        'Error: $status',
+        '${t('Error', 'Eror')}: $status',
         style: const TextStyle(
           color: Colors.redAccent,
           fontWeight: FontWeight.bold,
@@ -260,9 +273,8 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
 
     return Text('Status: $status');
   }
-  // --- AKHIR HELPER VEO ---
 
-  // --- [DIMODIFIKASI] Helper untuk Judul Bagian ---
+  // --- Helper untuk Judul Bagian ---
   Widget _buildSectionHeader(BuildContext context, String title) {
     return SliverToBoxAdapter(
       child: Padding(
@@ -276,7 +288,6 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
       ),
     );
   }
-  // --- AKHIR HELPER JUDUL ---
 
   @override
   Widget build(BuildContext context) {
@@ -289,46 +300,68 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
     // Provider 3 (User / Token)
     final userAsyncValue = ref.watch(firestoreUserProvider);
 
+    // [BARU] Provider Bahasa
+    final currentLocale = ref.watch(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    
+    // Helper lokal untuk build utama
+    String t(String en, String id) => isIndo ? id : en;
+
     // [BARU] Menerapkan tema Dark Modern HANYA ke halaman ini
     return Theme(
       data: AppTheme.darkTheme,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Majiku'),
+          // [MODIFIKASI] Menambahkan Tombol Notifikasi di sebelah kiri Judul
+          title: Row(
+            mainAxisSize: MainAxisSize.min, // Agar tidak mengambil lebar penuh
+            children: [
+              // Tombol Notifikasi Kecil (Pop-up trigger)
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: Icon(
+                  Icons.info_outline, // Ikon Info/Peringatan
+                  color: Colors.amber[700], // Warna Amber agar mencolok sedikit
+                  size: 20,
+                ),
+                tooltip: t('Auto-Delete Info', 'Info Hapus Otomatis'),
+                onPressed: _showModernAutoDeleteDialog, // Panggil dialog manual
+              ),
+            ],
+          ),
           actions: [
-            // 1. Tampilan Saldo Token (Koin Emas & Hijau Kemilau)
+            // 1. Tampilan Saldo Token
             userAsyncValue.when(
               data: (user) {
                 if (user.uid.isEmpty) {
                   return const SizedBox.shrink();
                 }
                 return Padding(
-                  padding: const EdgeInsets.only(right: 12.0), // Spasi kanan sedikit diperlebar
+                  padding: const EdgeInsets.only(right: 12.0),
                   child: Center(
-                    child: Container( // Container opsional untuk background tipis
+                    child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.black26, // Latar belakang tipis agar kontras
+                        color: Colors.black26,
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // [FITUR UI] Ikon Koin Emas
                           Icon(
                             Icons.monetization_on, 
-                            color: Colors.amberAccent[400], // Emas Kemilau
+                            color: Colors.amberAccent[400], 
                             size: 20,
                           ),
                           const SizedBox(width: 6),
-                          // [FITUR UI] Teks Hijau Kemilau
                           Text(
                             '${user.tokenBalance} TM',
                             style: TextStyle(
-                              color: Colors.lightGreenAccent[400], // Hijau Kemilau (Neon)
+                              color: Colors.lightGreenAccent[400],
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
-                              shadows: const [ // Efek Glow halus
+                              shadows: const [
                                 Shadow(
                                   blurRadius: 2,
                                   color: Colors.black45,
@@ -344,14 +377,11 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
                 );
               },
               loading: () => Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
                 child: SizedBox(
                   width: 24,
                   height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.0,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2.0),
                 ),
               ),
               error: (e, s) => const Padding(
@@ -360,67 +390,61 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
               ),
             ),
 
-            // [MODIFIKASI] Tombol Upgrade & +Token
+            // 2. Tombol Upgrade & +Token
             userAsyncValue.when(
               data: (user) {
-                if (user.uid.isEmpty) {
-                  return const SizedBox.shrink(); // User logout
-                }
+                if (user.uid.isEmpty) return const SizedBox.shrink();
                 final bool isFreeUser = (user.userTier == 'free');
                 return Row(
                   children: [
-                    // Tombol Upgrade (Boxy & Rapi)
+                    // Tombol Upgrade
                     SizedBox(
                       height: 36,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.amber[900], // Emas Tua
-                          foregroundColor: Colors.white, // Teks Putih
+                          backgroundColor: Colors.amber[900],
+                          foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6), // Tidak terlalu bundar
+                            borderRadius: BorderRadius.circular(6),
                           ),
                           elevation: 2,
                         ),
-                        child: const Text(
-                          'Upgrade',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 13),
+                        child: Text(
+                          t('Upgrade', 'Upgrade'), // Terjemahan tombol
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                         onPressed: () {
                           Navigator.of(context).push(
-                            MaterialPageRoute(
-                                builder: (context) => const UpgradeScreen()),
+                            MaterialPageRoute(builder: (context) => const UpgradeScreen()),
                           );
                         },
                       ),
                     ),
                     const SizedBox(width: 8),
                     
-                    // Tombol +Token (Boxy & Rapi - Tinggi Sama)
+                    // Tombol +Token
                     SizedBox(
                       height: 36,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.cyan[800], // Cyan Gelap
-                          foregroundColor: Colors.white, // Teks Putih
+                          backgroundColor: Colors.cyan[800],
+                          foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           elevation: 2, 
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6), // Disamakan dengan Upgrade
+                            borderRadius: BorderRadius.circular(6),
                           ),
                         ),
-                        child: const Text(
-                          '+Token', 
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 13),
+                        child: Text(
+                          '+Token', // Universal, tidak perlu translate
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                         onPressed: isFreeUser
                             ? null 
                             : () {
                                 Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                      builder: (context) => const TopUpScreen()),
+                                  MaterialPageRoute(builder: (context) => const TopUpScreen()),
                                 );
                               },
                       ),
@@ -433,10 +457,10 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
               error: (e, s) => const SizedBox.shrink(),
             ),
 
-            // 3. Tombol Akun (Navigasi)
+            // 3. Tombol Akun
             IconButton(
               icon: const Icon(Icons.account_circle_outlined),
-              tooltip: 'My Account',
+              tooltip: t('My Account', 'Akun Saya'),
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -451,37 +475,34 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
         // --- Body: CustomScrollView ---
         body: CustomScrollView(
           slivers: [
-            _buildSectionHeader(context, 'My Projects (Motion)'),
-            _buildImagenProjectList(context, ref, projectsAsyncValue),
+            _buildSectionHeader(context, t('My Projects (Motion)', 'Proyek Saya (Motion)')),
+            _buildImagenProjectList(context, ref, projectsAsyncValue, isIndo),
 
-            _buildSectionHeader(context, 'My Projects (Footage)'),
-            _buildVeoProjectList(context, ref, projectsVeoAsyncValue),
+            _buildSectionHeader(context, t('My Projects (Footage)', 'Proyek Saya (Footage)')),
+            _buildVeoProjectList(context, ref, projectsVeoAsyncValue, isIndo),
 
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
           ],
         ),
 
-        // [MODIFIKASI] Footer Buttons (Warna Gelap & Teks Kontras)
+        // Footer Buttons (Warna Gelap & Teks Kontras)
         persistentFooterButtons: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly, // Ratakan tombol
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                // --- Tombol +Narrative (TEAL GELAP) ---
+                // --- Tombol +Narrative ---
                 Expanded(
                   child: ElevatedButton(
-                    child: const Text(
-                      '+Narrative',
+                    child: Text(
+                      t('+Narrative', '+Narasi'), // Terjemahan
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 16, 
-                        fontWeight: FontWeight.bold, 
-                      ),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      backgroundColor: Colors.teal.shade800, // Diubah lebih gelap
+                      backgroundColor: Colors.teal.shade800,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -490,31 +511,26 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
                     onPressed: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (context) =>
-                              GeneratorKontenShortScreen(), 
+                          builder: (context) => GeneratorKontenShortScreen(), 
                         ),
                       );
                     },
                   ),
                 ),
                 
-                // --- Spasi ---
                 const SizedBox(width: 8),
                 
-                // --- Tombol +VMotion (BIRU TUA) ---
+                // --- Tombol +VMotion ---
                 Expanded(
                   child: ElevatedButton(
                     child: const Text(
-                      '+VMotion',
+                      '+VMotion', // Nama Fitur (Brand), tidak perlu translate
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      backgroundColor: Colors.blue.shade900, // Diubah lebih gelap/tua
+                      backgroundColor: Colors.blue.shade900,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -530,23 +546,19 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
                   ),
                 ),
                 
-                // --- Spasi ---
                 const SizedBox(width: 8),
                 
-                // --- Tombol +VFootage (UNGU TUA) ---
+                // --- Tombol +VFootage ---
                 Expanded(
                   child: ElevatedButton(
                     child: const Text(
-                      '+VFootage',
+                      '+VFootage', // Nama Fitur (Brand), tidak perlu translate
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      backgroundColor: Colors.deepPurple.shade900, // Diubah lebih gelap/tua
+                      backgroundColor: Colors.deepPurple.shade900,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -569,9 +581,12 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
     );
   }
 
-  // --- [LAMA] Helper Daftar Proyek IMAGEN (Motion) ---
+  // --- Helper Daftar Proyek IMAGEN (Motion) ---
   Widget _buildImagenProjectList(BuildContext context, WidgetRef ref,
-      AsyncValue<List<VideoProject>> asyncValue) {
+      AsyncValue<List<VideoProject>> asyncValue, bool isIndo) {
+    
+    String t(String en, String id) => isIndo ? id : en;
+
     return asyncValue.when(
       loading: () => const SliverToBoxAdapter(
         child: Center(
@@ -591,13 +606,14 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
       ),
       data: (projects) {
         if (projects.isEmpty) {
-          return const SliverToBoxAdapter(
+          return SliverToBoxAdapter(
             child: Center(
               child: Padding(
-                padding: EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(16.0),
                 child: Text(
-                  'No (Motion) projects yet. Create one below!',
+                  t('No (Motion) projects yet. Create one below!', 'Belum ada proyek (Motion). Buat baru di bawah!'),
                   textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70),
                 ),
               ),
             ),
@@ -607,15 +623,13 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
           delegate: SliverChildBuilderDelegate(
             (context, index) {
               final VideoProject project = projects[index];
-              // [UI FIX] Menghilangkan warna belang
               return Card(
-                elevation: 2, // Sedikit bayangan agar rapi
-                color: Colors.grey[900], // Warna dasar card gelap konsisten
-                margin:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6), // Jarak antar card
-                child: InkWell( // Menggunakan InkWell untuk efek hover
-                  hoverColor: Colors.white.withOpacity(0.05), // Efek hover halus
-                  borderRadius: BorderRadius.circular(12), // Mengikuti bentuk card
+                elevation: 2,
+                color: Colors.grey[900],
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: InkWell(
+                  hoverColor: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
                   onTap: () {
                     final String status = project.status ?? '';
                     if (status == 'ASSETS_COMPLETE' ||
@@ -638,19 +652,19 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
                       );
                     }
                   },
-                  child: Padding( // Padding dipindah ke dalam InkWell
+                  child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4.0),
                     child: ListTile(
-                      leading: const Icon(Icons.image_search, color: Colors.blueAccent), // Icon diberi warna
+                      leading: const Icon(Icons.image_search, color: Colors.blueAccent),
                       title: Text(
                         project.title,
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
-                      subtitle: _buildStatus(context, project),
+                      subtitle: _buildStatus(context, project, isIndo),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline,
                             color: Colors.redAccent),
-                        tooltip: 'Delete Project',
+                        tooltip: t('Delete Project', 'Hapus Proyek'),
                         onPressed: () {
                           ref
                               .read(dashboardViewModelProvider)
@@ -668,11 +682,13 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
       },
     );
   }
-  // --- AKHIR HELPER IMAGEN ---
 
-  // --- [LAMA] Helper Daftar Proyek VEO (Footage) ---
+  // --- Helper Daftar Proyek VEO (Footage) ---
   Widget _buildVeoProjectList(BuildContext context, WidgetRef ref,
-      AsyncValue<List<VideoProjectVeo>> asyncValue) {
+      AsyncValue<List<VideoProjectVeo>> asyncValue, bool isIndo) {
+    
+    String t(String en, String id) => isIndo ? id : en;
+
     return asyncValue.when(
       loading: () => const SliverToBoxAdapter(
         child: Center(
@@ -692,13 +708,14 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
       ),
       data: (projects) {
         if (projects.isEmpty) {
-          return const SliverToBoxAdapter(
+          return SliverToBoxAdapter(
             child: Center(
               child: Padding(
-                padding: EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(16.0),
                 child: Text(
-                  'No (Footage) projects yet. Create one below!',
+                  t('No (Footage) projects yet. Create one below!', 'Belum ada proyek (Footage). Buat baru di bawah!'),
                   textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70),
                 ),
               ),
             ),
@@ -708,12 +725,10 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
           delegate: SliverChildBuilderDelegate(
             (context, index) {
               final VideoProjectVeo project = projects[index];
-              // [UI FIX] Menghilangkan warna belang (Sama dengan Imagen)
               return Card(
                 elevation: 2,
                 color: Colors.grey[900],
-                margin:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                 child: InkWell(
                   hoverColor: Colors.white.withOpacity(0.05),
                   borderRadius: BorderRadius.circular(12),
@@ -744,16 +759,16 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4.0),
                     child: ListTile(
-                      leading: const Icon(Icons.movie_filter, color: Colors.deepPurpleAccent), // Icon diberi warna
+                      leading: const Icon(Icons.movie_filter, color: Colors.deepPurpleAccent),
                       title: Text(
                         project.title,
                         style: const TextStyle(fontWeight: FontWeight.w500),
                       ),
-                      subtitle: _buildStatusVeo(context, project),
+                      subtitle: _buildStatusVeo(context, project, isIndo),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline,
                             color: Colors.redAccent),
-                        tooltip: 'Delete Project',
+                        tooltip: t('Delete Project', 'Hapus Proyek'),
                         onPressed: () {
                           ref
                               .read(dashboardVeoViewModelProvider)
@@ -771,5 +786,4 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
       },
     );
   }
-  // --- AKHIR HELPER VEO ---
 }

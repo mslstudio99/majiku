@@ -1,91 +1,147 @@
-/*
-KATEGORI_PERBAIKAN_KEAMANAN NO_URUT_01 (REVISI 2.0 - DATA LEAK PATCH)
-KATEGORI_AUTH_UPDATE_02 (FITUR RESET PASSWORD & HAPUS GOOGLE)
-Tujuan:
-- [KEAMANAN] Memperbaiki kebocoran data antar akun saat logout.
-- [FITUR] Menambahkan fungsi sendPasswordResetEmail.
-- [CLEANUP] Menghapus fungsi signInWithGoogle.
-*/
+﻿//..................................................//
+// LIB/VIEW_MODELS/AUTH_VIEW_MODEL.DART             //
+//..................................................//
 
+//No ke-1...........................................//
+// IMPORT DAN SETUP PROVIDER                        //
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../services/auth_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart'; // Untuk debugPrint
 
-// [KATEGORI_REFAKTOR NO_URUT_02] Menambahkan impor provider yang bocor
+import '../services/auth_service.dart';
+import '../services/firestore_service.dart'; // [WAJIB] Untuk akses ensureUserDocumentExists
+
+// Import provider untuk pembersihan state
 import '../providers/user_provider.dart';
 import '../view_model/dashboard_view_model.dart';
 import '../view_model_veo/dashboard_veo_view_model.dart';
 
-// Provider 1: Exposes an instance of AuthService.
+/*
+KATEGORI_ARSITEKTUR_BARU NO_URUT_13 (REVISI FINAL 4.9 - ANTI RACE-CONDITION)
+Nama File: lib/view_models/auth_view_model.dart
+Tujuan:
+- [SENTRALISASI] Menyerahkan seluruh logika token & fraud ke FirestoreService.
+- [SINKRONISASI] Mengirim parameter `isNewRegistration` untuk membunuh tabrakan (Race Condition).
+- [KEAMANAN] Pembersihan state (invalidate) saat logout untuk mencegah data leak.
+*/
+
+// Provider 1: Menyediakan instance AuthService.
 final authServiceProvider = Provider<AuthService>((ref) {
   return AuthService();
 });
 
-// Provider 2: A StreamProvider that listens to the authentication state changes.
+// Provider tambahan untuk FirestoreService agar bisa diakses di ViewModel
+final firestoreServiceProvider = Provider<FirestoreService>((ref) {
+  return FirestoreService();
+});
+
+// Provider 2: StreamProvider yang mendengarkan perubahan status autentikasi.
 final authStateChangesProvider = StreamProvider<User?>((ref) {
   final authService = ref.watch(authServiceProvider);
   return authService.authStateChanges;
 });
 
-// Provider 3: The ViewModel (StateNotifier).
+// Provider 3: ViewModel (StateNotifier).
 final authViewModelProvider = StateNotifierProvider<AuthViewModel, bool>((ref) {
   final authService = ref.watch(authServiceProvider);
   return AuthViewModel(authService, ref); 
 });
+//..................................................//
 
+//No ke-2...........................................//
+// KELOMPOK STATE NOTIFIER AUTHENTICATION (INTEGRAL)//
 class AuthViewModel extends StateNotifier<bool> {
   final AuthService _authService;
   final Ref _ref;
 
-  // The state of this notifier is a boolean representing the loading state.
+  // State berupa boolean mewakili status loading.
   AuthViewModel(this._authService, this._ref) : super(false);
 
-  // [DIHAPUS] Method signInWithGoogle dihapus sesuai permintaan.
+  // --- Core Methods ---
 
-  // Method to sign in with email and password
+  /// [MODIFIKASI KRITIS] Method Login
+  /// Memanggil FirestoreService untuk verifikasi identitas (Mode Normal)
   Future<bool> signInWithEmail(String email, String password) async {
     state = true;
-    final userCredential = await _authService.signInWithEmailAndPassword(email, password);
-    state = false;
-    return userCredential != null;
-  }
-
-  // Method to register with email and password
-  Future<bool> createUserWithEmail(String email, String password) async {
-    state = true;
-    final userCredential = await _authService.createUserWithEmailAndPassword(email, password);
-    state = false;
-    return userCredential != null;
-  }
-
-  // [BARU] Method untuk mengirim email reset password
-  // Digunakan oleh tombol 'Lupa Password' di LoginScreen
-  Future<void> sendPasswordResetEmail(String email) async {
-    state = true; // Set loading state to true
     try {
-      await _authService.sendPasswordResetEmail(email);
+      final userCredential = await _authService.signInWithEmailAndPassword(email, password);
+      
+      if (userCredential != null) {
+        // --- [SENTRALISASI KEAMANAN] ---
+        // Mode Login: Tidak disetel sebagai pendaftar baru
+        final firestoreService = _ref.read(firestoreServiceProvider);
+        await firestoreService.ensureUserDocumentExists(isNewRegistration: false);
+        
+        debugPrint("✅ AuthViewModel: Login sukses & Sinkronisasi profil dipicu.");
+      }
+      
+      state = false;
+      return userCredential != null;
     } catch (e) {
-      // Opsional: Anda bisa menangani error spesifik di sini atau melemparnya ke UI
-      rethrow; 
-    } finally {
-      state = false; // Set loading state to false (selalu dijalankan)
+      state = false;
+      debugPrint("❌ AuthViewModel: Login failed: $e");
+      rethrow;
     }
   }
 
-  // Method to sign out
-  // [KATEGORI_REFAKTOR NO_URUT_03] (Perbaikan Kritis Data Leak)
+  /// [REVISI PARIPURNA] Method Pendaftaran (Anti-Fraud Sentral & Anti Race-Condition)
+  /// Mengirim flag isNewRegistration = true ke FirestoreService.
+  Future<bool> createUserWithEmail(String email, String password) async {
+    state = true;
+    try {
+      final userCredential = await _authService.createUserWithEmailAndPassword(email, password);
+      
+      if (userCredential != null && userCredential.user != null) {
+        // --- [LOGIKA ANTI-FRAUD TERPUSAT] ---
+        // Penulisan dokumen dipaksa (Force Overwrite) menggunakan parameter isNewRegistration
+        // Untuk membunuh Race Condition jika UI/Dashboard mencoba mencuri start.
+        final firestoreService = _ref.read(firestoreServiceProvider);
+        await firestoreService.ensureUserDocumentExists(isNewRegistration: true);
+        
+        debugPrint("✅ AuthViewModel: Registrasi Berhasil & Profil dipaksa sinkronisasi anti-fraud.");
+      }
+      
+      state = false;
+      return userCredential != null;
+    } catch (e) {
+      state = false;
+      debugPrint("❌ AuthViewModel: Registration Error: $e");
+      rethrow;
+    }
+  }
+
+  /// Method untuk mengirim email reset password
+  Future<void> sendPasswordResetEmail(String email) async {
+    state = true; 
+    try {
+      await _authService.sendPasswordResetEmail(email);
+      debugPrint("✅ AuthViewModel: Reset password email sent to $email");
+    } catch (e) {
+      debugPrint("❌ AuthViewModel: Reset Password Error: $e");
+      rethrow; 
+    } finally {
+      state = false; 
+    }
+  }
+
+  /// Method untuk Sign Out dengan pembersihan cache (Anti-Leak)
   Future<void> signOut() async {
     state = true;
-    
-    // --- [PERBAIKAN KEAMANAN DATA LEAK] ---
-    // Paksa Riverpod untuk membersihkan cache data pengguna LAMA
-    // sebelum kita benar-benar logout.
-    _ref.invalidate(firestoreUserProvider);
-    _ref.invalidate(projectsStreamProvider);
-    _ref.invalidate(projectsVeoStreamProvider);
-    // --- [AKHIR PERBAIKAN] ---
+    try {
+      // --- [ANTI-REGRESI: PEMBERSIHAN CACHE] ---
+      // Wajib dilakukan agar user selanjutnya tidak melihat data user sebelumnya.
+      _ref.invalidate(firestoreUserProvider);
+      _ref.invalidate(projectsStreamProvider);
+      _ref.invalidate(projectsVeoStreamProvider);
 
-    await _authService.signOut();
-    state = false;
+      await _authService.signOut();
+      debugPrint("✅ AuthViewModel: Sign out success & state invalidated.");
+    } catch (e) {
+      debugPrint("❌ AuthViewModel: Sign Out Error: $e");
+    } finally {
+      state = false;
+    }
   }
 }
+//..................................................//

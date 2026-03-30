@@ -1,18 +1,19 @@
-// [RILIS FINAL - UI KONSISTEN & APP THEME INTEGRATED]
-// KATEGORI_NARAKU_TOKEN NO_URUT_08
+// [RILIS FINAL - KONTEN UMUM: POLICY COMPLIANT & FIRESTORE LOGIC]
+// KATEGORI_POLICY_UPDATE NO_URUT_03
 // Lokasi: lib/screens_naraku/generator_konten_umum_screen.dart
-// TUJUAN: 
-// 1. Mengganti Hardcoded Colors (Grey/Teal) menjadi AppTheme (Black/Purple/Amber).
-// 2. Mempertahankan logika Border pada tombol Send.
-// 3. Mempertahankan teks "Copy".
+// TUJUAN:
+// 1. [FIX] Mengganti user.id menjadi user.uid (Error Solved).
+// 2. Menambahkan tombol Lapor (Flag) sesuai kebijakan Google.
+// 3. Tombol aksi Text-Only (Hemat tempat).
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // [WAJIB] Untuk lapor konten
 
 // [IMPORT NAVIGASI]
-import '../screens/input_script_screen.dart'; 
-import '../screens_veo/input_script_veo_screen.dart'; 
+import '../screens/input_script_screen.dart';
+import '../screens_veo/input_script_veo_screen.dart';
 import '../screens/project_dashboard_screen.dart';
 
 // [IMPORT GENERATOR LAIN]
@@ -28,7 +29,7 @@ import './generator_konten_short_screen.dart';
 // [IMPORT VM & MODELS]
 import '../view_model_naraku/generator_konten_umum_view_model.dart';
 import '../providers/user_provider.dart';
-import '../providers/config_provider.dart';
+import '../providers/config_provider.dart'; // Akses Bahasa
 import '../models/app_user.dart';
 import '../models/app_config.dart';
 
@@ -46,10 +47,13 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
     final AsyncValue<AppUser> userState = ref.watch(firestoreUserProvider);
     final AsyncValue<AppConfig> configState = ref.watch(appConfigProvider);
 
+    // [BAHASA]
+    final currentLocale = ref.watch(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     // [THEME ACCESS]
     final theme = Theme.of(context);
-
-    final String generatorTitle = KontenUmumLocalizationHelper.get('generatorTitle');
 
     // [ERROR LISTENER]
     ref.listen<GeneratorKontenUmumState>(generatorKontenUmumViewModelProvider,
@@ -67,7 +71,8 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
     return Scaffold(
       // Background otomatis Hitam dari AppTheme
       appBar: AppBar(
-        title: Text(generatorTitle),
+        // [BERSIH] Judul dihapus di AppBar
+        title: null,
         actions: [
           TextButton.icon(
             icon: const Icon(Icons.dashboard_outlined),
@@ -87,7 +92,7 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
           ),
         ],
       ),
-      drawer: _buildNarakuDrawer(context),
+      drawer: _buildNarakuDrawer(context, t),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -100,11 +105,88 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
               state,
               userState,
               configState,
+              t, // Pass helper translate
             ),
             const SizedBox(height: 24),
-            _buildOutputCard(context, ref, viewModel, state),
+            _buildOutputCard(context, ref, viewModel, state, t),
           ],
         ),
+      ),
+    );
+  }
+
+  // --- [LOGIC REAL] LAPOR KONTEN KE FIRESTORE ---
+  void _showReportDialog(BuildContext context, WidgetRef ref, String content) {
+    final TextEditingController reasonController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Lapor Konten / Report"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Bantu kami menjaga keamanan. Mengapa konten ini tidak pantas?",
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                hintText: "Alasan (SARA, Kekerasan, dll)...",
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Batal"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              // [FIREBASE LOGIC] Simpan Laporan
+              final user = ref.read(firestoreUserProvider).valueOrNull;
+              
+              // [BUGFIX] Menggunakan .uid bukan .id
+              final userId = user?.uid ?? 'anonymous'; 
+
+              FirebaseFirestore.instance.collection('reports').add({
+                'content': content, // Isi narasi yang dilaporkan
+                'reason': reasonController.text.isEmpty ? 'No reason provided' : reasonController.text,
+                'reportedAt': FieldValue.serverTimestamp(),
+                'userId': userId,
+                'feature': 'Generator Konten Umum', // Penanda fitur
+              }).then((_) {
+                if (context.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Laporan berhasil dikirim. Terima kasih."),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              }).catchError((error) {
+                if (context.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Gagal mengirim laporan: $error"),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              });
+            },
+            child: const Text("Kirim Laporan", style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
@@ -117,6 +199,7 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
     GeneratorKontenUmumState state,
     AsyncValue<AppUser> userState,
     AsyncValue<AppConfig> configState,
+    String Function(String, String) t,
   ) {
     final theme = Theme.of(context);
     final charCounter = ValueNotifier<int>(viewModel.promptController.text.length);
@@ -135,15 +218,15 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
 
     final String buttonLabel;
     if (vmIsLoading) {
-      buttonLabel = KontenUmumLocalizationHelper.get('btnProcessing');
+      buttonLabel = t('Processing...', 'Memproses...');
     } else if (providersAreLoading) {
-      buttonLabel = "Memuat...";
+      buttonLabel = t('Loading...', 'Memuat...');
     } else if (providersHaveError) {
       buttonLabel = "Error";
     } else if (!canAfford) {
-      buttonLabel = "Token Tidak Cukup";
+      buttonLabel = t('Insufficient Tokens', 'Token Tidak Cukup');
     } else {
-      buttonLabel = KontenUmumLocalizationHelper.get('btnGenerate');
+      buttonLabel = t('GENERATE CONTENT', 'BUAT KONTEN');
     }
 
     final bool isButtonDisabled = vmIsLoading || providersAreLoading || providersHaveError || !canAfford;
@@ -161,16 +244,18 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // [JUDUL FITUR DI SINI]
             Text(
-              KontenUmumLocalizationHelper.get('generatorTitle'),
+              t('General Content Generator', 'Generator Konten Umum'),
               style: theme.textTheme.headlineSmall,
             ),
             const SizedBox(height: 20),
+            
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  KontenUmumLocalizationHelper.get('promptLabel'),
+                  t('Topic / Idea', 'Topik / Ide Konten'),
                   style: theme.textTheme.bodyMedium,
                 ),
                 ValueListenableBuilder<int>(
@@ -200,7 +285,7 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
               // Style teks mengikuti theme
               style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white),
               decoration: InputDecoration(
-                hintText: KontenUmumLocalizationHelper.get('promptPlaceholder'),
+                hintText: t('e.g., Tips for healthy diet', 'Cth: Tips diet sehat'),
                 counterText: '',
                 filled: true,
                 // KUNCI: Warna input sama dengan background scaffold (Hitam)
@@ -218,7 +303,7 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              KontenUmumLocalizationHelper.get('languageHint'),
+              t('Language will be auto-detected from your input.', 'Bahasa akan dideteksi otomatis dari input Anda.'),
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 20),
@@ -261,18 +346,18 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
     WidgetRef ref,
     GeneratorKontenUmumViewModel viewModel,
     GeneratorKontenUmumState state,
+    String Function(String, String) t,
   ) {
     final theme = Theme.of(context);
     final bool hasOutput = state.generatedStory.isNotEmpty;
     
-    // [LOGIKA WARNA DINAMIS - TEMA]
-    // Emas (Secondary) untuk Copy, Merah (Error) untuk Clear, Abu-abu jika kosong
+    // [LOGIKA WARNA DINAMIS]
     final Color copyColor = hasOutput ? theme.colorScheme.secondary : theme.disabledColor;
     final Color clearColor = hasOutput ? theme.colorScheme.error : theme.disabledColor;
 
     String outputContent = hasOutput
         ? state.generatedStory
-        : KontenUmumLocalizationHelper.get('outputPlaceholder');
+        : t('Result will appear here...', 'Hasil akan muncul di sini...');
 
     return Card(
       margin: EdgeInsets.zero,
@@ -281,11 +366,25 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              KontenUmumLocalizationHelper.get('outputTitle'),
-              style: theme.textTheme.headlineSmall,
+            // [REVISI UI] Header dengan Tombol Lapor (Flag)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  t('Generated Content', 'Konten Hasil Generasi'),
+                  style: theme.textTheme.headlineSmall?.copyWith(fontSize: 18),
+                ),
+                // Tombol Lapor (Hanya muncul jika ada konten)
+                if (hasOutput)
+                  IconButton(
+                    icon: const Icon(Icons.flag_outlined, color: Colors.redAccent),
+                    tooltip: t('Report offensive content', 'Laporkan konten'),
+                    onPressed: () => _showReportDialog(context, ref, outputContent),
+                  ),
+              ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
+
             Container(
               padding: const EdgeInsets.all(16),
               constraints: const BoxConstraints(minHeight: 150),
@@ -298,7 +397,7 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
               child: state.isLoading
                   ? Center(
                       child: Text(
-                          KontenUmumLocalizationHelper.get('apiLoading'),
+                          t('Consulting AI...', 'Sedang konsultasi AI...'),
                           style: TextStyle(
                               color: theme.textTheme.bodySmall?.color,
                               fontStyle: FontStyle.italic)))
@@ -315,17 +414,16 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
             const SizedBox(height: 20),
             
             // --- [HEADER & KONTROL OUTPUT] ---
+            // Menggunakan Row dengan child text-only buttons
             Row(
               children: [
-                // 1. TOMBOL COPY
+                // 1. TOMBOL COPY (TEXT ONLY)
                 Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.copy, size: 18),
-                    label: const Text('Copy'), 
+                  child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       foregroundColor: copyColor,
-                      side: BorderSide(color: copyColor), // Warna Dinamis (Emas/Abu)
+                      side: BorderSide(color: copyColor), // Warna Dinamis
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
                       ),
@@ -338,25 +436,24 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                    KontenUmumLocalizationHelper.get('btnCopied')),
+                                    t('Copied to clipboard!', 'Disalin ke papan klip!')),
                                 backgroundColor: Colors.green,
                               ),
                             );
                           },
+                    child: Text(t('Copy', 'Salin')),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 8), // Spasi diperkecil sedikit agar muat
 
-                // 2. TOMBOL SEND (Border & Theme Integrated)
-                _buildSendToProjectButton(context, state), 
+                // 2. TOMBOL SEND (Border & Theme Integrated - TEXT ONLY)
+                _buildSendToProjectButton(context, state, t), 
 
-                const SizedBox(width: 16),
+                const SizedBox(width: 8),
                 
-                // 3. TOMBOL CLEAR
+                // 3. TOMBOL CLEAR (TEXT ONLY)
                 Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    label: Text(KontenUmumLocalizationHelper.get('btnClear')),
+                  child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       foregroundColor: clearColor,
@@ -366,6 +463,7 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
                       ),
                     ),
                     onPressed: !hasOutput ? null : viewModel.clearAll,
+                    child: Text(t('Clear', 'Hapus')),
                   ),
                 ),
               ],
@@ -377,7 +475,7 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
   }
 
   // --- Helper: Parsing Hasil Narasi ---
-  Map<String, String> _parseGeneratedContent(String rawContent) {
+  Map<String, String> _parseGeneratedContent(String rawContent, String defaultTitle) {
     if (rawContent.isEmpty) return {'title': '', 'script': ''};
     
     final lines = rawContent.split('\n');
@@ -399,8 +497,6 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
       script = lines.sublist(startLine + 1).join('\n').trim();
     }
     
-    String defaultTitle = "Konten Umum"; 
-    
     if (rawTitle.isEmpty && script.isNotEmpty) rawTitle = defaultTitle;
     else if (rawTitle.isEmpty && script.isEmpty) return {'title': '', 'script': ''};
     
@@ -408,19 +504,17 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
     return {'title': rawTitle, 'script': cleanedScript};
   }
 
-  // --- Helper: Dropdown Tombol Send (APP THEME VERSION) ---
+  // --- Helper: Dropdown Tombol Send (APP THEME VERSION - TEXT ONLY) ---
   Widget _buildSendToProjectButton(
-      BuildContext context, GeneratorKontenUmumState state) {
+      BuildContext context, GeneratorKontenUmumState state, String Function(String, String) t) {
     
     final theme = Theme.of(context); // Gunakan Theme
     final bool hasOutput = state.generatedStory.isNotEmpty; 
 
-    // Jika kosong: Tampilkan tombol abu-abu (padam)
+    // Jika kosong: Tampilkan tombol abu-abu (padam) - TEXT ONLY
     if (!hasOutput) {
       return Expanded(
-        child: OutlinedButton.icon(
-          icon: const Icon(Icons.send_to_mobile, size: 18),
-          label: const Text("Send"),
+        child: OutlinedButton(
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 12), 
             foregroundColor: theme.disabledColor,
@@ -430,12 +524,16 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
             ),
           ),
           onPressed: null,
+          child: Text(t('Send', 'Kirim')),
         ),
       );
     }
     
     // Jika ada isi: Tampilkan Dropdown Primary (Ungu) dengan Border Aksen (Emas)
-    final Map<String, String> parsedData = _parseGeneratedContent(state.generatedStory);
+    final Map<String, String> parsedData = _parseGeneratedContent(
+        state.generatedStory,
+        t('General Content', 'Konten Umum')
+    );
     final String cleanTitle = parsedData['title']!;
     final String cleanScript = parsedData['script']!;
 
@@ -447,7 +545,7 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
         child: DropdownButtonFormField<String>(
           decoration: InputDecoration(
             isDense: true, 
-            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12), // Padding horizontal sedikit disesuaikan
             filled: true,
             fillColor: activeFillColor,
             // [BORDER MENYALA SESUAI TEMA]
@@ -465,35 +563,22 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
             ),
           ),
           isExpanded: true,
-          icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
-          hint: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(Icons.send_to_mobile, color: Colors.white, size: 18),
-              SizedBox(width: 8),
-              Text("Send", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ],
+          icon: const Icon(Icons.arrow_drop_down, color: Colors.white), // Icon panah dropdown tetap ada
+          hint: Center(
+            child: Text(
+              t('Send', 'Kirim'), 
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
           ),
           items: <DropdownMenuItem<String>>[
             DropdownMenuItem<String>(
               value: 'motion',
-              child: Row(
-                children: [
-                  Icon(Icons.image_search, size: 16, color: activeFillColor),
-                  const SizedBox(width: 8),
-                  const Text('To VMotion', style: TextStyle(fontSize: 14)),
-                ],
-              ),
+              child: Text('To VMotion', style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
             ),
             DropdownMenuItem<String>(
               value: 'veo',
-              child: Row(
-                children: [
-                  Icon(Icons.movie_filter, size: 16, color: activeFillColor),
-                  const SizedBox(width: 8),
-                  const Text('To VFootage', style: TextStyle(fontSize: 14)),
-                ],
-              ),
+              child: Text('To VFootage', style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
             ),
           ],
           onChanged: (String? value) {
@@ -509,21 +594,19 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
           },
           selectedItemBuilder: (context) {
              return [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.send_to_mobile, color: Colors.white, size: 18),
-                  SizedBox(width: 8),
-                  Text("Send", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ],
+              Center(
+                child: Text(
+                  t('Send', 'Kirim'), 
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis
+                ),
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.send_to_mobile, color: Colors.white, size: 18),
-                  SizedBox(width: 8),
-                  Text("Send", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ],
+              Center(
+                child: Text(
+                  t('Send', 'Kirim'), 
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis
+                ),
               ),
              ];
           },
@@ -533,7 +616,7 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
   }
 
   // --- Drawer (THEME INTEGRATED) ---
-  Widget _buildNarakuDrawer(BuildContext context) {
+  Widget _buildNarakuDrawer(BuildContext context, String Function(String, String) t) {
     final theme = Theme.of(context);
 
     void _goToKonsultan() {
@@ -591,9 +674,9 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
               children: [
                  Icon(Icons.movie_creation_outlined, color: theme.colorScheme.secondary, size: 32),
                  const SizedBox(width: 12),
-                 const Text(
-                  'Daftar Produk',
-                  style: TextStyle(
+                 Text(
+                  t('Product List', 'Daftar Produk'),
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -603,21 +686,21 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
             ),
           ),
 
-          _menuItem('Konsultan Ide Konten', Icons.lightbulb_outline, _goToKonsultan),
-          _menuItem('Generator Konten Umum', Icons.rate_review_outlined, () {}, isDisabled: true), // Halaman Ini
-          _menuItem('Generator Konten Short', Icons.movie_creation_outlined, _goToNaraku),
-          _menuItem('Generator Kisah Sejarah', Icons.account_balance_outlined, _goToKisahSejarah),
-          _menuItem('Generator Kisah Legenda', Icons.auto_stories_outlined, _goToKisahLegenda),
-          _menuItem('Generator Kisah Islami', Icons.mosque_outlined, _goToKisahIslami),
-          _menuItem('Generator Kisah Horor', Icons.help_outline, _goToKisahHoror),
-          _menuItem('Generator Kisah Custom', Icons.theater_comedy_outlined, _goToKisahCustom),
+          _menuItem(t('Idea Consultant', 'Konsultan Ide Konten'), Icons.lightbulb_outline, _goToKonsultan),
+          _menuItem(t('General Content', 'Generator Konten Umum'), Icons.rate_review_outlined, () {}, isDisabled: true), // Aktif
+          _menuItem(t('Short Content', 'Generator Konten Short'), Icons.movie_creation_outlined, _goToNaraku),
+          _menuItem(t('History Story', 'Generator Kisah Sejarah'), Icons.account_balance_outlined, _goToKisahSejarah),
+          _menuItem(t('Legend Story', 'Generator Kisah Legenda'), Icons.auto_stories_outlined, _goToKisahLegenda),
+          _menuItem(t('Islamic Story', 'Generator Kisah Islami'), Icons.mosque_outlined, _goToKisahIslami),
+          _menuItem(t('Horror Story', 'Generator Kisah Horor'), Icons.help_outline, _goToKisahHoror),
+          _menuItem(t('Custom Story', 'Generator Kisah Custom'), Icons.theater_comedy_outlined, _goToKisahCustom),
 
           Divider(color: theme.dividerColor, height: 30),
 
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Text(
-              'Create',
+              t('Create', 'Buat'),
               style: TextStyle(color: theme.disabledColor, fontSize: 14, fontWeight: FontWeight.w600),
             ),
           ),
@@ -627,7 +710,7 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
             title: const Text('Create Video Motion', style: TextStyle(color: Colors.white)),
             onTap: () {
               Navigator.pop(context);
-              Navigator.of(context).push(MaterialPageRoute(builder: (context) => InputScriptScreen())); 
+              Navigator.of(context).push(MaterialPageRoute(builder: (context) => const InputScriptScreen())); 
             },
           ),
 
@@ -640,7 +723,7 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
             },
           ),
 
-          _menuItem('Create Thumbnail', Icons.aspect_ratio_outlined, _goToGambarThumbnail),
+          _menuItem(t('Create Thumbnail', 'Buat Thumbnail'), Icons.aspect_ratio_outlined, _goToGambarThumbnail),
         ],
       ),
     );

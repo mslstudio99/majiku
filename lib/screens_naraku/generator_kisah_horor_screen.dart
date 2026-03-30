@@ -1,13 +1,15 @@
-// [RILIS FINAL - UI DRAWER FIX]
-// KATEGORI_UI_TWEAK NO_URUT_08
+// [RILIS FINAL - KISAH HOROR: POLICY COMPLIANCE & BUGFIX]
+// KATEGORI_POLICY_UPDATE NO_URUT_01
 // Lokasi: lib/screens_naraku/generator_kisah_horor_screen.dart
 // TUJUAN:
-// 1. Memperbaiki layout Drawer (Mengganti DrawerHeader dengan Container) agar rapi.
-// 2. Mempertahankan tema Dark Modern & Fix Compiler Error sebelumnya.
+// 1. [POLICY] Menambahkan fitur Lapor Konten (Flag) terintegrasi Firestore.
+// 2. [CRITICAL] Menggunakan user.uid untuk identifikasi pelapor.
+// 3. [MAINTENANCE] Mempertahankan UI Text-Only yang sudah responsif.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // [WAJIB] Untuk lapor konten
 
 // [IMPORT NAVIGASI]
 import '../screens/input_script_screen.dart';
@@ -20,7 +22,6 @@ import './generator_kisah_sejarah_screen.dart';
 import './generator_konten_umum_screen.dart';
 import './generator_kisah_legenda_screen.dart';
 import './generator_kisah_islami_screen.dart';
-// import './generator_kisah_horor_screen.dart'; // Halaman ini
 import './generator_kisah_custom_screen.dart';
 import './generator_gambar_thumbnail_screen.dart';
 import './generator_konten_short_screen.dart';
@@ -28,7 +29,7 @@ import './generator_konten_short_screen.dart';
 // [IMPORT VM & MODELS]
 import '../view_model_naraku/generator_kisah_horor_view_model.dart';
 import '../providers/user_provider.dart';
-import '../providers/config_provider.dart';
+import '../providers/config_provider.dart'; // Akses Bahasa
 import '../models/app_user.dart';
 import '../models/app_config.dart';
 
@@ -39,32 +40,38 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // [STATE & LOGIC]
     final state = ref.watch(generatorKisahHororViewModelProvider);
     final viewModel = ref.read(generatorKisahHororViewModelProvider.notifier);
     final AsyncValue<AppUser> userState = ref.watch(firestoreUserProvider);
     final AsyncValue<AppConfig> configState = ref.watch(appConfigProvider);
 
-    final String generatorTitle = KisahHororLocalizationHelper.get('generatorTitle');
+    // [BAHASA]
+    final currentLocale = ref.watch(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
 
+    // [THEME SHORTCUT]
+    final theme = Theme.of(context);
+
+    // [LISTENER ERROR]
     ref.listen<GeneratorKisahHororState>(generatorKisahHororViewModelProvider,
         (previous, next) {
       if (next.errorMessage != null && previous?.errorMessage == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.errorMessage!),
-            backgroundColor: Theme.of(context).colorScheme.error,
+            backgroundColor: theme.colorScheme.error,
           ),
         );
       }
     });
 
-    // [THEME SHORTCUT]
-    final theme = Theme.of(context);
-
     return Scaffold(
       // Background otomatis hitam dari Theme
       appBar: AppBar(
-        title: Text(generatorTitle),
+        // [UI BERSIH] Judul dihapus di AppBar
+        title: null,
         actions: [
           TextButton.icon(
             icon: const Icon(Icons.dashboard_outlined),
@@ -84,7 +91,7 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
           ),
         ],
       ),
-      drawer: _buildNarakuDrawer(context),
+      drawer: _buildNarakuDrawer(context, t),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -97,11 +104,86 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
               state,
               userState,
               configState,
+              t,
             ),
             const SizedBox(height: 24),
-            _buildOutputCard(context, ref, viewModel, state),
+            _buildOutputCard(context, ref, viewModel, state, t),
           ],
         ),
+      ),
+    );
+  }
+
+  // --- [LOGIC REAL] LAPOR KONTEN KE FIRESTORE ---
+  void _showReportDialog(BuildContext context, WidgetRef ref, String content) {
+    final TextEditingController reasonController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Lapor Konten / Report"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Bantu kami menjaga keamanan. Mengapa konten ini tidak pantas?",
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                hintText: "Alasan (SARA, Kekerasan, dll)...",
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Batal"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              // [FIREBASE LOGIC FIX] Gunakan .uid bukan .id
+              final user = ref.read(firestoreUserProvider).valueOrNull;
+              final userId = user?.uid ?? 'anonymous'; // <-- SUDAH DIPERBAIKI
+
+              FirebaseFirestore.instance.collection('reports').add({
+                'content': content,
+                'reason': reasonController.text.isEmpty ? 'No reason provided' : reasonController.text,
+                'reportedAt': FieldValue.serverTimestamp(),
+                'userId': userId,
+                'feature': 'Generator Kisah Horor', 
+              }).then((_) {
+                if (context.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Laporan berhasil dikirim. Terima kasih."),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              }).catchError((error) {
+                if (context.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Gagal mengirim laporan: $error"),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              });
+            },
+            child: const Text("Kirim Laporan", style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
@@ -114,6 +196,7 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
     GeneratorKisahHororState state,
     AsyncValue<AppUser> userState,
     AsyncValue<AppConfig> configState,
+    String Function(String, String) t,
   ) {
     final theme = Theme.of(context);
     final charCounter = ValueNotifier<int>(viewModel.promptController.text.length);
@@ -132,15 +215,15 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
 
     final String buttonLabel;
     if (vmIsLoading) {
-      buttonLabel = KisahHororLocalizationHelper.get('btnProcessing');
+      buttonLabel = t('Summoning Horror...', 'Memanggil Horor...');
     } else if (providersAreLoading) {
-      buttonLabel = "Memuat...";
+      buttonLabel = t('Loading...', 'Memuat...');
     } else if (providersHaveError) {
       buttonLabel = "Error";
     } else if (!canAfford) {
-      buttonLabel = "Token Tidak Cukup";
+      buttonLabel = t('Insufficient Tokens', 'Token Tidak Cukup');
     } else {
-      buttonLabel = KisahHororLocalizationHelper.get('btnGenerate');
+      buttonLabel = t('GENERATE HORROR', 'BUAT KISAH HOROR');
     }
 
     final bool isButtonDisabled = vmIsLoading || providersAreLoading || providersHaveError || !canAfford;
@@ -157,16 +240,18 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // [JUDUL FITUR DI SINI]
             Text(
-              KisahHororLocalizationHelper.get('generatorTitle'),
+              t('Horror Story Generator', 'Generator Kisah Horor'),
               style: theme.textTheme.headlineSmall,
             ),
             const SizedBox(height: 20),
+
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  KisahHororLocalizationHelper.get('promptLabel'),
+                  t('Topic / Ghost Type', 'Topik / Jenis Hantu'),
                   style: theme.textTheme.bodyMedium,
                 ),
                 ValueListenableBuilder<int>(
@@ -193,8 +278,10 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
               maxLines: 3,
               maxLength: _maxPromptLength,
               enabled: !state.isLoading,
+              // Style teks mengikuti theme
+              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white),
               decoration: InputDecoration(
-                hintText: KisahHororLocalizationHelper.get('promptPlaceholder'),
+                hintText: t('e.g., The haunted old house', 'Cth: Rumah tua yang angker'),
                 counterText: '',
                 filled: true,
                 // Fill warna Hitam (Scaffold BG)
@@ -212,7 +299,7 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              KisahHororLocalizationHelper.get('languageHint'),
+              t('Language will be auto-detected from your input.', 'Bahasa akan dideteksi otomatis dari input Anda.'),
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 20),
@@ -242,7 +329,7 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
                 disabledBackgroundColor: buttonColor,
                 disabledForegroundColor: Colors.white.withOpacity(0.7),
               ),
-              // [FIX ERROR] Hapus argumen 'generatorTitle' sesuai permintaan sebelumnya
+              // [MAINTENANCE] Tetap tanpa argumen sesuai fix sebelumnya
               onPressed: isButtonDisabled ? null : () => viewModel.generateStory(),
             ),
           ],
@@ -257,6 +344,7 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
     WidgetRef ref,
     GeneratorKisahHororViewModel viewModel,
     GeneratorKisahHororState state,
+    String Function(String, String) t,
   ) {
     final theme = Theme.of(context);
     final bool hasOutput = state.generatedStory.isNotEmpty;
@@ -267,7 +355,7 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
 
     String outputContent = hasOutput
         ? state.generatedStory
-        : KisahHororLocalizationHelper.get('outputPlaceholder');
+        : t('Result will appear here...', 'Hasil akan muncul di sini...');
 
     return Card(
       margin: EdgeInsets.zero,
@@ -276,11 +364,25 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              KisahHororLocalizationHelper.get('outputTitle'),
-              style: theme.textTheme.headlineSmall,
+            // [UI FIX] Header Row dengan Tombol Flag
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  t('Generated Horror', 'Kisah Hasil Generasi'),
+                  style: theme.textTheme.headlineSmall,
+                ),
+                // Tombol Lapor (Hanya muncul jika ada konten)
+                if (hasOutput)
+                  IconButton(
+                    icon: const Icon(Icons.flag_outlined, color: Colors.redAccent),
+                    tooltip: t('Report offensive content', 'Laporkan konten'),
+                    onPressed: () => _showReportDialog(context, ref, outputContent),
+                  ),
+              ],
             ),
             const SizedBox(height: 20),
+            
             Container(
               padding: const EdgeInsets.all(16),
               constraints: const BoxConstraints(minHeight: 150),
@@ -293,7 +395,7 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
               child: state.isLoading
                   ? Center(
                       child: Text(
-                          KisahHororLocalizationHelper.get('apiLoading'),
+                          t('Summoning spirits...', 'Memanggil arwah...'),
                           style: TextStyle(
                               color: theme.textTheme.bodySmall?.color,
                               fontStyle: FontStyle.italic)))
@@ -312,11 +414,9 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
             // --- [HEADER & KONTROL OUTPUT] ---
             Row(
               children: [
-                // 1. TOMBOL COPY
+                // 1. TOMBOL COPY (Text Only)
                 Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.copy, size: 18),
-                    label: const Text('Copy'),
+                  child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       foregroundColor: copyColor,
@@ -333,25 +433,24 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                    KisahHororLocalizationHelper.get('btnCopied')),
+                                    t('Copied to clipboard!', 'Disalin ke papan klip!')),
                                 backgroundColor: Colors.green,
                               ),
                             );
                           },
+                    child: Text(t('Copy', 'Salin')),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 8), // Spasi diperkecil (16 -> 8)
                 
-                // 2. TOMBOL SEND
-                _buildSendToProjectButton(context, state),
+                // 2. TOMBOL SEND (Text Only)
+                _buildSendToProjectButton(context, state, t),
 
-                const SizedBox(width: 16),
+                const SizedBox(width: 8),
                 
-                // 3. TOMBOL CLEAR
+                // 3. TOMBOL CLEAR (Text Only)
                 Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    label: Text(KisahHororLocalizationHelper.get('btnClear')),
+                  child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       foregroundColor: clearColor,
@@ -361,6 +460,7 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
                       ),
                     ),
                     onPressed: !hasOutput ? null : viewModel.clearAll,
+                    child: Text(t('Clear', 'Hapus')),
                   ),
                 ),
               ],
@@ -372,7 +472,7 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
   }
 
   // --- Helper: Parsing Hasil Narasi Kasar ---
-  Map<String, String> _parseGeneratedContent(String rawContent) {
+  Map<String, String> _parseGeneratedContent(String rawContent, String defaultTitle) {
     if (rawContent.isEmpty) return {'title': '', 'script': ''};
     
     final lines = rawContent.split('\n');
@@ -381,11 +481,11 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
     
     for (int i = 0; i < lines.length; i++) {
       String line = lines[i].trim();
-      if (line.toLowerCase().startsWith('source:')) continue; 
+      if (line.toLowerCase().startsWith('source:')) continue;
       if (line.isNotEmpty) {
         rawTitle = line;
         startLine = i;
-        break; 
+        break;
       }
     }
     
@@ -394,8 +494,6 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
       script = lines.sublist(startLine + 1).join('\n').trim();
     }
     
-    String defaultTitle = "Kisah Horor";
-    
     if (rawTitle.isEmpty && script.isNotEmpty) rawTitle = defaultTitle;
     else if (rawTitle.isEmpty && script.isEmpty) return {'title': '', 'script': ''};
     
@@ -403,33 +501,35 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
     return {'title': rawTitle, 'script': cleanedScript};
   }
 
-  // --- Helper: Dropdown Tombol Send (Themed) ---
+  // --- Helper: Dropdown Tombol Send (Themed - Text Only) ---
   Widget _buildSendToProjectButton(
-      BuildContext context, GeneratorKisahHororState state) {
+      BuildContext context, GeneratorKisahHororState state, String Function(String, String) t) {
     
     final theme = Theme.of(context);
-    final bool hasOutput = state.generatedStory.isNotEmpty; 
+    final bool hasOutput = state.generatedStory.isNotEmpty;
 
-    // Jika Kosong: Tombol Disabled
+    // Jika Kosong: Tombol Disabled (Text Only)
     if (!hasOutput) {
       return Expanded(
-        child: OutlinedButton.icon(
-          icon: const Icon(Icons.send_to_mobile, size: 18),
-          label: const Text("Send"),
+        child: OutlinedButton(
           style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 12), 
+            padding: const EdgeInsets.symmetric(vertical: 12),
             foregroundColor: theme.disabledColor,
-            side: BorderSide(color: theme.disabledColor), 
+            side: BorderSide(color: theme.disabledColor),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(30),
             ),
           ),
           onPressed: null,
+          child: Text(t('Send', 'Kirim')),
         ),
       );
     }
     
-    final Map<String, String> parsedData = _parseGeneratedContent(state.generatedStory);
+    final Map<String, String> parsedData = _parseGeneratedContent(
+        state.generatedStory,
+        t('Horror Story', 'Kisah Horor')
+    );
     final String cleanTitle = parsedData['title']!;
     final String cleanScript = parsedData['script']!;
 
@@ -441,8 +541,9 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
       child: DropdownButtonHideUnderline(
         child: DropdownButtonFormField<String>(
           decoration: InputDecoration(
-            isDense: true, 
-            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            isDense: true,
+            // Padding Horizontal dikurangi (12)
+            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
             filled: true,
             fillColor: activeFillColor,
             // Border menyala dengan warna Secondary (Amber)
@@ -461,13 +562,12 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
           ),
           isExpanded: true,
           icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
-          hint: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(Icons.send_to_mobile, color: Colors.white, size: 18),
-              SizedBox(width: 8),
-              Text("Send", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ],
+          // Hint: Center Text (No Icon)
+          hint: Center(
+            child: Text(
+              t('Send', 'Kirim'), 
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+            )
           ),
           items: <DropdownMenuItem<String>>[
             DropdownMenuItem<String>(
@@ -504,21 +604,17 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
           },
           selectedItemBuilder: (context) {
              return [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.send_to_mobile, color: Colors.white, size: 18),
-                  SizedBox(width: 8),
-                  Text("Send", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ],
+              Center(
+                child: Text(
+                  t('Send', 'Kirim'), 
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+                ),
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.send_to_mobile, color: Colors.white, size: 18),
-                  SizedBox(width: 8),
-                  Text("Send", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ],
+              Center(
+                child: Text(
+                  t('Send', 'Kirim'), 
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+                ),
               ),
              ];
           },
@@ -528,41 +624,12 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
   }
 
   // --- Drawer (Dark Modern - Layout Fix) ---
-  Widget _buildNarakuDrawer(BuildContext context) {
+  Widget _buildNarakuDrawer(BuildContext context, String Function(String, String) t) {
     final theme = Theme.of(context);
 
-    void _goToKonsultan() {
+    void _navigate(Widget screen) {
       Navigator.pop(context);
-      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const KonsultanIdeKontenScreen()));
-    }
-    void _goToKisahSejarah() {
-      Navigator.pop(context);
-      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKisahSejarahScreen()));
-    }
-    void _goToKontenUmum() {
-      Navigator.pop(context);
-      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKontenUmumScreen()));
-    }
-    void _goToNaraku() {
-      Navigator.pop(context);
-      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKontenShortScreen()));
-    }
-    void _goToKisahLegenda() {
-      Navigator.pop(context);
-      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKisahLegendaScreen()));
-    }
-    void _goToKisahIslami() {
-      Navigator.pop(context);
-      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKisahIslamiScreen()));
-    }
-    // void _goToKisahHoror() { Navigator.pop(context); } // Halaman Ini
-    void _goToKisahCustom() {
-      Navigator.pop(context);
-      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKisahCustomScreen()));
-    }
-    void _goToGambarThumbnail() {
-      Navigator.pop(context);
-      Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorGambarThumbnailScreen()));
+      Navigator.of(context).push(MaterialPageRoute(builder: (c) => screen));
     }
 
     Widget _menuItem(String title, IconData icon, Function() onTap, {bool isDisabled = false}) {
@@ -580,17 +647,17 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // [PERBAIKAN LAYOUT] Mengganti DrawerHeader dengan Container
+          // [PERBAIKAN LAYOUT] Mengganti DrawerHeader dengan Container agar rapi
           Container(
             padding: const EdgeInsets.fromLTRB(16, 50, 16, 20), 
             color: theme.appBarTheme.backgroundColor, 
             child: Row(
               children: [
-                 Icon(Icons.movie_creation_outlined, color: theme.colorScheme.secondary, size: 32),
-                 const SizedBox(width: 12),
-                 const Text(
-                  'Daftar Produk',
-                  style: TextStyle(
+                  Icon(Icons.movie_creation_outlined, color: theme.colorScheme.secondary, size: 32),
+                  const SizedBox(width: 12),
+                  Text(
+                  t('Product List', 'Daftar Produk'),
+                  style: const TextStyle(
                     color: Colors.white, 
                     fontSize: 22, 
                     fontWeight: FontWeight.bold
@@ -600,21 +667,21 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
             ),
           ),
           
-          _menuItem('Konsultan Ide Konten', Icons.lightbulb_outline, _goToKonsultan),
-          _menuItem('Generator Konten Umum', Icons.rate_review_outlined, _goToKontenUmum),
-          _menuItem('Generator Konten Short', Icons.movie_creation_outlined, _goToNaraku),
-          _menuItem('Generator Kisah Sejarah', Icons.account_balance_outlined, _goToKisahSejarah),
-          _menuItem('Generator Kisah Legenda', Icons.auto_stories_outlined, _goToKisahLegenda),
-          _menuItem('Generator Kisah Islami', Icons.mosque_outlined, _goToKisahIslami),
-          _menuItem('Generator Kisah Horor', Icons.help_outline, () {}, isDisabled: true), // Halaman Ini
-          _menuItem('Generator Kisah Custom', Icons.theater_comedy_outlined, _goToKisahCustom),
+          _menuItem(t('Idea Consultant', 'Konsultan Ide Konten'), Icons.lightbulb_outline, () => _navigate(const KonsultanIdeKontenScreen())),
+          _menuItem(t('General Content', 'Generator Konten Umum'), Icons.rate_review_outlined, () => _navigate(const GeneratorKontenUmumScreen())),
+          _menuItem(t('Short Content', 'Generator Konten Short'), Icons.movie_creation_outlined, () => _navigate(const GeneratorKontenShortScreen())),
+          _menuItem(t('History Story', 'Generator Kisah Sejarah'), Icons.account_balance_outlined, () => _navigate(const GeneratorKisahSejarahScreen())),
+          _menuItem(t('Legend Story', 'Generator Kisah Legenda'), Icons.auto_stories_outlined, () => _navigate(const GeneratorKisahLegendaScreen())),
+          _menuItem(t('Islamic Story', 'Generator Kisah Islami'), Icons.mosque_outlined, () => _navigate(const GeneratorKisahIslamiScreen())),
+          _menuItem(t('Horror Story', 'Generator Kisah Horor'), Icons.help_outline, () {}, isDisabled: true), // Halaman Ini
+          _menuItem(t('Custom Story', 'Generator Kisah Custom'), Icons.theater_comedy_outlined, () => _navigate(const GeneratorKisahCustomScreen())),
           
           Divider(color: theme.dividerColor, height: 30),
           
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0), 
             child: Text(
-              'Create', 
+              t('Create', 'Buat'), 
               style: TextStyle(color: theme.disabledColor, fontSize: 14, fontWeight: FontWeight.w600)
             )
           ),
@@ -622,21 +689,15 @@ class GeneratorKisahHororScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.image_search, color: Colors.blueAccent),
             title: const Text('Create Video Motion', style: TextStyle(color: Colors.white)),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.of(context).push(MaterialPageRoute(builder: (context) => InputScriptScreen())); 
-            },
+            onTap: () => _navigate(const InputScriptScreen()),
           ),
           ListTile(
             leading: Icon(Icons.movie_filter, color: theme.primaryColor),
             title: const Text('Create Video Footage', style: TextStyle(color: Colors.white)),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.of(context).push(MaterialPageRoute(builder: (context) => InputScriptVeoScreen())); 
-            },
+            onTap: () => _navigate(InputScriptVeoScreen()),
           ),
           
-          _menuItem('Create Thumbnail', Icons.aspect_ratio_outlined, _goToGambarThumbnail),
+          _menuItem(t('Create Thumbnail', 'Buat Thumbnail'), Icons.aspect_ratio_outlined, () => _navigate(const GeneratorGambarThumbnailScreen())),
         ],
       ),
     );

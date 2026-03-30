@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "595802795623",
+    "project_id": "majiku-5b07e",
+    "storage_bucket": "majiku-5b07e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:595802795623:android:44ee9233805a4ab4006ec2",
+        "android_client_info": {
+          "package_name": "com.mslstudio.majiku"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "595802795623-g18hru3ju2vj5ja8vrm846663k5em5sn.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD_x64PPVL-Lb518IPVQBcnZxUNfTXOsIQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "595802795623-g18hru3ju2vj5ja8vrm846663k5em5sn.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

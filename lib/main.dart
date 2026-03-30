@@ -1,25 +1,25 @@
-// KATEGORI_PENYESUAIAN_TEMA NO_URUT_03
-// NAMA FILE: lib/main.dart
-// TUJUAN: Mengaktifkan "Dark Modern Theme" (Hitam/Ungu/Emas)
-// secara global di level MaterialApp.
+// [RILIS KHUSUS TESTING - APP CHECK DISABLED]
+// KATEGORI_CONFIG_UPDATE NO_URUT_06
+// TUJUAN:
+// 1. MEMATIKAN App Check sementara agar Generasi Narasi jalan (Bypass Error 403).
+// 2. Tetap menggunakan Tema Dark Modern.
+// 3. Routing Otomatis (Login/Dashboard).
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart'; // Untuk kDebugMode
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:majiku/screens/login_screen.dart'; // <-- DIPERBAIKI
-import 'package:majiku/screens/project_dashboard_screen.dart'; // <-- DIPERBAIKI
+
+// [IMPORT APP CHECK - Disimpan untuk nanti]
+import 'package:firebase_app_check/firebase_app_check.dart';
+
+import 'package:majiku/screens/login_screen.dart'; 
+import 'package:majiku/screens/project_dashboard_screen.dart'; 
 import 'firebase_options.dart';
 import 'view_model/auth_view_model.dart';
-
-// --- KATEGORI_PENYESUAIAN_TEMA (PERUBAHAN 1): Impor tema ---
 import 'package:majiku/theme/app_theme.dart';
-// --- AKHIR PENYESUAIAN_TEMA ---
-
-// Pastikan alamat ini benar. "localhost" adalah yang paling umum.
-const String emulatorHost = "localhost";
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,23 +28,21 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // --- KATEGORI: KONFIGURASI / NO_URUT: 01 ---
-  // Penyesuaian: Blok emulator dimatikan (diberi komentar)
-  // untuk beralih dari mode Emulator Lokal ke mode Firebase LIVE (Deploy).
-  /*
-  // Blok krusial untuk koneksi ke emulator
-  if (kDebugMode) {
-    try {
-      print("===== MENGHUBUNGKAN KE EMULATOR LOKAL =====");
-      await FirebaseAuth.instance.useAuthEmulator(emulatorHost, 9099);
-      FirebaseFirestore.instance.useFirestoreEmulator(emulatorHost, 8080);
-      print("===== BERHASIL TERHUBUNG KE EMULATOR =====");
-    } catch (e) {
-      print("!!! GAGAL TERHUBUNG KE EMULATOR: $e");
-    }
-  }
-  */
-  // --- AKHIR PENYESUAIAN ---
+  // --- [MODIFIKASI SEMENTARA: APP CHECK DIMATIKAN] ---
+  // Saya menonaktifkan blok ini agar aplikasi TIDAK mengirim token error ke server.
+  // Karena server sudah 'Unenforced', request akan diterima tanpa token ini.
+  
+  /* // ^^^ KODE INI AKAN KITA NYALAKAN LAGI SAAT MAU UPLOAD PLAY STORE ^^^
+  
+  await FirebaseAppCheck.instance.activate(
+    androidProvider: kDebugMode 
+        ? AndroidProvider.debug 
+        : AndroidProvider.playIntegrity,
+    appleProvider: AppleProvider.appAttest,
+  );
+  
+  */ 
+  // -----------------------------------------------------
 
   runApp(
     const ProviderScope(
@@ -52,8 +50,6 @@ void main() async {
     ),
   );
 }
-
-// ... sisa kode MyApp tetap sama ...
 
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});
@@ -65,13 +61,10 @@ class MyApp extends ConsumerWidget {
     return MaterialApp(
       title: 'Majiku',
       debugShowCheckedModeBanner: false,
-
-      // --- KATEGORI_PENYESUAIAN_TEMA (PERUBAHAN 2): Terapkan Tema Global ---
-      // Menghapus ThemeData(primarySwatch: Colors.indigo...) yang lama
-      // dan menggantinya dengan tema "Dark Modern" (Hitam/Ungu/Emas).
-      theme: AppTheme.darkTheme,
-      // --- AKHIR PENYESUAIAN_TEMA ---
-
+      
+      // Tema Global (Dark Modern)
+      theme: AppTheme.darkTheme, 
+      
       home: authState.when(
         data: (user) {
           if (user != null) {
@@ -79,8 +72,13 @@ class MyApp extends ConsumerWidget {
           }
           return const LoginScreen();
         },
-        loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-        error: (error, stack) => Scaffold(body: Center(child: Text("Error: $error"))),
+        loading: () => const Scaffold(
+          backgroundColor: Colors.black,
+          body: Center(child: CircularProgressIndicator()),
+        ),
+        error: (error, stack) => Scaffold(
+          body: Center(child: Text("Error Init: $error")),
+        ),
       ),
     );
   }

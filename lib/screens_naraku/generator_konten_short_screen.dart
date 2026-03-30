@@ -1,13 +1,14 @@
-﻿// [RILIS REVISI - ELEGANT BLACK INPUTS]
-// KATEGORI_UI_TWEAK NO_URUT_02
-// Lokasi: lib/screens_naraku/generator_konten_short_screen.dart
-// TUJUAN:
-// 1. Menyamakan background kolom Input Prompt dengan kolom Output (Hitam Pekat).
-// 2. Meningkatkan kontras dan eleganitas UI.
+﻿//................................................................//
+// NAMA FILE: GENERATOR_KONTEN_SHORT_SCREEN.DART                  //
+// PATH: LIB/SCREENS/GENERATOR_KONTEN_SHORT_SCREEN.DART           //
+//................................................................//
 
+//No ke-1.........................................................//
+//IMPORT MODULE & DEPENDENCIES....................................//
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // [WAJIB] Untuk lapor konten
 
 // [IMPORT NAVIGASI]
 import '../screens/input_script_screen.dart';
@@ -27,26 +28,117 @@ import './generator_gambar_thumbnail_screen.dart';
 // [IMPORT VM & MODELS]
 import '../view_model_naraku/generator_konten_short_view_model.dart';
 import '../providers/user_provider.dart';
-import '../providers/config_provider.dart';
+import '../providers/config_provider.dart'; 
 import '../models/app_user.dart';
 import '../models/app_config.dart';
+//................................................................//
 
-class GeneratorKontenShortScreen extends ConsumerWidget {
+//No ke-2.........................................................//
+//MAIN CLASS & STATE DECLARATION..................................//
+class GeneratorKontenShortScreen extends ConsumerStatefulWidget {
   const GeneratorKontenShortScreen({super.key});
-  final int _maxPromptLength = 200;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<GeneratorKontenShortScreen> createState() => _GeneratorKontenShortScreenState();
+}
+
+class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShortScreen> {
+  final int _maxPromptLength = 200;
+  OverlayEntry? _overlayEntry;
+//................................................................//
+
+//No ke-3.........................................................//
+//LIFECYCLE & POPUP TUTORIAL LOGIC................................//
+  @override
+  void initState() {
+    super.initState();
+    // [PERBAIKAN] Langsung panggil popup tanpa flag static agar selalu muncul tiap buka halaman
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _showTutorialPopup();
+    });
+  }
+
+  @override
+  void dispose() {
+    _removePopup();
+    super.dispose();
+  }
+
+  void _removePopup() {
+    if (_overlayEntry != null && _overlayEntry!.mounted) {
+      _overlayEntry!.remove();
+      _overlayEntry = null;
+    }
+  }
+
+  // --- [LOGIC POP-UP TUTORIAL] ---
+  void _showTutorialPopup() {
+    _overlayEntry = OverlayEntry(
+      builder: (context) {
+        final topPadding = MediaQuery.of(context).padding.top;
+        return Positioned(
+          // Posisi persis di sebelah kanan ikon garis 3 (hamburger menu)
+          top: topPadding + 10,
+          left: 56, 
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.green, // [PERBAIKAN] Warna background diubah menjadi hijau
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black45, blurRadius: 6, offset: Offset(2, 2))
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.arrow_back, color: Colors.white, size: 18),
+                  const SizedBox(width: 8),
+                  const Text(
+                    "Click here to view product list",
+                    style: TextStyle(
+                      color: Colors.white, // [PERBAIKAN] Tulisan dipastikan warna putih
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  InkWell(
+                    onTap: _removePopup,
+                    child: const Icon(Icons.close, color: Colors.white70, size: 18),
+                  )
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+    // [PERBAIKAN] Future.delayed (auto-hide 5 detik) dihapus agar popup selalu ON hingga user aksi
+  }
+//................................................................//
+
+//No ke-4.........................................................//
+//MAIN BUILD METHOD & SCAFFOLD....................................//
+  @override
+  Widget build(BuildContext context) {
     // [STATE LOKAL]
     final state = ref.watch(generatorKontenShortViewModelProvider);
     final viewModel = ref.read(generatorKontenShortViewModelProvider.notifier);
-
-    final String generatorTitle = NarakuLocalizationHelper.get('generatorTitle');
 
     // [STATE GLOBAL]
     final AsyncValue<AppUser> userState = ref.watch(firestoreUserProvider);
     final AsyncValue<AppConfig> configState = ref.watch(appConfigProvider);
     
+    // [BAHASA]
+    final currentLocale = ref.watch(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     // [THEME SHORTCUTS]
     final theme = Theme.of(context);
 
@@ -64,9 +156,14 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
     });
 
     return Scaffold(
-      // Background diambil otomatis dari Theme (Black)
+      // [PERBAIKAN] Deteksi jika user klik menu garis tiga (drawer kebuka), lalu matikan pop-up
+      onDrawerChanged: (isOpened) {
+        if (isOpened) {
+          _removePopup();
+        }
+      },
       appBar: AppBar(
-        title: Text(generatorTitle),
+        title: null, 
         actions: [
           TextButton.icon(
             icon: const Icon(Icons.dashboard_outlined),
@@ -86,7 +183,7 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
           ),
         ],
       ),
-      drawer: _buildNarakuDrawer(context),
+      drawer: _buildNarakuDrawer(context, t),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -97,27 +194,106 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
               ref,
               viewModel,
               state,
-              generatorTitle,
               userState,
               configState,
+              t, 
             ),
             const SizedBox(height: 24),
-            _buildOutputCard(context, ref, viewModel, state),
+            _buildOutputCard(context, ref, viewModel, state, t),
           ],
         ),
       ),
     );
   }
+//................................................................//
 
+//No ke-5.........................................................//
+//ACTION LOGIC (FIRESTORE REPORT).................................//
+  // --- [LOGIC REAL] LAPOR KONTEN KE FIRESTORE ---
+  void _showReportDialog(BuildContext context, WidgetRef ref, String content) {
+    final TextEditingController reasonController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Lapor Konten / Report"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Bantu kami menjaga keamanan. Mengapa konten ini tidak pantas?",
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                hintText: "Alasan (SARA, Kekerasan, dll)...",
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Batal"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              final user = ref.read(firestoreUserProvider).valueOrNull;
+              final userId = user?.uid ?? 'anonymous'; 
+
+              FirebaseFirestore.instance.collection('reports').add({
+                'content': content,
+                'reason': reasonController.text.isEmpty ? 'No reason provided' : reasonController.text,
+                'reportedAt': FieldValue.serverTimestamp(),
+                'userId': userId,
+                'feature': 'Generator Konten Short', 
+              }).then((_) {
+                if (context.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Laporan berhasil dikirim. Terima kasih."),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              }).catchError((error) {
+                if (context.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Gagal mengirim laporan: $error"),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              });
+            },
+            child: const Text("Kirim Laporan", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+//................................................................//
+
+//No ke-6.........................................................//
+//UI HELPERS (INPUT, OUTPUT CARD & LOGIC PARSING).................//
   // --- Helper Kartu Input ---
   Widget _buildInputCard(
       BuildContext context,
       WidgetRef ref,
       GeneratorKontenShortViewModel viewModel,
       GeneratorKontenShortState state,
-      String generatorTitle,
       AsyncValue<AppUser> userState,
-      AsyncValue<AppConfig> configState) {
+      AsyncValue<AppConfig> configState,
+      String Function(String, String) t) {
     
     final theme = Theme.of(context);
     final charCounter =
@@ -126,10 +302,8 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
       charCounter.value = viewModel.promptController.text.length;
     });
 
-    // --- [LOGIKA TOMBOL] ---
     final bool vmIsLoading = state.isLoading;
-    final bool providersAreLoading =
-        userState.isLoading || configState.isLoading;
+    final bool providersAreLoading = userState.isLoading || configState.isLoading;
     final bool providersHaveError = userState.hasError || configState.hasError;
     final int currentBalance = userState.valueOrNull?.tokenBalance ?? 0;
     final int actionCost = configState.valueOrNull?.costs.kontenShortPerClick ??
@@ -138,15 +312,15 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
 
     final String buttonLabel;
     if (vmIsLoading) {
-      buttonLabel = NarakuLocalizationHelper.get('statusGenerating');
+      buttonLabel = t('Generating...', 'Sedang Membuat...');
     } else if (providersAreLoading) {
-      buttonLabel = "Memuat...";
+      buttonLabel = t('Loading...', 'Memuat...');
     } else if (providersHaveError) {
       buttonLabel = "Error";
     } else if (!canAfford) {
-      buttonLabel = "Token Tidak Cukup";
+      buttonLabel = t('Insufficient Tokens', 'Token Tidak Cukup');
     } else {
-      buttonLabel = NarakuLocalizationHelper.get('btnGenerate');
+      buttonLabel = t('GENERATE NARRATIVE', 'BUAT NARASI');
     }
 
     final bool isButtonDisabled =
@@ -165,15 +339,16 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              NarakuLocalizationHelper.get('generatorTitle'),
+              t('Short Content Generator', 'Generator Konten Short'),
               style: theme.textTheme.headlineSmall,
             ),
             const SizedBox(height: 20),
+            
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  NarakuLocalizationHelper.get('promptLabel'),
+                  t('Topic / Idea', 'Topik / Ide Konten'),
                   style: theme.textTheme.bodyMedium,
                 ),
                 ValueListenableBuilder<int>(
@@ -194,38 +369,35 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 10),
             
-            // INPUT UTAMA - REVISI BACKGROUND HITAM
             TextField(
               controller: viewModel.promptController,
               maxLines: 3,
               maxLength: _maxPromptLength,
               enabled: !state.isLoading,
+              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white),
               decoration: InputDecoration(
-                hintText: NarakuLocalizationHelper.get('promptPlaceholder'),
+                hintText: t('Input your title or keyword here..', 'Input judul atau kata kunci disini'),
                 counterText: '',
                 filled: true,
-                // [FIX] Memaksa warna hitam (scaffoldBackgroundColor) agar sama dengan output
-                fillColor: theme.scaffoldBackgroundColor, 
+                fillColor: theme.scaffoldBackgroundColor,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: BorderSide.none,
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: theme.colorScheme.secondary), // Emas saat fokus
+                  borderSide: BorderSide(color: theme.colorScheme.secondary),
                 ),
               ),
             ),
             
-            // --- Dropdown Panjang Narasi ---
             const SizedBox(height: 16),
             DropdownButtonFormField<int>(
               value: state.lengthOption,
-              // [FIX] Menyamakan style dropdown dengan TextField (Hitam)
               decoration: InputDecoration(
-                labelText: 'Target Character Length',
+                labelText: t('Target Character Length', 'Target Panjang Karakter'),
                 filled: true,
-                fillColor: theme.scaffoldBackgroundColor, // Hitam
+                fillColor: theme.scaffoldBackgroundColor, 
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: BorderSide.none,
@@ -236,7 +408,7 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
               items: [500, 1000, 2000, 3000, 4000].map((int value) {
                 return DropdownMenuItem<int>(
                   value: value,
-                  child: Text('$value Characters'),
+                  child: Text('$value ${t('Characters', 'Karakter')}'),
                 );
               }).toList(),
               onChanged: state.isLoading
@@ -250,12 +422,11 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
 
             const SizedBox(height: 8),
             Text(
-              NarakuLocalizationHelper.get('languageHint'),
+              t('Language will be auto-detected from your input.', 'Bahasa akan dideteksi otomatis dari input Anda.'),
               style: theme.textTheme.bodySmall,
             ),
             const SizedBox(height: 20),
             
-            // --- Tombol Generate ---
             ElevatedButton.icon(
               icon: vmIsLoading
                   ? const SizedBox(
@@ -272,12 +443,16 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 backgroundColor: buttonColor,
                 foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30),
+                ),
               ),
               onPressed: isButtonDisabled
                   ? null
-                  : () => viewModel.generateNarrative(generatorTitle),
+                  : () => viewModel.generateNarrative(viewModel.promptController.text), 
             ),
           ],
         ),
@@ -287,7 +462,7 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
 
   // --- Helper Kartu Output ---
   Widget _buildOutputCard(BuildContext context, WidgetRef ref,
-      GeneratorKontenShortViewModel viewModel, GeneratorKontenShortState state) {
+      GeneratorKontenShortViewModel viewModel, GeneratorKontenShortState state, String Function(String, String) t) {
     
     final theme = Theme.of(context);
     final bool hasOutput = state.generatedNarrative.isNotEmpty;
@@ -297,7 +472,7 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
 
     String outputContent = hasOutput
         ? state.generatedNarrative
-        : NarakuLocalizationHelper.get('outputPlaceholder');
+        : t('Result will appear here...', 'Hasil akan muncul di sini...');
 
     return Card(
       margin: EdgeInsets.zero,
@@ -306,23 +481,35 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              NarakuLocalizationHelper.get('outputTitle'),
-              style: theme.textTheme.headlineSmall,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  t('Generated Narrative', 'Narasi Hasil Generasi'),
+                  style: theme.textTheme.headlineSmall?.copyWith(fontSize: 18),
+                ),
+                if (hasOutput)
+                  IconButton(
+                    icon: const Icon(Icons.flag_outlined, color: Colors.redAccent),
+                    tooltip: t('Report offensive content', 'Laporkan konten'),
+                    onPressed: () => _showReportDialog(context, ref, outputContent),
+                  ),
+              ],
             ),
-            const SizedBox(height: 20),
+            
+            const SizedBox(height: 10),
+            
             Container(
               padding: const EdgeInsets.all(16),
               constraints: const BoxConstraints(minHeight: 150),
               decoration: BoxDecoration(
-                // [FIX] Ini adalah referensi warna yang kita samakan (Hitam)
-                color: theme.scaffoldBackgroundColor, 
+                color: theme.scaffoldBackgroundColor,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: theme.dividerColor),
               ),
               child: state.isLoading
                   ? Center(
-                      child: Text(NarakuLocalizationHelper.get('statusLoading'),
+                      child: Text(t('Generating magic...', 'Sedang meracik keajaiban...'),
                           style: TextStyle(
                               color: theme.textTheme.bodySmall?.color,
                               fontStyle: FontStyle.italic)))
@@ -330,22 +517,17 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
                       outputContent,
                       style: TextStyle(
                         color: hasOutput ? theme.textTheme.bodyMedium?.color : theme.textTheme.bodySmall?.color,
-                        fontStyle:
-                            hasOutput ? FontStyle.normal : FontStyle.italic,
+                        fontStyle: hasOutput ? FontStyle.normal : FontStyle.italic,
                         height: 1.6,
                       ),
                     ),
             ),
             const SizedBox(height: 20),
             
-            // --- [HEADER & KONTROL OUTPUT] ---
             Row(
               children: [
-                // 1. TOMBOL COPY
                 Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.copy, size: 18),
-                    label: const Text('Copy'),
+                  child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       foregroundColor: copyColor,
@@ -361,26 +543,22 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
                                 ClipboardData(text: state.generatedNarrative));
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text(NarakuLocalizationHelper.get(
-                                    'statusCopySuccess')),
+                                content: Text(t('Copied to clipboard!', 'Disalin ke papan klip!')),
                                 backgroundColor: Colors.green,
                               ),
                             );
                           },
+                    child: Text(t('Copy', 'Salin')),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 8), 
                 
-                // 2. TOMBOL SEND
-                _buildSendToProjectButton(context, state), 
+                _buildSendToProjectButton(context, state, t), 
 
-                const SizedBox(width: 16),
+                const SizedBox(width: 8), 
                 
-                // 3. TOMBOL CLEAR
                 Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    label: Text(NarakuLocalizationHelper.get('btnClear')),
+                  child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       foregroundColor: clearColor,
@@ -390,6 +568,7 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
                       ),
                     ),
                     onPressed: !hasOutput ? null : viewModel.clearAll,
+                    child: Text(t('Clear', 'Hapus')),
                   ),
                 ),
               ],
@@ -401,7 +580,7 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
   }
 
   // --- Helper: Parsing Hasil Narasi ---
-  Map<String, String> _parseGeneratedContent(String rawContent) {
+  Map<String, String> _parseGeneratedContent(String rawContent, String defaultTitle) {
     if (rawContent.isEmpty) {
       return {'title': '', 'script': ''};
     }
@@ -425,8 +604,6 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
       script = lines.sublist(startLine + 1).join('\n').trim();
     }
     
-    String defaultTitle = NarakuLocalizationHelper.get('defaultProjectTitle');
-    
     if (rawTitle.isEmpty && script.isNotEmpty) {
       rawTitle = defaultTitle;
     } else if (rawTitle.isEmpty && script.isEmpty) {
@@ -437,18 +614,16 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
     return {'title': rawTitle, 'script': cleanedScript};
   }
 
-  // --- Helper: Dropdown Tombol Send ---
+  // --- Helper: Tombol Kirim -> PopupMenu ---
   Widget _buildSendToProjectButton(
-      BuildContext context, GeneratorKontenShortState state) {
+      BuildContext context, GeneratorKontenShortState state, String Function(String, String) t) {
     
     final theme = Theme.of(context);
     final bool hasOutput = state.generatedNarrative.isNotEmpty;
 
     if (!hasOutput) {
       return Expanded(
-        child: OutlinedButton.icon(
-          icon: const Icon(Icons.send_to_mobile, size: 18),
-          label: const Text("Send"),
+        child: OutlinedButton(
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 12),
             foregroundColor: theme.disabledColor,
@@ -458,73 +633,27 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
             ),
           ),
           onPressed: null,
+          child: Text(t('Send', 'Kirim')),
         ),
       );
     }
     
-    final Map<String, String> parsedData = _parseGeneratedContent(state.generatedNarrative);
+    final Map<String, String> parsedData = _parseGeneratedContent(
+        state.generatedNarrative, 
+        t('Untitled Project', 'Proyek Tanpa Judul')
+    );
     final String cleanTitle = parsedData['title']!;
     final String cleanScript = parsedData['script']!;
 
-    final Color activeFillColor = theme.primaryColor;
-    final Color activeBorderColor = theme.colorScheme.secondary;
-
     return Expanded(
-      child: DropdownButtonHideUnderline(
-        child: DropdownButtonFormField<String>(
-          decoration: InputDecoration(
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            filled: true,
-            fillColor: activeFillColor,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(30),
-              borderSide: BorderSide(color: activeBorderColor, width: 1.5),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(30),
-              borderSide: BorderSide(color: activeBorderColor, width: 1.5),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(30),
-              borderSide: const BorderSide(color: Colors.white, width: 2.0),
-            ),
-          ),
-          isExpanded: true,
-          icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
-          hint: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(Icons.send_to_mobile, color: Colors.white, size: 18),
-              SizedBox(width: 8),
-              Text("Send", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          items: <DropdownMenuItem<String>>[
-            DropdownMenuItem<String>(
-              value: 'motion',
-              child: Row(
-                children: [
-                  Icon(Icons.image_search, size: 16, color: activeFillColor),
-                  const SizedBox(width: 8),
-                  const Text('To VMotion', style: TextStyle(fontSize: 14)),
-                ],
-              ),
-            ),
-            DropdownMenuItem<String>(
-              value: 'veo',
-              child: Row(
-                children: [
-                  Icon(Icons.movie_filter, size: 16, color: activeFillColor),
-                  const SizedBox(width: 8),
-                  const Text('To VFootage', style: TextStyle(fontSize: 14)),
-                ],
-              ),
-            ),
-          ],
-          onChanged: (String? value) {
-            if (value == null) return;
-
+      child: Material(
+        color: theme.primaryColor,
+        borderRadius: BorderRadius.circular(30),
+        child: PopupMenuButton<String>(
+          elevation: 6,
+          color: theme.cardColor,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          onSelected: (String value) {
             final Widget targetScreen = value == 'motion'
                 ? InputScriptScreen(initialTitle: cleanTitle, initialScript: cleanScript)
                 : InputScriptVeoScreen(initialTitle: cleanTitle, initialScript: cleanScript);
@@ -533,70 +662,75 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
               MaterialPageRoute(builder: (context) => targetScreen),
             );
           },
-          selectedItemBuilder: (context) {
-             return [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.send_to_mobile, color: Colors.white, size: 18),
-                  SizedBox(width: 8),
-                  Text("Send", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ],
+          itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+            const PopupMenuItem<String>(
+              value: 'motion',
+              child: Text('To VMotion', style: TextStyle(fontSize: 13)),
+            ),
+            const PopupMenuItem<String>(
+              value: 'veo',
+              child: Text('To VFootage', style: TextStyle(fontSize: 13)),
+            ),
+          ],
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+            alignment: Alignment.center,
+            child: Text(
+              t('Send', 'Kirim'),
+              style: const TextStyle(
+                color: Colors.white, 
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.send_to_mobile, color: Colors.white, size: 18),
-                  SizedBox(width: 8),
-                  Text("Send", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ],
-              ),
-             ];
-          },
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ),
       ),
     );
   }
+//................................................................//
 
-
-  // --- Drawer ---
-  Widget _buildNarakuDrawer(BuildContext context) {
+//No ke-7.........................................................//
+//DRAWER BUILDER..................................................//
+  // --- Drawer (Full Original) ---
+  Widget _buildNarakuDrawer(BuildContext context, String Function(String, String) t) {
     final theme = Theme.of(context);
 
-    void _goToKonsultan() {
+    void goToKonsultan() {
       Navigator.pop(context);
       Navigator.of(context).push(MaterialPageRoute(builder: (context) => const KonsultanIdeKontenScreen()));
     }
-    void _goToKisahSejarah() {
+    void goToKisahSejarah() {
       Navigator.pop(context);
       Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKisahSejarahScreen()));
     }
-    void _goToKontenUmum() {
+    void goToKontenUmum() {
       Navigator.pop(context);
       Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKontenUmumScreen()));
     }
-    void _goToKisahLegenda() {
+    void goToKisahLegenda() {
       Navigator.pop(context);
       Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKisahLegendaScreen()));
     }
-    void _goToKisahIslami() {
+    void goToKisahIslami() {
       Navigator.pop(context);
       Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKisahIslamiScreen()));
     }
-    void _goToKisahHoror() {
+    void goToKisahHoror() {
       Navigator.pop(context);
       Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKisahHororScreen()));
     }
-    void _goToKisahCustom() {
+    void goToKisahCustom() {
       Navigator.pop(context);
       Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorKisahCustomScreen()));
     }
-    void _goToGambarThumbnail() {
+    void goToGambarThumbnail() {
       Navigator.pop(context);
       Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GeneratorGambarThumbnailScreen()));
     }
 
-    Widget _menuItem(String title, IconData icon, Function() onTap, {bool isDisabled = false}) {
+    Widget menuItem(String title, IconData icon, Function() onTap, {bool isDisabled = false}) {
       return ListTile(
         leading: Icon(icon, color: isDisabled ? theme.disabledColor : Colors.white70),
         title: Text(title, style: TextStyle(color: isDisabled ? theme.disabledColor : Colors.white)),
@@ -617,9 +751,9 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
               children: [
                  Icon(Icons.movie_creation_outlined, color: theme.colorScheme.secondary, size: 32),
                  const SizedBox(width: 12),
-                 const Text(
-                  'Daftar Produk',
-                  style: TextStyle(
+                 Text(
+                  t('Product List', 'Daftar Produk'),
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 22, 
                     fontWeight: FontWeight.bold,
@@ -629,21 +763,21 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
             ),
           ),
 
-          _menuItem('Konsultan Ide Konten', Icons.lightbulb_outline, _goToKonsultan),
-          _menuItem('Generator Konten Umum', Icons.rate_review_outlined, _goToKontenUmum),
-          _menuItem('Generator Konten Short', Icons.movie_creation_outlined, () {}, isDisabled: true),
-          _menuItem('Generator Kisah Sejarah', Icons.account_balance_outlined, _goToKisahSejarah),
-          _menuItem('Generator Kisah Legenda', Icons.auto_stories_outlined, _goToKisahLegenda),
-          _menuItem('Generator Kisah Islami', Icons.mosque_outlined, _goToKisahIslami),
-          _menuItem('Generator Kisah Horor', Icons.help_outline, _goToKisahHoror),
-          _menuItem('Generator Kisah Custom', Icons.theater_comedy_outlined, _goToKisahCustom),
+          menuItem(t('Idea Consultant', 'Konsultan Ide Konten'), Icons.lightbulb_outline, goToKonsultan),
+          menuItem(t('General Content', 'Generator Konten Umum'), Icons.rate_review_outlined, goToKontenUmum),
+          menuItem(t('Short Content', 'Generator Konten Short'), Icons.movie_creation_outlined, () {}, isDisabled: true), 
+          menuItem(t('History Story', 'Generator Kisah Sejarah'), Icons.account_balance_outlined, goToKisahSejarah),
+          menuItem(t('Legend Story', 'Generator Kisah Legenda'), Icons.auto_stories_outlined, goToKisahLegenda),
+          menuItem(t('Islamic Story', 'Generator Kisah Islami'), Icons.mosque_outlined, goToKisahIslami),
+          menuItem(t('Horror Story', 'Generator Kisah Horor'), Icons.help_outline, goToKisahHoror),
+          menuItem(t('Custom Story', 'Generator Kisah Custom'), Icons.theater_comedy_outlined, goToKisahCustom),
 
           Divider(color: theme.dividerColor, height: 30), 
 
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Text(
-              'Create',
+              t('Create', 'Buat'),
               style: TextStyle(color: theme.disabledColor, fontSize: 14, fontWeight: FontWeight.w600),
             ),
           ),
@@ -653,7 +787,7 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
             title: const Text('Create Video Motion', style: TextStyle(color: Colors.white)),
             onTap: () {
               Navigator.pop(context);
-              Navigator.of(context).push(MaterialPageRoute(builder: (context) => InputScriptScreen())); 
+              Navigator.of(context).push(MaterialPageRoute(builder: (context) => const InputScriptScreen())); 
             },
           ),
 
@@ -666,9 +800,10 @@ class GeneratorKontenShortScreen extends ConsumerWidget {
             },
           ),
 
-          _menuItem('Create Thumbnail', Icons.aspect_ratio_outlined, _goToGambarThumbnail),
+          menuItem(t('Create Thumbnail', 'Buat Thumbnail'), Icons.aspect_ratio_outlined, goToGambarThumbnail),
         ],
       ),
     );
   }
 }
+//................................................................//

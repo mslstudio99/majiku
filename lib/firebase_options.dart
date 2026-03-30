@@ -21,10 +21,7 @@ class DefaultFirebaseOptions {
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for android - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return android;
       case TargetPlatform.iOS:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for ios - '
@@ -55,9 +52,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '595802795623',
     projectId: 'majiku-5b07e',
     authDomain: 'majiku-5b07e.firebaseapp.com',
-    // --- PERBAIKAN KRITIS: Mengganti .firebasestorage.app ke .appspot.com ---
-    storageBucket: 'majiku-5b07e.appspot.com',
-    // --- AKHIR PERBAIKAN ---
+    storageBucket: 'majiku-5b07e.firebasestorage.app',
     measurementId: 'G-5CDBJJSTHM',
   );
 
@@ -67,9 +62,16 @@ class DefaultFirebaseOptions {
     messagingSenderId: '595802795623',
     projectId: 'majiku-5b07e',
     authDomain: 'majiku-5b07e.firebaseapp.com',
-    // --- PERBAIKAN KRITIS: Mengganti .firebasestorage.app ke .appspot.com ---
-    storageBucket: 'majiku-5b07e.appspot.com',
-    // --- AKHIR PERBAIKAN ---
+    storageBucket: 'majiku-5b07e.firebasestorage.app',
     measurementId: 'G-R4T7JD4WT0',
   );
+
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyD_x64PPVL-Lb518IPVQBcnZxUNfTXOsIQ',
+    appId: '1:595802795623:android:44ee9233805a4ab4006ec2',
+    messagingSenderId: '595802795623',
+    projectId: 'majiku-5b07e',
+    storageBucket: 'majiku-5b07e.firebasestorage.app',
+  );
+
 }

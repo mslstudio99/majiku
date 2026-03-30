@@ -1,10 +1,10 @@
-﻿// [RILIS BERSIH - TIMELINE VIEW MODEL SMART ENGINE]
-// KATEGORI_SMART_ENGINE NO_URUT_01
-// Lokasi: lib/view_model/timeline_view_model.dart
-// TUJUAN:
-// - Mengirim teks RAW ke backend agar Libass bisa melakukan Auto-Wrap.
-// - Tetap memotong baris untuk Preview di UI Flutter agar rapi.
+﻿//====================================================================================================//
+// NAMA FILE: LIB/VIEW_MODEL/TIMELINE_VIEW_MODEL.DART                                                 //
+// DESKRIPSI: TIMELINE VIEW MODEL SMART ENGINE (PENGELOLA DURASI, TEKS, DAN RENDER PACKET)            //
+//====================================================================================================//
 
+//No ke-1: IMPORTS & DEPENDENCIES //
+//Deklarasi pustaka inti, Riverpod, dan model data. //
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'dart:async';
@@ -15,11 +15,10 @@ import '../models/scene.dart';
 import '../models/video_project.dart';
 import '../services/firestore_service.dart';
 import '../providers/visual_settings_provider.dart';
+//----------------------------------------------------------------------------------------------------//
 
-// =========================================================================
-// === BAGIAN 1: PROVIDER BAHAN MENTAH ===
-// =========================================================================
-
+//No ke-2: PROVIDER BAHAN MENTAH //
+//Mengambil stream data proyek dan scene dari Firestore. //
 final firestoreServiceProvider = Provider<FirestoreService>((ref) {
   return FirestoreService();
 });
@@ -33,12 +32,10 @@ final scenesStreamProvider = StreamProvider.family<List<Scene>, String>((ref, pr
   final firestoreService = ref.watch(firestoreServiceProvider);
   return firestoreService.getScenesStream(projectId);
 });
+//----------------------------------------------------------------------------------------------------//
 
-
-// =========================================================================
-// === BAGIAN 2: MODEL DATA "MATANG" ===
-// =========================================================================
-
+//No ke-3: MODEL DATA MATANG (PROCESSED) //
+//Model untuk menampung data timeline yang sudah diukur dan dibagi chunk. //
 @immutable
 class SubtitleChunk {
   final String text; // Untuk Pratinjau (mengerti '\n')
@@ -124,10 +121,10 @@ class ProcessedTimelineData {
     };
   }
 }
+//----------------------------------------------------------------------------------------------------//
 
-// =========================================================================
-// === BAGIAN 3: HELPER PENGUKURAN AUDIO & TEXT ===
-// =========================================================================
+//No ke-4: HELPER PENGUKURAN AUDIO & FORMAT TEKS //
+//Mengukur durasi asli audio dan memotong teks untuk preview UI. //
 Future<double> _measureAudioDuration(String url, {bool isAsset = false}) async {
   final double fallbackDuration = 5.0;
   if (url.isEmpty) {
@@ -166,7 +163,6 @@ Future<double> _measureAudioDuration(String url, {bool isAsset = false}) async {
   }
 }
 
-// Helper untuk Preview UI (Flutter) agar teks tidak melebar
 String _injectNewlines(String text, {required int maxLines}) {
   if (maxLines <= 1) return text;
   final List<String> words = text.split(' ').where((s) => s.isNotEmpty).toList();
@@ -193,15 +189,12 @@ String _injectNewlines(String text, {required int maxLines}) {
   }
   return lines.join('\n');
 }
+//----------------------------------------------------------------------------------------------------//
 
-
-// =========================================================================
-// === BAGIAN 4: "PABRIK PROVIDER" TERPUSAT (SMART ENGINE READY) ===
-// =========================================================================
-
+//No ke-5: PABRIK PROVIDER (SMART ENGINE) //
+//Memproses data mentah menjadi timeline siap render. //
 final processedTimelineProvider = StreamProvider.family<ProcessedTimelineData, String>((ref, projectId) async* {
   
-  // 1. Tonton Bahan Mentah
   final (
     double estimatedIntroDuration,
     int subtitleChunkCount,
@@ -225,10 +218,8 @@ final processedTimelineProvider = StreamProvider.family<ProcessedTimelineData, S
     return;
   }
 
-  // --- "PABRIK" DIMULAI ---
   final bool isAnyAudioMissing = scenes.any((s) => s.ttsAudioUrl.isEmpty);
 
-  // 3. Eksekusi Pengukuran Durasi Audio
   final double finalIntroDuration = 0.0;
 
   final List<Future<double>> measurementFutures = [];
@@ -245,7 +236,6 @@ final processedTimelineProvider = StreamProvider.family<ProcessedTimelineData, S
   debugPrint("[$projectId] All audio durations calculated.");
 
 
-  // 4. "Memasak" Data
   final List<ProcessedSceneData> processedScenes = [];
   double currentPlaybackTime = finalIntroDuration;
   double totalDuration = finalIntroDuration;
@@ -257,16 +247,13 @@ final processedTimelineProvider = StreamProvider.family<ProcessedTimelineData, S
     final double measuredDuration = actualSceneDurations[i];
     final String fullText = scene.segmentText ?? "";
     
-    // --- ATURAN RASIO ---
     final int chunksToMake;
     final int linesPerChunk;
 
     if (aspectRatio == "16:9") {
-      // 16:9: Lebih lebar, sedikit chunk, sedikit baris
       chunksToMake = 2;
       linesPerChunk = 3;
     } else {
-      // 9:16 / 1:1: Lebih sempit, lebih banyak chunk, lebih banyak baris
       chunksToMake = 5;
       linesPerChunk = 4;
     }
@@ -278,7 +265,6 @@ final processedTimelineProvider = StreamProvider.family<ProcessedTimelineData, S
     if (totalWords == 0 || measuredDuration == 0) {
       subtitleChunks.add(const SubtitleChunk(text: "", lines: [], startTime: 0, duration: 0));
     } else {
-      // 4d. Eksekusi Algoritma Chunking
       final double durationPerChunk = measuredDuration / chunksToMake;
       final int wordsPerChunk = (totalWords / chunksToMake).floor();
       int wordCursor = 0;
@@ -299,18 +285,12 @@ final processedTimelineProvider = StreamProvider.family<ProcessedTimelineData, S
           wordCursor = endWordIndex;
         }
         
-        // --- KATEGORI_SMART_ENGINE (Frontend Adjustment) ---
-        // 1. Untuk PREVIEW (Flutter): Gunakan _injectNewlines agar rapi di HP
         final String formattedTextForPreview = _injectNewlines(chunkText, maxLines: linesPerChunk);
-
-        // 2. Untuk RENDER (Backend): Kirim RAW TEXT dalam list.
-        // Libass di backend akan mengurus wrapping secara otomatis & rapi.
         final List<String> rawLinesForBackend = [chunkText];
-        // --- AKHIR PENYESUAIAN ---
 
         subtitleChunks.add(SubtitleChunk(
-          text: formattedTextForPreview, // Pratinjau (Ada \n)
-          lines: rawLinesForBackend,     // Render (Raw String)
+          text: formattedTextForPreview, 
+          lines: rawLinesForBackend,     
           startTime: chunkStartTime,
           duration: chunkDuration > 0.1 ? chunkDuration : 0.1,
         ));
@@ -331,7 +311,6 @@ final processedTimelineProvider = StreamProvider.family<ProcessedTimelineData, S
     totalDuration += measuredDuration;
   }
 
-  // 5. Yield Data
   yield ProcessedTimelineData(
     introDuration: finalIntroDuration,
     scenes: processedScenes,
@@ -340,11 +319,10 @@ final processedTimelineProvider = StreamProvider.family<ProcessedTimelineData, S
   );
 
 });
+//----------------------------------------------------------------------------------------------------//
 
-// =========================================================================
-// === BAGIAN 5: FUNGSI "PERAKITAN" UTAMA ===
-// =========================================================================
-
+//No ke-6: FUNGSI PERAKITAN RENDER PACKET //
+//Menyiapkan seluruh data timing dan style, lalu mengirimnya ke backend via Firestore. //
 Future<void> prepareAndSaveRenderPacket(WidgetRef ref, String projectId) async {
   debugPrint("prepareAndSaveRenderPacket: Memulai perakitan renderPacket untuk $projectId...");
   
@@ -370,7 +348,6 @@ Future<void> prepareAndSaveRenderPacket(WidgetRef ref, String projectId) async {
       },
     };
 
-    // Simpan
     await firestoreService.updateProject(
       projectId,
       {'renderPacket': renderPacket},
@@ -396,3 +373,4 @@ double _calculateAspectRatioFromString(String? ratioString) {
   }
   return 16 / 9;
 }
+//----------------------------------------------------------------------------------------------------//

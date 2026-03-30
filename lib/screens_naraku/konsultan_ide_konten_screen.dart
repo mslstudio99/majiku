@@ -1,19 +1,22 @@
-// [RILIS REVISI - FIX LAYOUT DRAWER]
-// KATEGORI_UI_TWEAK NO_URUT_04
+// [RILIS FINAL - KONSULTAN IDE: POLICY COMPLIANT & FIRESTORE LOGIC]
+// KATEGORI_POLICY_UPDATE NO_URUT_04
 // Lokasi: lib/screens_naraku/konsultan_ide_konten_screen.dart
 // TUJUAN:
-// 1. Mengganti DrawerHeader dengan Container agar jarak teks "Daftar Produk" lebih rapi dan presisi.
-// 2. Menghapus label biaya pada tombol Generate (sesuai file sebelumnya).
+// 1. [FIX] Menggunakan user.uid untuk mencegah error.
+// 2. Menambahkan fitur Lapor (Flag) untuk kepatuhan Google Play.
+// 3. UI Bersih (Judul di Card) & Tombol Responsif.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // [WAJIB]
 
 // [IMPORT NAVIGASI MASTER]
 import '../screens/input_script_screen.dart';
 import '../screens_veo/input_script_veo_screen.dart';
 import '../screens/project_dashboard_screen.dart';
-// import './konsultan_ide_konten_screen.dart'; // Hapus self-import
+
+// [IMPORT GENERATOR LAIN]
 import './generator_kisah_sejarah_screen.dart';
 import './generator_konten_umum_screen.dart';
 import './generator_kisah_legenda_screen.dart';
@@ -21,14 +24,14 @@ import './generator_kisah_islami_screen.dart';
 import './generator_kisah_horor_screen.dart';
 import './generator_kisah_custom_screen.dart';
 import './generator_gambar_thumbnail_screen.dart';
-import './generator_konten_short_screen.dart'; 
+import './generator_konten_short_screen.dart';
 
 // [IMPORT NARAKU VM]
 import '../view_model_naraku/konsultan_ide_konten_view_model.dart';
 
 // [IMPORT PROVIDER]
 import '../providers/user_provider.dart';
-import '../providers/config_provider.dart';
+import '../providers/config_provider.dart'; // Akses Bahasa
 import '../models/app_user.dart';
 import '../models/app_config.dart';
 
@@ -44,9 +47,12 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
     final viewModel = ref.read(konsultanIdeKontenViewModelProvider.notifier);
     final AsyncValue<AppUser> userState = ref.watch(firestoreUserProvider);
     final AsyncValue<AppConfig> configState = ref.watch(appConfigProvider);
-    
-    final String generatorTitle = KonsultanLocalizationHelper.get('generatorTitle');
-    
+
+    // [BAHASA]
+    final currentLocale = ref.watch(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     // [THEME SHORTCUT]
     final theme = Theme.of(context);
 
@@ -66,8 +72,8 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
     return Scaffold(
       // Background otomatis hitam dari Theme
       appBar: AppBar(
-        title: Text(generatorTitle),
-        // Warna AppBar otomatis dari Theme
+        // [UI BERSIH] Judul dihapus di AppBar
+        title: null,
         actions: [
           TextButton.icon(
             icon: const Icon(Icons.dashboard_outlined),
@@ -87,7 +93,7 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
           ),
         ],
       ),
-      drawer: _buildNarakuDrawer(context),
+      drawer: _buildNarakuDrawer(context, t),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -100,11 +106,88 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
               state,
               userState,
               configState,
+              t,
             ),
             const SizedBox(height: 24),
-            _buildOutputCard(context, ref, viewModel, state),
+            _buildOutputCard(context, ref, viewModel, state, t),
           ],
         ),
+      ),
+    );
+  }
+
+  // --- [LOGIC REAL] LAPOR KONTEN KE FIRESTORE ---
+  void _showReportDialog(BuildContext context, WidgetRef ref, String content) {
+    final TextEditingController reasonController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Lapor Konten / Report"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Bantu kami menjaga keamanan. Mengapa konten ini tidak pantas?",
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                hintText: "Alasan (SARA, Kekerasan, dll)...",
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Batal"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              // [FIREBASE LOGIC] Simpan Laporan
+              final user = ref.read(firestoreUserProvider).valueOrNull;
+              
+              // [BUGFIX] Menggunakan .uid bukan .id
+              final userId = user?.uid ?? 'anonymous'; 
+
+              FirebaseFirestore.instance.collection('reports').add({
+                'content': content, 
+                'reason': reasonController.text.isEmpty ? 'No reason provided' : reasonController.text,
+                'reportedAt': FieldValue.serverTimestamp(),
+                'userId': userId,
+                'feature': 'Konsultan Ide Konten', // Penanda fitur
+              }).then((_) {
+                if (context.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Laporan berhasil dikirim. Terima kasih."),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              }).catchError((error) {
+                if (context.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Gagal mengirim laporan: $error"),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              });
+            },
+            child: const Text("Kirim Laporan", style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
@@ -117,6 +200,7 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
     KonsultanIdeKontenState state,
     AsyncValue<AppUser> userState,
     AsyncValue<AppConfig> configState,
+    String Function(String, String) t,
   ) {
     final theme = Theme.of(context);
     
@@ -138,16 +222,15 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
     
     final String buttonLabel;
     if (vmIsLoading) {
-      buttonLabel = KonsultanLocalizationHelper.get('btnProcessing');
+      buttonLabel = t('Thinking...', 'Sedang Berpikir...');
     } else if (providersAreLoading) {
-      buttonLabel = "Memuat Saldo...";
+      buttonLabel = t('Loading...', 'Memuat...');
     } else if (providersHaveError) {
-      buttonLabel = "Error Konfigurasi";
+      buttonLabel = "Error";
     } else if (!canAfford) {
-      buttonLabel = "Token Tidak Cukup ($actionCost TM)";
+      buttonLabel = t('Insufficient Tokens', 'Token Tidak Cukup');
     } else {
-      // [MODIFIKASI] Menghapus tampilan biaya ($actionCost TM)
-      buttonLabel = KonsultanLocalizationHelper.get('btnGenerate');
+      buttonLabel = t('GENERATE IDEAS', 'CARI IDE KONTEN');
     }
     
     final bool isButtonDisabled =
@@ -160,23 +243,24 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
             : theme.primaryColor;
 
     return Card(
-      // Warna Card otomatis dari Theme
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // [JUDUL FITUR DI SINI]
             Text(
-              KonsultanLocalizationHelper.get('generatorTitle'),
+              t('Content Idea Consultant', 'Konsultan Ide Konten'),
               style: theme.textTheme.headlineSmall,
             ),
             const SizedBox(height: 20),
+
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  KonsultanLocalizationHelper.get('promptLabel'),
+                  t('Topic / Niche', 'Topik / Niche'),
                   style: theme.textTheme.bodyMedium,
                 ),
                 ValueListenableBuilder<int>(
@@ -197,17 +281,17 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 10),
             
-            // [THEME] Input Field
+            // [ELEGANT BLACK INPUT]
             TextField(
               controller: viewModel.promptController,
               maxLines: 3,
               maxLength: _maxPromptLength,
               enabled: !state.isLoading,
+              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white),
               decoration: InputDecoration(
-                hintText: KonsultanLocalizationHelper.get('promptPlaceholder'),
+                hintText: t('e.g., Technology, Healthy Diet', 'Cth: Teknologi, Diet Sehat'),
                 counterText: '',
                 filled: true,
-                // Warna Fill HITAM (Scaffold Background) agar elegan inset
                 fillColor: theme.scaffoldBackgroundColor,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -215,7 +299,6 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  // Warna Border Fokus: AMBER (Secondary)
                   borderSide: BorderSide(color: theme.colorScheme.secondary),
                 ),
               ),
@@ -232,7 +315,7 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
                         color: Colors.white,
                       ),
                     )
-                  : const Icon(Icons.auto_awesome, size: 20),
+                  : const Icon(Icons.lightbulb, size: 20), // Icon Bulb
               label: Text(
                 buttonLabel,
                 style: const TextStyle(fontWeight: FontWeight.bold),
@@ -263,17 +346,17 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
     WidgetRef ref,
     KonsultanIdeKontenViewModel viewModel,
     KonsultanIdeKontenState state,
+    String Function(String, String) t,
   ) {
     final theme = Theme.of(context);
     final bool hasOutput = state.generatedIdeas.isNotEmpty;
 
-    // [THEME] Warna Aksi
     final Color copyColor = hasOutput ? theme.colorScheme.secondary : theme.disabledColor;
     final Color clearColor = hasOutput ? theme.colorScheme.error : theme.disabledColor;
 
     String outputContent = hasOutput
         ? state.generatedIdeas
-        : KonsultanLocalizationHelper.get('outputPlaceholder');
+        : t('Ideas will appear here...', 'Ide akan muncul di sini...');
 
     return Card(
       margin: EdgeInsets.zero,
@@ -282,16 +365,28 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              KonsultanLocalizationHelper.get('outputTitle'),
-              style: theme.textTheme.headlineSmall,
+            // [REVISI UI] Header dengan Tombol Lapor (Flag)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  t('Recommended Ideas', 'Ide Rekomendasi'),
+                  style: theme.textTheme.headlineSmall,
+                ),
+                // Tombol Lapor (Hanya muncul jika ada konten)
+                if (hasOutput)
+                  IconButton(
+                    icon: const Icon(Icons.flag_outlined, color: Colors.redAccent),
+                    tooltip: t('Report offensive content', 'Laporkan konten'),
+                    onPressed: () => _showReportDialog(context, ref, outputContent),
+                  ),
+              ],
             ),
             const SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.all(16),
               constraints: const BoxConstraints(minHeight: 150),
               decoration: BoxDecoration(
-                // Warna Latar Output: HITAM (Scaffold Background)
                 color: theme.scaffoldBackgroundColor,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: theme.dividerColor),
@@ -299,7 +394,7 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
               child: state.isLoading
                   ? Center(
                       child: Text(
-                          KonsultanLocalizationHelper.get('apiLoading'),
+                          t('Consulting AI...', 'Sedang konsultasi AI...'),
                           style: TextStyle(
                               color: theme.textTheme.bodySmall?.color,
                               fontStyle: FontStyle.italic)))
@@ -314,12 +409,12 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
                     ),
             ),
             const SizedBox(height: 20),
+            
+            // --- [HEADER & KONTROL OUTPUT] ---
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.copy, size: 18),
-                    label: Text(KonsultanLocalizationHelper.get('btnCopy')),
+                  child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       foregroundColor: copyColor,
@@ -335,19 +430,17 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
                                 ClipboardData(text: state.generatedIdeas));
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text(KonsultanLocalizationHelper.get(
-                                    'btnCopied')),
+                                content: Text(t('Copied to clipboard!', 'Disalin ke papan klip!')),
                                 backgroundColor: Colors.green,
                               ),
                             );
                           },
+                    child: Text(t('Copy', 'Salin')),
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    label: Text(KonsultanLocalizationHelper.get('btnClear')),
+                  child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       foregroundColor: clearColor,
@@ -357,6 +450,7 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
                       ),
                     ),
                     onPressed: !hasOutput ? null : viewModel.clearAll,
+                    child: Text(t('Clear', 'Hapus')),
                   ),
                 ),
               ],
@@ -368,89 +462,13 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
   }
 
   // --- Drawer Master (Themed) ---
-  Widget _buildNarakuDrawer(BuildContext context) {
+  Widget _buildNarakuDrawer(BuildContext context, String Function(String, String) t) {
     final theme = Theme.of(context);
 
-    // --- [AWAL] Helper Navigasi ---
-    void _goToKonsultan() {
+    // Helper Navigasi
+    void _navigate(Widget screen) {
       Navigator.pop(context);
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const KonsultanIdeKontenScreen(),
-        ),
-      );
-    }
-
-    void _goToKisahSejarah() {
-      Navigator.pop(context);
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const GeneratorKisahSejarahScreen(),
-        ),
-      );
-    }
-
-    void _goToKontenUmum() {
-      Navigator.pop(context);
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const GeneratorKontenUmumScreen(),
-        ),
-      );
-    }
-
-    void _goToKisahLegenda() {
-      Navigator.pop(context);
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const GeneratorKisahLegendaScreen(),
-        ),
-      );
-    }
-
-    void _goToKisahIslami() {
-      Navigator.pop(context);
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const GeneratorKisahIslamiScreen(),
-        ),
-      );
-    }
-
-    void _goToKisahHoror() {
-      Navigator.pop(context);
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const GeneratorKisahHororScreen(),
-        ),
-      );
-    }
-
-    void _goToKisahCustom() {
-      Navigator.pop(context);
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const GeneratorKisahCustomScreen(),
-        ),
-      );
-    }
-
-    void _goToGambarThumbnail() {
-      Navigator.pop(context);
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const GeneratorGambarThumbnailScreen(),
-        ),
-      );
-    }
-
-    void _goToNaraku() {
-      Navigator.pop(context);
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const GeneratorKontenShortScreen(),
-        ),
-      );
+      Navigator.of(context).push(MaterialPageRoute(builder: (c) => screen));
     }
 
     Widget _menuItem(String title, IconData icon, Function() onTap,
@@ -466,26 +484,23 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
         onTap: isDisabled ? null : onTap,
       );
     }
-    // --- [AKHIR] Helper Navigasi ---
 
     return Drawer(
-      // Background Drawer mengikuti Theme (Black)
       backgroundColor: theme.scaffoldBackgroundColor,
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // [PERBAIKAN LAYOUT] Mengganti DrawerHeader dengan Container
+          // [UI DRAWER HEADER RAPI]
           Container(
-            padding: const EdgeInsets.fromLTRB(16, 50, 16, 20), // Jarak atas dan bawah diatur manual
-            color: theme.appBarTheme.backgroundColor, // Warna Header sama dengan AppBar
+            padding: const EdgeInsets.fromLTRB(16, 50, 16, 20),
+            color: theme.appBarTheme.backgroundColor,
             child: Row(
               children: [
-                 // Ikon Header Drawer (Aksen Amber)
-                 Icon(Icons.lightbulb_outline, color: theme.colorScheme.secondary, size: 32),
+                 Icon(Icons.movie_creation_outlined, color: theme.colorScheme.secondary, size: 32),
                  const SizedBox(width: 12),
-                 const Text(
-                  'Daftar Produk',
-                  style: TextStyle(
+                 Text(
+                  t('Product List', 'Daftar Produk'),
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -495,71 +510,44 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
             ),
           ),
 
-          // --- Daftar Produk ---
-          _menuItem(
-              'Konsultan Ide Konten', Icons.lightbulb_outline, () {}, isDisabled: true),
-          _menuItem('Generator Konten Umum', Icons.rate_review_outlined,
-              _goToKontenUmum),
-          _menuItem('Generator Konten Short', Icons.movie_creation_outlined,
-              _goToNaraku),
-          _menuItem('Generator Kisah Sejarah', Icons.account_balance_outlined,
-              _goToKisahSejarah),
-          _menuItem('Generator Kisah Legenda', Icons.auto_stories_outlined,
-              _goToKisahLegenda),
-          _menuItem(
-              'Generator Kisah Islami', Icons.mosque_outlined, _goToKisahIslami),
-          _menuItem(
-              'Generator Kisah Horor', Icons.help_outline, _goToKisahHoror),
-          _menuItem('Generator Kisah Custom', Icons.theater_comedy_outlined,
-              _goToKisahCustom),
+          _menuItem(t('Idea Consultant', 'Konsultan Ide Konten'), Icons.lightbulb_outline, () {}, isDisabled: true), // Halaman Ini
+          _menuItem(t('General Content', 'Generator Konten Umum'), Icons.rate_review_outlined, () => _navigate(const GeneratorKontenUmumScreen())),
+          _menuItem(t('Short Content', 'Generator Konten Short'), Icons.movie_creation_outlined, () => _navigate(const GeneratorKontenShortScreen())),
+          _menuItem(t('History Story', 'Generator Kisah Sejarah'), Icons.account_balance_outlined, () => _navigate(const GeneratorKisahSejarahScreen())),
+          _menuItem(t('Legend Story', 'Generator Kisah Legenda'), Icons.auto_stories_outlined, () => _navigate(const GeneratorKisahLegendaScreen())),
+          _menuItem(t('Islamic Story', 'Generator Kisah Islami'), Icons.mosque_outlined, () => _navigate(const GeneratorKisahIslamiScreen())),
+          _menuItem(t('Horror Story', 'Generator Kisah Horor'), Icons.help_outline, () => _navigate(const GeneratorKisahHororScreen())),
+          _menuItem(t('Custom Story', 'Generator Kisah Custom'), Icons.theater_comedy_outlined, () => _navigate(const GeneratorKisahCustomScreen())),
 
-          Divider(color: theme.dividerColor),
+          Divider(color: theme.dividerColor, height: 30),
 
           Padding(
-            padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 8.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Text(
-              'Create',
-              style: TextStyle(
-                color: theme.disabledColor,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
+              t('Create', 'Buat'),
+              style: TextStyle(color: theme.disabledColor, fontSize: 14, fontWeight: FontWeight.w600),
             ),
           ),
 
           ListTile(
             leading: const Icon(Icons.image_search, color: Colors.blueAccent),
-            title: const Text('Create Video Motion',
-                style: TextStyle(color: Colors.white)),
+            title: const Text('Create Video Motion', style: TextStyle(color: Colors.white)),
             onTap: () {
               Navigator.pop(context);
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => InputScriptScreen(),
-                ),
-              );
+              Navigator.of(context).push(MaterialPageRoute(builder: (context) => const InputScriptScreen())); 
             },
           ),
 
           ListTile(
             leading: Icon(Icons.movie_filter, color: theme.primaryColor),
-            title: const Text('Create Video Footage',
-                style: TextStyle(color: Colors.white)),
+            title: const Text('Create Video Footage', style: TextStyle(color: Colors.white)),
             onTap: () {
               Navigator.pop(context);
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => InputScriptVeoScreen(),
-                ),
-              );
+              Navigator.of(context).push(MaterialPageRoute(builder: (context) => InputScriptVeoScreen())); 
             },
           ),
-          
-          _menuItem(
-            'Create Thumbnail',
-            Icons.aspect_ratio_outlined,
-            _goToGambarThumbnail,
-          ),
+
+          _menuItem(t('Create Thumbnail', 'Buat Thumbnail'), Icons.aspect_ratio_outlined, () => _navigate(const GeneratorGambarThumbnailScreen())),
         ],
       ),
     );

@@ -1,13 +1,42 @@
+//..................................................//
+// LIB/SERVICES/FIRESTORE_SERVICE.DART              //
+//..................................................//
+
+//No ke-1...........................................//
+// IMPORT, SETUP KEAMANAN, DAN DEPENDENSI           //
+import 'dart:io' show Platform;
+import 'dart:ui' as ui; // Digunakan untuk mengambil resolusi layar fisik
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart'; // Dibutuhkan untuk debugPrint
+import 'package:flutter/material.dart'; 
+
+// Package Keamanan & Anti-Fraud
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
+import 'package:android_id/android_id.dart'; // [BARU] Khusus untuk Plat Nomor Mesin Murni
 
 // Import model Scene dan VideoProject
 import '../models/scene.dart';
 import '../models/video_project.dart';
 // Import model VisualSettings dari provider
-import '../providers/visual_settings_provider.dart'; // Pastikan path ini benar
+import '../providers/visual_settings_provider.dart';
 
+/*
+KATEGORI_ARSITEKTUR_BARU NO_URUT_15 (REVISI PARIPURNA 6.0 - STRICT ID + FORENSIC LOG)
+Nama File: lib/services/firestore_service.dart
+Status: STABIL, ANTI-REGRESI, & ANTI-FARMING AKURAT
+Perubahan: 
+- Mencabut IP tracking agar tidak rancu dengan jaringan WiFi/CGNAT publik.
+- Memisahkan Hardware ID Mutlak (ANDROID_ID) dengan Spesifikasi Kosmetik (Merk HP).
+- Menambahkan 'totalRegistrations' untuk monitoring peternak akun.
+*/
+//..................................................//
+
+//No ke-2...........................................//
+// CLASS SERVICE DAN LOGIKA ANTI-FRAUD IDENTITAS    //
 class FirestoreService {
   final FirebaseFirestore _db;
   final FirebaseAuth _auth;
@@ -17,85 +46,264 @@ class FirestoreService {
       : _db = db ?? FirebaseFirestore.instance,
         _auth = auth ?? FirebaseAuth.instance;
 
-  /// Mengambil stream real-time dari semua proyek video milik pengguna saat ini.
+  /// Mengambil Detail Spesifikasi Kosmetik (HANYA UNTUK CATATAN/INFO, BUKAN ID)
+  Future<Map<String, dynamic>> _getDeviceSpecs() async {
+    final deviceInfo = DeviceInfoPlugin();
+    final double width = ui.PlatformDispatcher.instance.views.first.physicalSize.width;
+    final double height = ui.PlatformDispatcher.instance.views.first.physicalSize.height;
+
+    try {
+      if (kIsWeb) {
+        final web = await deviceInfo.webBrowserInfo;
+        return {
+          'mesin': '${web.browserName} on ${web.platform}',
+          'resolusi': '${width.toInt()}x${height.toInt()}',
+          'cores': web.hardwareConcurrency,
+          'userAgent': web.userAgent,
+        };
+      } else if (Platform.isAndroid) {
+        final android = await deviceInfo.androidInfo;
+        return {
+          'brand': android.brand,
+          'model': android.model,
+          'resolusi': '${width.toInt()}x${height.toInt()}',
+          'hardware': android.hardware,
+          'androidVer': android.version.release,
+        };
+      }
+    } catch (e) {
+      debugPrint("⚠️ Gagal ambil spek hardware kosmetik: $e");
+    }
+    return {'info': 'generic_device'};
+  }
+
+  /// Menghasilkan ID Unik Mutlak Fisik Mesin (ANDROID_ID murni / UUID Web).
+  Future<String?> _getStrictHardwareId() async {
+    try {
+      if (kIsWeb) {
+        final prefs = await SharedPreferences.getInstance();
+        String? deviceId = prefs.getString('web_persistent_id');
+        if (deviceId == null) {
+          deviceId = const Uuid().v4();
+          await prefs.setString('web_persistent_id', deviceId);
+        }
+        return "web_$deviceId";
+      } else if (Platform.isAndroid) {
+        const androidIdPlugin = AndroidId();
+        final String? androidId = await androidIdPlugin.getId();
+        return androidId != null ? "android_$androidId" : null;
+      }
+    } catch (e) {
+      debugPrint("❌ Gagal mengambil Strict Hardware ID: $e");
+    }
+    return null;
+  }
+
+  /// Logika Anti-Fraud (MASTER RECORD): isNewRegistration memblokir Race Condition,
+  /// Menggunakan STRICT HARDWARE ID sebagai indikator tunggal, Merk HP sebagai catatan.
+  Future<void> ensureUserDocumentExists({bool isNewRegistration = false}) async {
+    final user = _auth.currentUser;
+    if (user == null || user.email == null) {
+      debugPrint("[UserInit] Gagal: User/Email null.");
+      return;
+    }
+
+    final userRef = _db.collection('users').doc(user.uid);
+    final String userEmail = user.email!.toLowerCase().trim();
+    
+    try {
+      final doc = await userRef.get();
+      
+      // 1. Ambil Nilai Config Bonus Langsung Dari Database
+      int configuredBonus = 1000; 
+      try {
+        final configDoc = await _db.collection('config').doc('tokens_setting').get();
+        if (configDoc.exists) {
+          final data = configDoc.data();
+          if (data != null && data.containsKey('free_tokens')) {
+            configuredBonus = data['free_tokens'] ?? 1000;
+          } else if (data != null && data.containsKey('costs')) {
+            final costsData = data['costs'] as Map<String, dynamic>;
+            configuredBonus = costsData['free_tokens'] ?? 1000;
+          }
+        }
+      } catch (e) {
+        debugPrint("⚠️ FirestoreService: Gagal membaca config tokens_setting: $e");
+      }
+
+      // 2. Persiapan Data (Indikator Mutlak + Catatan Kosmetik)
+      final String safeDeviceId = await _getStrictHardwareId() ?? "unknown_device_${user.uid}";
+      final Map<String, dynamic> deviceSpecs = await _getDeviceSpecs();
+      
+      bool isDeviceEligible = false; 
+      
+      // Audit Silang KUNCI FORENSIK dengan ID Mutlak
+      final deviceRef = _db.collection('device_claims').doc(safeDeviceId);
+      final deviceDoc = await deviceRef.get();
+      
+      if (!deviceDoc.exists) {
+        isDeviceEligible = true; // Skenario 1: Mesin Fisik Bersih (Belum pernah klaim)
+      } else {
+        isDeviceEligible = false; // Skenario 2: Ternak Akun (Mesin ini sudah pernah dipakai!)
+        debugPrint("⚠️ FRAUD: HardwareId $safeDeviceId sudah pernah diklaim.");
+      }
+
+      // Jika fraud, bonus disetel paksa menjadi 0
+      final int finalBonus = isDeviceEligible ? configuredBonus : 0;
+
+      // 3. Eksekusi Penciptaan atau Pembaruan Data (Menggunakan ATOMIC BATCH)
+      final batch = _db.batch();
+
+      // LOGIKA ANTI RACE-CONDITION: Menimpa paksa walau UI curi start
+      if (!doc.exists || isNewRegistration) {
+        debugPrint("[UserInit] Eksekusi Paksa Akun: $userEmail. Bonus: $finalBonus TM.");
+        
+        // Eksekusi Dokumen User
+        batch.set(userRef, {
+          'uid': user.uid,
+          'email': userEmail,
+          'displayName': user.displayName ?? '',
+          'userTier': 'free',
+          'tokenBalance': finalBonus, 
+          'hasReceivedWelcomeBonus': true, 
+          'isFraudDetected': !isDeviceEligible, 
+          'createdAt': doc.exists ? (doc.data()?['createdAt'] ?? FieldValue.serverTimestamp()) : FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        // Eksekusi Master Record Perangkat (Catat ID Mutlak + Log Merk HP)
+        if (isDeviceEligible) {
+          batch.set(deviceRef, {
+            'hardwareId': safeDeviceId,
+            'firstEmail': userEmail,
+            'registeredEmails': [userEmail],
+            'totalRegistrations': 1, // Start dari 1
+            'hardwareDetail': deviceSpecs, // Hanya sebagai info/catatan
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        } else {
+          // Update Master: Tambahkan email nakal ke array dan naikkan counter
+          batch.update(deviceRef, {
+            'registeredEmails': FieldValue.arrayUnion([userEmail]),
+            'totalRegistrations': FieldValue.increment(1),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+      } else {
+        // Kasus Login Normal: Penyelamatan User Lama
+        final data = doc.data()!;
+        if ((data['tokenBalance'] ?? 0) <= 0 && !(data['hasReceivedWelcomeBonus'] ?? false)) {
+          debugPrint("[UserInit] Menyelamatkan user lama $userEmail. Bonus: $finalBonus TM.");
+          
+          batch.update(userRef, {
+            'tokenBalance': finalBonus,
+            'hasReceivedWelcomeBonus': true,
+            'isFraudDetected': !isDeviceEligible,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+
+          if (isDeviceEligible) {
+            batch.set(deviceRef, {
+              'hardwareId': safeDeviceId,
+              'firstEmail': userEmail,
+              'registeredEmails': [userEmail],
+              'totalRegistrations': 1,
+              'hardwareDetail': deviceSpecs,
+              'createdAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+          } else {
+            batch.update(deviceRef, {
+              'registeredEmails': FieldValue.arrayUnion([userEmail]),
+              'totalRegistrations': FieldValue.increment(1),
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+          }
+        }
+      }
+
+      // COMMIT BATCH (Menjamin semua ditulis utuh dalam 1 waktu)
+      await batch.commit();
+
+    } catch (e) {
+      debugPrint("❌ FirestoreService Error pada ensureUserDocumentExists: $e");
+    }
+  }
+//..................................................//
+
+//No ke-3...........................................//
+// OPERASI DATA PROYEK (INTEGRITAS PENUH)           //
   Stream<List<VideoProject>> getProjectsForUser() {
     final user = _auth.currentUser;
     if (user == null) {
-      debugPrint("getProjectsForUser: No user logged in.");
-      return Stream.value([]); // Kembalikan stream kosong jika user tidak login
+      debugPrint("getProjectsForUser: Gagal, tidak ada user login.");
+      return Stream.value([]); 
     }
-    debugPrint("getProjectsForUser: Fetching projects for user ${user.uid}");
+    
+    debugPrint("getProjectsForUser: Memulai stream untuk user ${user.uid}");
     return _db
         .collection('projects')
         .where('userId', isEqualTo: user.uid)
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
-      debugPrint("getProjectsForUser: Received ${snapshot.docs.length} project snapshots.");
-      // Tambahkan penanganan error parsing per dokumen
+      debugPrint("getProjectsForUser: Berhasil memuat ${snapshot.docs.length} dokumen.");
       return snapshot.docs.map((doc) {
         try {
           return VideoProject.fromFirestore(doc);
         } catch (e) {
-          debugPrint("Error parsing project ${doc.id}: $e");
-          // Kembalikan objek default atau null, atau filter keluar
-          return null; // Tandai sebagai null jika parsing gagal
+          debugPrint("❌ Error parsing VideoProject pada ID ${doc.id}: $e");
+          return null; 
         }
-      }).whereType<VideoProject>().toList(); // Filter null
+      }).whereType<VideoProject>().toList(); 
     }).handleError((error) {
-      debugPrint("Error in getProjectsForUser stream: $error");
-      return []; // Kembalikan list kosong jika ada error stream
+      debugPrint("❌ Error pada stream getProjectsForUser: $error");
+      return <VideoProject>[]; 
     });
   }
 
-  // --- Operasi untuk Timeline & Pengaturan ---
-
-  /// Mengambil stream real-time dari SATU dokumen proyek spesifik.
   Stream<VideoProject> getProjectStream(String projectId) {
-      debugPrint("getProjectStream: Subscribing to project $projectId");
+    debugPrint("getProjectStream: Berlangganan pada proyek $projectId");
     return _db
         .collection('projects')
         .doc(projectId)
         .snapshots()
         .map((snapshot) {
           if (!snapshot.exists) {
-              debugPrint("getProjectStream: Project $projectId does not exist.");
-              throw Exception('Project not found'); // Lemparkan error jika dokumen tidak ada
+              debugPrint("getProjectStream: Proyek $projectId tidak ditemukan.");
+              throw Exception('Project not found'); 
           }
           try {
-           return VideoProject.fromFirestore(snapshot);
+            return VideoProject.fromFirestore(snapshot);
           } catch (e) {
-           debugPrint("Error parsing project stream for ${snapshot.id}: $e");
-           throw Exception('Error parsing project data: $e'); // Lemparkan error parsing
+            debugPrint("❌ Error parsing stream proyek $projectId: $e");
+            throw Exception('Error parsing project data: $e');
           }
         }).handleError((error) {
-          debugPrint("Error in getProjectStream for $projectId: $error");
-          // Anda bisa mengembalikan state error atau melempar ulang
+          debugPrint("❌ Error pada getProjectStream: $error");
           throw error;
         });
   }
 
-    /// Mengambil SATU kali data dokumen proyek spesifik (Future).
-    /// Berguna untuk load awal atau operasi yang tidak perlu realtime.
-    Future<DocumentSnapshot<Map<String, dynamic>>> getProject(String projectId) async {
-     debugPrint("getProject: Fetching single snapshot for project $projectId");
-     try {
-       final doc = await _db.collection('projects').doc(projectId).get();
-       if (!doc.exists) {
-         debugPrint("getProject: Project $projectId does not exist.");
-         throw Exception('Project not found');
-       }
-       return doc;
-     } catch (e) {
-       debugPrint("Error fetching project $projectId: $e");
-       rethrow; // Lemparkan error agar pemanggil tahu
-     }
+  Future<DocumentSnapshot<Map<String, dynamic>>> getProject(String projectId) async {
+    debugPrint("getProject: Mengambil snapshot tunggal untuk $projectId");
+    try {
+      final doc = await _db.collection('projects').doc(projectId).get();
+      if (!doc.exists) {
+        debugPrint("getProject: Proyek $projectId tidak ada.");
+        throw Exception('Project not found');
+      }
+      return doc;
+    } catch (e) {
+      debugPrint("❌ Gagal mengambil data proyek $projectId: $e");
+      rethrow; 
     }
+  }
 
-
-  /// Mengambil stream real-time dari SEMUA 'scenes' di bawah satu proyek.
   Stream<List<Scene>> getScenesStream(String projectId) {
-    debugPrint("getScenesStream: Subscribing to scenes for project $projectId");
+    debugPrint("getScenesStream: Berlangganan pada scenes proyek $projectId");
     return _db
         .collection('projects')
         .doc(projectId)
@@ -103,133 +311,96 @@ class FirestoreService {
         .orderBy('segmentIndex')
         .snapshots()
         .map((snapshot) {
-      debugPrint("getScenesStream: Received ${snapshot.docs.length} scene snapshots for project $projectId.");
+      debugPrint("getScenesStream: Memuat ${snapshot.docs.length} scenes.");
       return snapshot.docs.map((doc) {
-       try {
-         return Scene.fromFirestore(doc);
-       } catch (e) {
-         debugPrint("Error parsing scene ${doc.id} for project $projectId: $e");
-         return null; // Tandai null jika gagal
-       }
-      }).whereType<Scene>().toList(); // Filter null
+        try {
+          return Scene.fromFirestore(doc);
+        } catch (e) {
+          debugPrint("❌ Error parsing Scene ID ${doc.id}: $e");
+          return null; 
+        }
+      }).whereType<Scene>().toList(); 
     }).handleError((error) {
-      debugPrint("Error in getScenesStream for $projectId: $error");
-      return []; // Kembalikan list kosong jika error stream
+      debugPrint("❌ Error pada getScenesStream proyek $projectId: $error");
+      return <Scene>[]; 
     });
   }
+//..................................................//
 
- // --- Operasi Update & Delete ---
-/// Memperbarui field spesifik pada dokumen proyek.
-/// Secara cerdas menangani 'renderPacket' untuk melakukan deep merge (Anti-Regresi).
-Future<void> updateProject(String projectId, Map<String, dynamic> data) async {
-  final user = _auth.currentUser;
-  if (user == null) {
-    debugPrint(
-        "updateProject: No user logged in. Update cancelled for $projectId.");
-    throw Exception('User not logged in');
-  }
+//No ke-4...........................................//
+// OPERASI UPDATE, DELETE, & REGENERATE             //
+  Future<void> updateProject(String projectId, Map<String, dynamic> data) async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('User not logged in');
 
-  try {
-    // --- KATEGORI_PERBAIKAN_ARSITEKTUR (Deep Merge) ---
-    // Logika baru untuk "meratakan" (flatten) nested map.
-    // Ini PENTING untuk mencegah 'renderPacket.styleSettings'
-    // menimpa 'renderPacket.scenes' dan 'renderPacket.timing'.
-    final Map<String, dynamic> flattenedData = {
-      // Selalu tambahkan timestamp update
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
+    try {
+      final Map<String, dynamic> flattenedData = {
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
 
-    // Iterasi melalui data yang dikirim oleh client
-    for (final entry in data.entries) {
-      if (entry.key == 'renderPacket' && entry.value is Map) {
-        // --- INI KASUS SPESIAL ---
-        // Jika kuncinya 'renderPacket', kita ratakan isinya
-        // (Contoh: {'styleSettings': ...} menjadi 'renderPacket.styleSettings': ...)
-        final innerMap = entry.value as Map<String, dynamic>;
-        for (final innerEntry in innerMap.entries) {
-          flattenedData['renderPacket.${innerEntry.key}'] = innerEntry.value;
+      for (final entry in data.entries) {
+        if (entry.key == 'renderPacket' && entry.value is Map) {
+          final innerMap = entry.value as Map<String, dynamic>;
+          for (final innerEntry in innerMap.entries) {
+            flattenedData['renderPacket.${innerEntry.key}'] = innerEntry.value;
+          }
+        } else if (entry.key != 'updatedAt') {
+          flattenedData[entry.key] = entry.value;
         }
-      } else if (entry.key != 'updatedAt') {
-        // Salin semua field lain (seperti 'status', 'finalVideoUrl', dll)
-        flattenedData[entry.key] = entry.value;
-      }
-    }
-
-    debugPrint(
-        "updateProject (deep merge): Updating project $projectId with keys: ${flattenedData.keys.join(', ')}");
-
-    // Ganti dari .set(merge: true) ke .update()
-    // .update() secara native mendukung dot notation untuk deep merge.
-    await _db.collection('projects').doc(projectId).update(flattenedData);
-    // --- AKHIR PERBAIKAN ---
-
-    debugPrint("updateProject: Project $projectId updated successfully.");
-  } catch (e) {
-    debugPrint("❌ Error updating project $projectId: $e");
-    rethrow; // Lemparkan error agar UI bisa menangani
-  }
-}
-
-  /// Menghapus dokumen proyek beserta subkoleksi 'scenes'.
-  Future<void> deleteProject(String projectId) async {
-      final user = _auth.currentUser;
-      if (user == null) {
-        debugPrint("deleteProject: No user logged in. Delete cancelled for $projectId.");
-        throw Exception('User not logged in');
-      }
-      // Optional: Verifikasi kepemilikan
-
-    try {
-      final projectRef = _db.collection('projects').doc(projectId);
-      debugPrint("deleteProject: Deleting project $projectId and its scenes...");
-
-      // Hapus semua scene dalam batch (lebih efisien)
-      final scenesSnapshot = await projectRef.collection('scenes').get();
-      if (scenesSnapshot.docs.isNotEmpty) {
-         final batch = _db.batch();
-         for (var doc in scenesSnapshot.docs) {
-           batch.delete(doc.reference);
-         }
-         await batch.commit();
-         debugPrint("deleteProject: Deleted ${scenesSnapshot.docs.length} scenes for project $projectId.");
-      } else {
-         debugPrint("deleteProject: No scenes found to delete for project $projectId.");
       }
 
-      // Hapus dokumen project utama
-      await projectRef.delete();
-      debugPrint("✅ deleteProject: Project $projectId deleted successfully.");
+      debugPrint("updateProject (deep merge): Updating $projectId with keys: ${flattenedData.keys.join(', ')}");
+      await _db.collection('projects').doc(projectId).update(flattenedData);
     } catch (e) {
-      debugPrint("❌ Error deleting project $projectId: $e");
-      rethrow; // Lemparkan error
-    }
-  }
-
-  /// Mengirim permintaan untuk meregenerasi gambar untuk satu scene.
-  Future<void> requestImageRegeneration(String projectId, String sceneId) async {
-      final user = _auth.currentUser;
-      if (user == null) throw Exception('User not logged in');
-      // Optional: Verifikasi kepemilikan
-
-    try {
-      final sceneRef = _db.collection('projects').doc(projectId).collection('scenes').doc(sceneId);
-      debugPrint("requestImageRegeneration: Requesting regeneration for scene $sceneId in project $projectId");
-      await sceneRef.update({
-        'status': 'PENDING_REGENERATION', // Memicu backend
-        'imageUrl': FieldValue.delete(), // Hapus URL lama (atau null) agar UI update
-        'errorDetail': FieldValue.delete(), // Hapus error lama
-        // 'updatedAt': FieldValue.serverTimestamp(), // Opsional
-      });
-        debugPrint("requestImageRegeneration: Regeneration requested for scene $sceneId.");
-    } catch (e) {
-      debugPrint("❌ Failed to request regeneration for scene $sceneId: $e");
+      debugPrint("❌ Error updating project $projectId: $e");
       rethrow;
     }
   }
 
-  // --- PEMBARUAN UTAMA: Metode addProject ---
-  /// Menambahkan dokumen proyek video baru ke Firestore,
-  /// termasuk visualSettings default.
+  Future<void> deleteProject(String projectId) async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('User not logged in');
+
+    try {
+      final projectRef = _db.collection('projects').doc(projectId);
+      debugPrint("deleteProject: Starting batch delete for project $projectId");
+
+      final scenesSnapshot = await projectRef.collection('scenes').get();
+      if (scenesSnapshot.docs.isNotEmpty) {
+        final batch = _db.batch();
+        for (var doc in scenesSnapshot.docs) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+        debugPrint("deleteProject: Deleted ${scenesSnapshot.docs.length} scenes.");
+      }
+
+      await projectRef.delete();
+      debugPrint("✅ deleteProject: Project $projectId deleted successfully.");
+    } catch (e) {
+      debugPrint("❌ Error deleting project $projectId: $e");
+      rethrow;
+    }
+  }
+
+  Future<void> requestImageRegeneration(String projectId, String sceneId) async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('User not logged in');
+
+    try {
+      final sceneRef = _db.collection('projects').doc(projectId).collection('scenes').doc(sceneId);
+      debugPrint("requestImageRegeneration: Requesting for scene $sceneId");
+      await sceneRef.update({
+        'status': 'PENDING_REGENERATION',
+        'imageUrl': FieldValue.delete(),
+        'errorDetail': FieldValue.delete(),
+      });
+    } catch (e) {
+      debugPrint("❌ Failed to request regeneration: $e");
+      rethrow;
+    }
+  }
+
   Future<String?> addProject({
     required String title,
     required String rawScript,
@@ -237,86 +408,59 @@ Future<void> updateProject(String projectId, Map<String, dynamic> data) async {
     required String aspectRatio,
     required String language,
     required String voice,
+    required bool showSubtitles, 
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
-      debugPrint("❌ Error: User not logged in. Cannot add project.");
-      return null; // Kembalikan null jika user tidak login
+      debugPrint("❌ addProject: User not logged in.");
+      return null;
     }
 
     try {
-      // 1. Buat instance VisualSettings default menggunakan judul
-      final defaultVisualSettings = VisualSettings.defaultSettingsWithTitle(title);
+      final defaultVisualSettings = VisualSettings.defaultSettingsWithTitle(title)
+          .copyWith(showSubtitles: showSubtitles);
       
-      // --- KATEGORI_PERBAIKAN (Anti-Regresi Font Responsif) ---
-      // 2. Hitung nilai rasio aspek dari string input
-      //    (Kita butuh 'aspectRatio' dari parameter fungsi)
       final double aspectRatioValue = _calculateAspectRatioFromString(aspectRatio);
       
-      // 3. Konversi ke Map menggunakan toJson() BARU
       final visualSettingsMap = defaultVisualSettings.toJson(aspectRatioValue);
-      // --- AKHIR PERBAIKAN ---
 
-      // 4. Tambahkan dokumen baru ke Firestore
-      debugPrint("addProject: Creating new project for user ${user.uid} with title: $title");
+      debugPrint("addProject: Creating new project with title: $title");
       final docRef = await _db.collection('projects').add({
         'userId': user.uid,
-        'title': title.isNotEmpty ? title : "Untitled Project", // Fallback judul
+        'title': title.isNotEmpty ? title : "Untitled Project",
         'rawScript': rawScript,
         'imageStyle': imageStyle,
         'aspectRatio': aspectRatio,
         'language': language,
         'voice': voice,
-        'status': 'PROCESSING_GENERATION', // Langsung memicu backend
+        'status': 'PROCESSING_GENERATION',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-        
-        // --- KATEGORI_FITUR_TTL NO_URUT_01: Tambahkan "Bom Waktu" ---
-        // Menambahkan field 'expireAt' yang disetel 24 jam dari sekarang.
         'expireAt': Timestamp.fromDate(DateTime.now().add(const Duration(hours: 24))),
-        // --- AKHIR FITUR ---
-        
-        'visualSettings': visualSettingsMap, // <-- SIMPAN VISUAL SETTINGS DEFAULT
-        // Field lain bisa ditambahkan di sini jika perlu nilai awal
+        'visualSettings': visualSettingsMap,
         'thumbnailImageUrl': null,
         'finalVideoUrl': null,
         'errorDetail': null,
-        // 'identifiedCharacters': [], // Mungkin dibuat oleh backend?
       });
 
-      debugPrint('✅ Project created with ID ${docRef.id} and default visual settings. Backend auto-triggered.');
-      return docRef.id; // Kembalikan ID proyek baru
-
+      debugPrint('✅ Project created with ID ${docRef.id}.');
+      return docRef.id;
     } catch (e) {
-      debugPrint("❌ Error adding project to Firestore: $e");
-      // Pertimbangkan untuk melempar error agar UI bisa menangani lebih baik
-      // throw Exception('Failed to add project: $e');
-      return null; // Kembalikan null jika gagal
+      debugPrint("❌ Error adding project: $e");
+      return null;
     }
   }
-    // --- AKHIR PEMBARUAN ---
 
-  // --- KATEGORI_LOGIKA_BARU (Helper Font Responsif) ---
-  /// Helper untuk mengonversi string rasio aspek (cth: "16:9") ke nilai double (cth: 1.77).
-  /// Diduplikasi dari provider agar file ini mandiri.
   double _calculateAspectRatioFromString(String? ratioString) {
-    // Default ke 16:9 jika string null, kosong, atau format salah
-    if (ratioString == null || ratioString.isEmpty) {
-      return 16 / 9;
-    }
+    if (ratioString == null || ratioString.isEmpty) return 16 / 9;
     final parts = ratioString.split(':');
     if (parts.length == 2) {
       final double? width = double.tryParse(parts[0]);
       final double? height = double.tryParse(parts[1]);
-      // Pastikan kedua bagian adalah angka valid dan height tidak nol
-      if (width != null && height != null && height != 0) {
-        return width / height;
-      }
+      if (width != null && height != null && height != 0) return width / height;
     }
-    // Fallback jika format salah
-    debugPrint("Invalid aspectRatio string '$ratioString' in FirestoreService, falling back to 16/9.");
+    debugPrint("Invalid aspectRatio '$ratioString', falling back to 16/9.");
     return 16 / 9;
   }
-  // --- AKHIR LOGIKA BARU ---
-
-} // Penutup Class FirestoreService
+} 
+//..................................................//

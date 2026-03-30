@@ -1,13 +1,11 @@
-// [RILIS BERSIH - TIMELINE UI UPDATE]
-// KATEGORI_UI_TIMELINE_UPDATE
-// Lokasi: lib/screens/timeline_review_screen.dart
-// TUJUAN:
-// - [UI] Menghapus baris "Intro Image" di timeline.
-// - [UI] Menjadikan Scene 1 sebagai baris pertama.
-// - [UI] Menampilkan gambar Scene 1 secara default di preview utama saat muat.
-// - [UI] Menambahkan nomor urut scene di sebelah kiri thumbnail.
-// - [ANTI-REGRESI] Fitur playback, render, dan editing tetap berjalan normal.
 
+//====================================================================================================//
+// NAMA FILE: LIB/SCREENS/TIMELINE_REVIEW_SCREEN.DART                                                 //
+// DESKRIPSI: SMART CONTROLLER, TIMELINE UI, AUTO-RENDER WORKFLOW & MANUAL FALLBACK                   //
+//====================================================================================================//
+
+//No ke-1: IMPORTS, CONSTANTS & PROVIDERS //
+//Deklarasi pustaka, tema, model, dan konfigurasi state global. //
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -27,6 +25,7 @@ import '../services/firestore_service.dart';
 import '../view_model/timeline_view_model.dart';
 import 'visual_setting_screen.dart';
 import '../providers/visual_settings_provider.dart';
+import '../providers/user_provider.dart';
 
 const List<String> kDefaultSceneMotionNames = [
   'rand_zoom_in_center',
@@ -58,7 +57,10 @@ class MotionStopCurve extends Curve {
 final firestoreServiceProvider =
     Provider<FirestoreService>((ref) => FirestoreService());
 final selectedSceneProvider = StateProvider.autoDispose<Scene?>((ref) => null);
+//----------------------------------------------------------------------------------------------------//
 
+//No ke-2: MAIN CLASS DEFINITION & INITIALIZATION //
+//Deklarasi class utama, inisialisasi state, dan setup player. //
 class TimelineReviewScreen extends ConsumerStatefulWidget {
   final String projectId;
   const TimelineReviewScreen({super.key, required this.projectId});
@@ -90,9 +92,15 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
   Animation<double>? _scaleAnimation;
   Animation<Offset>? _translateAnimation;
   String? _currentImageUrl;
+  
+  // [STATE KONTROL RENDER]
   bool _isTriggeringRender = false;
+  bool _hasAutoTriggeredRender = false; // [FITUR BARU] Kunci untuk cegah infinite loop Auto-Render
   static const int _renderTimeoutDuration = 3600;
   Timer? _uiRefreshTimer;
+  
+  // Status pop-up panduan render
+  bool _hasDismissedRenderPopup = false; 
 
   @override
   void initState() {
@@ -208,7 +216,10 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
       }
     });
   }
+//----------------------------------------------------------------------------------------------------//
 
+//No ke-3: TIMERS, UTILITIES & TIMEOUT HANDLER //
+//Fungsi utilitas untuk waktu, timer UI, dan penanganan timeout render. //
   void _startUiRefreshTimer() {
     if (_uiRefreshTimer != null && _uiRefreshTimer!.isActive) {
       return;
@@ -372,7 +383,10 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
     _bgmPlayer.dispose();
     super.dispose();
   }
+//----------------------------------------------------------------------------------------------------//
 
+//No ke-4: PLAYBACK & ANIMATION LOGIC //
+//Logika pemutaran audio, animasi gambar, dan navigasi antar scene. //
   void _startOrResumeSequencePlayback() async {
     if (_currentSequenceIndex == -1) {
       _updatePlaybackTime(0.0);
@@ -459,7 +473,7 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
         _isPlayingIndividual = false;
         _currentlyPlayingSceneId = null;
         if (resetIndex) {
-          _currentImageUrl = null; // Will reset to default in build
+          _currentImageUrl = null;
           _currentSequenceIndex = -1;
         }
       });
@@ -660,19 +674,22 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
         "Invalid aspectRatio string '$ratioString', falling back to 16:9.");
     return 16 / 9;
   }
+//----------------------------------------------------------------------------------------------------//
 
+//No ke-5: BUILD UI, WIDGETS & GATEKEEPER LOGIC //
+//Fungsi rendering antarmuka pengguna, validasi aset (Gatekeeper), auto-render pemicu, dan layout utama. //
   Widget _buildAnimatedImage(String? imageUrl, {Key? key}) {
     if (imageUrl == null || imageUrl.isEmpty) {
       return Tooltip(
         key: key,
         message: 'Image URL is missing',
-        child: Icon(Icons.video_camera_back_outlined,
+        child: const Icon(Icons.video_camera_back_outlined,
             color: Colors.white54, size: 60),
       );
     }
     final imageWidget = Image.network(
       imageUrl,
-      headers: const {}, 
+      headers: const {},
       fit: BoxFit.contain,
       loadingBuilder: (c, ch, lp) => lp == null
           ? ch
@@ -718,11 +735,11 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Colors.grey[900], // [UBAH] Warna latar pop-up jadi gelap elegan
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: const [
                   BoxShadow(
-                    color: Colors.black26,
+                    color: Colors.black54, // [UBAH] Bayangan disesuaikan agar cocok dengan latar gelap
                     blurRadius: 10,
                     offset: Offset(0, 4),
                   )
@@ -731,26 +748,27 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const CircularProgressIndicator(),
+                  const CircularProgressIndicator(color: Colors.blueAccent), // [UBAH] Warna loading spinner
                   const SizedBox(height: 16),
                   const Text(
-                    "Rendering Video Dalam Beberapa Menit...",
+                    "Rendering in minutes... You may safely leave this page",
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      color: Colors.white, // [UBAH] Teks utama jadi putih
                     ),
                   ),
                   const SizedBox(height: 10),
                   if (hasValidStartTime)
                     Text(
-                      "Batas waktu cancel otomatis: ${_formatDuration(secondsRemaining)}",
-                      style: const TextStyle(fontSize: 14, color: Colors.black54),
+                      "Auto Cancel in: ${_formatDuration(secondsRemaining)}",
+                      style: const TextStyle(fontSize: 14, color: Colors.white70), // [UBAH] Teks countdown jadi putih redup
                     )
                   else
                     const Text(
                       "Menunggu respons backend...",
-                      style: TextStyle(fontSize: 14, color: Colors.black54),
+                      style: TextStyle(fontSize: 14, color: Colors.white70), // [UBAH] Teks menunggu jadi putih redup
                     ),
                 ],
               ),
@@ -768,9 +786,87 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
         ref.watch(processedTimelineProvider(widget.projectId));
     final visualSettings = ref.watch(visualSettingsProvider(widget.projectId));
     final projectData = projectAsyncValue.asData?.value;
+    
     final bool isCalculating =
         processedTimelineAsync.asData?.value?.isCalculating ?? true;
-    final bool canPlayOrReplay = projectData != null && !isCalculating;
+
+    // KATEGORI_UX_OTOMATIS (GATEKEEPER VALIDASI MUTLAK)
+    final bool areAllScenesValid = processedTimelineAsync.maybeWhen(
+      data: (timeline) {
+        if (timeline.scenes.isEmpty) return false; 
+        
+        return timeline.scenes.every((s) {
+          final scene = s.originalScene;
+          final hasValidImage = scene.imageUrl.isNotEmpty;
+          final hasValidAudio = scene.ttsAudioUrl.isNotEmpty;
+          final hasNoErrors = scene.status == null || !scene.status!.startsWith('ERROR');
+          final isNotGenerating = scene.status != 'PENDING_REGENERATION' &&
+                                  scene.status != 'GENERATING_VISUALS' &&
+                                  scene.status != 'GENERATING_AUDIO' &&
+                                  scene.status != 'PENDING_VISUALS' &&
+                                  scene.status != 'PENDING_AUDIO';
+          return hasValidImage && hasValidAudio && hasNoErrors && isNotGenerating;
+        });
+      },
+      orElse: () => false,
+    );
+
+    // [MODIFIKASI: DETEKSI RENDER SUKSES LEBIH AWAL UNTUK MENGUNCI PLAY/REPLAY]
+    final bool isRenderSuccessGlobal = projectData != null &&
+        projectData.status == 'RENDER_COMPLETED' &&
+        projectData.finalVideoUrl != null &&
+        projectData.finalVideoUrl!.isNotEmpty;
+
+    // [FITUR BARU: AUTO-RENDER SMART CONTROLLER]
+    // Otomatis memicu render tanpa klik jika syarat terpenuhi
+    if (projectData != null &&
+        projectData.status == 'CREATE_RENDER_PACKET' &&
+        areAllScenesValid &&
+        !_hasAutoTriggeredRender &&
+        !_isTriggeringRender) {
+      
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        setState(() {
+          _hasAutoTriggeredRender = true; // Kunci agar tidak loop
+          _isTriggeringRender = true;     // Tampilkan overlay loading hitam
+        });
+        
+        try {
+          logger.info("[AUTO-RENDER] Preparing and saving render packet...");
+          await prepareAndSaveRenderPacket(ref, widget.projectId);
+          
+          logger.info("[AUTO-RENDER] Updating status to RENDER_START...");
+          await ref.read(firestoreServiceProvider).updateProject(
+            widget.projectId,
+            {
+              'status': 'RENDER_START',
+              'renderStartedAt': FieldValue.serverTimestamp(),
+              'errorDetail': FieldValue.delete()
+            }
+          );
+          logger.info("[AUTO-RENDER] Trigger successful for ${widget.projectId}");
+        } catch (e) {
+          logger.error("[AUTO-RENDER] Failed to auto-trigger render", e);
+          if (mounted) {
+            setState(() {
+              _isTriggeringRender = false;
+              _hasAutoTriggeredRender = false; // Buka kunci agar bisa coba manual
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('❌ Auto-Render failed: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      });
+    }
+
+    // [MODIFIKASI KUNCI: JIKA RENDER SUKSES, TOMBOL PLAY & REPLAY MATI]
+    final bool canPlayOrReplay = projectData != null && !isCalculating && areAllScenesValid && !isRenderSuccessGlobal;
+
     final double aspectRatioValue =
         _calculateAspectRatio(projectData?.aspectRatio);
 
@@ -794,9 +890,6 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
       );
     }
 
-    // [FIX] DEFAULT IMAGE LOGIC: Jika belum ada image, ambil dari SCENE 1
-    // bukan dari thumbnail project.
-    // Ini dilakukan di dalam processedTimelineAsync.when data block
     final double transitionDurationSeconds = visualSettings.transitionDuration;
 
     return Theme(
@@ -844,29 +937,31 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                 if (mounted) setState(() => _isTriggeringRender = false);
               });
             }
-            final bool scenesAreReadyOrError = processedTimelineAsync.maybeWhen(
-              data: (timeline) =>
-                  !timeline.scenes.any((s) => s.originalScene.status == 'ERROR'),
-              orElse: () => false,
-            );
+            
             final bool isRenderSuccess = project.status == 'RENDER_COMPLETED' &&
                 project.finalVideoUrl != null &&
                 project.finalVideoUrl!.isNotEmpty;
             final bool isRenderComplete = isRenderSuccess;
             final String? finalVideoUrl = project.finalVideoUrl;
+            
             final bool canRender;
             if (isRenderSuccess) {
               canRender = false;
             } else if (project.status == 'ASSETS_COMPLETE' ||
+                project.status == 'CREATE_RENDER_PACKET' ||
+                project.status == 'ASSETS_NEED_REFINEMENT' || 
                 project.status == 'ERROR_RENDER' ||
                 project.status == 'RENDER_QUEUED' ||
                 project.status == 'ERROR_TRIGGER' ||
                 project.status == 'RENDER_START' ||
                 (project.status == 'RENDER_COMPLETED' && !isRenderSuccess)) {
-              canRender = scenesAreReadyOrError;
+              
+              canRender = areAllScenesValid; 
+              
             } else {
               canRender = false;
             }
+            
             final bool isProjectRendering = (project.status == 'RENDER_START' ||
                 project.status == 'RENDERING' ||
                 _isTriggeringRender);
@@ -915,7 +1010,6 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                       ),
                     ),
 
-                    // --- Viewer Atas DINAMIS ---
                     Padding(
                       padding: const EdgeInsets.symmetric(
                           vertical: 8.0, horizontal: 16.0),
@@ -1083,10 +1177,10 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                                 _currentSubtitleText,
                                                 style: TextStyle(
                                                   fontSize: (visualSettings
-                                                              .subtitleBaseFontSize *
-                                                          (aspectRatioValue < 1.1
-                                                              ? 1.0
-                                                              : 1.0)) *
+                                                          .subtitleBaseFontSize *
+                                                      (aspectRatioValue < 1.1
+                                                          ? 1.0
+                                                          : 1.0)) *
                                                       previewScaleFactor,
                                                   color: Colors.white,
                                                   shadows: const [
@@ -1115,7 +1209,6 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                         ),
                       ),
                     ),
-                    // --- AKHIR BLOK PREVIEWER ---
 
                     if (isRenderComplete &&
                         finalVideoUrl != null &&
@@ -1162,7 +1255,6 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                           _currentProcessedScenes = timelineData.scenes;
                           final scenes = _currentScenes;
 
-                          // [FIX] Set Default Image to Scene 1 if not set
                           if (_currentImageUrl == null && scenes.isNotEmpty) {
                              _currentImageUrl = scenes.first.imageUrl;
                           }
@@ -1180,10 +1272,8 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                             children: [
                               Expanded(
                                 child: ListView.builder(
-                                  itemCount: scenes.length, // [REMOVED INTRO] Count hanya scenes
+                                  itemCount: scenes.length,
                                   itemBuilder: (context, index) {
-                                    // [REMOVED INTRO] Logic index 0 dihapus
-                                    // Sekarang index 0 adalah Scene 1 langsung
                                     final sceneIndex = index;
                                     final scene = scenes[sceneIndex];
                                     final isCurrentlyPlayingInSequence =
@@ -1203,7 +1293,8 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                             scene.status ==
                                                 'ERROR_REFINEMENT' ||
                                             scene.status ==
-                                                'ERROR_VISUALS';
+                                                'ERROR_VISUALS' ||
+                                            scene.status == 'ERROR_VISUALS_FINAL'; 
                                     final bool isSceneStuck =
                                         scene.status == 'PENDING_AUDIO' ||
                                             scene.status ==
@@ -1262,7 +1353,6 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                           padding: const EdgeInsets.all(8.0),
                                           child: Row(
                                             children: [
-                                              // [BARU] Nomor Urut Scene di Kiri
                                               CircleAvatar(
                                                 radius: 12,
                                                 backgroundColor: Colors.grey[400],
@@ -1276,7 +1366,6 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                                 ),
                                               ),
                                               const SizedBox(width: 12),
-                                              // Thumbnail Container
                                               Container(
                                                 width: 80,
                                                 height: 60,
@@ -1305,18 +1394,17 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                                                 .circular(8),
                                                         child: Image.network(
                                                           scene.imageUrl,
-                                                          // [PATCH CORS] Headers
                                                           headers: const {},
                                                           fit: BoxFit.cover,
                                                           errorBuilder:
                                                               (c, e, s) {
-                                                                  debugPrint("Scene ${sceneIndex + 1} Image Error: $e");
-                                                                  return const Icon(
-                                                                  Icons
-                                                                      .error_outline,
-                                                                  color: Colors
-                                                                      .red);
-                                                              },
+                                                            debugPrint("Scene ${sceneIndex + 1} Image Error: $e");
+                                                            return const Icon(
+                                                                Icons
+                                                                    .error_outline,
+                                                                color: Colors
+                                                                    .red);
+                                                          },
                                                         ),
                                                       )
                                                     : Center(
@@ -1415,6 +1503,15 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                                         },
                                                 ),
                                               ),
+                                              const SizedBox(width: 8),
+                                              IconButton(
+                                                icon: const Icon(Icons.flag_outlined, 
+                                                  color: Colors.redAccent, 
+                                                  size: 20
+                                                ),
+                                                tooltip: 'Lapor Konten Scene ${index + 1}',
+                                                onPressed: () => _showSceneReportDialog(scene),
+                                              ),
                                             ],
                                           ),
                                         ),
@@ -1497,155 +1594,163 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                           ? null
                                           : _replaySequence,
                                     ),
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                              backgroundColor:
-                                                  Colors.red.shade700,
-                                              foregroundColor: Colors.white,
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 20,
-                                                      vertical: 12),
-                                              textStyle: const TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold))
-                                          .copyWith(
-                                              backgroundColor: MaterialStateProperty
-                                                  .resolveWith<Color?>(
-                                                      (states) => states.contains(
-                                                              MaterialState.disabled)
-                                                          ? Colors.red.shade200
-                                                          : Colors.red.shade700),
-                                              foregroundColor: MaterialStateProperty
-                                                  .resolveWith<Color?>(
-                                                      (states) => states.contains(
-                                                              MaterialState.disabled)
-                                                          ? Colors.white70
-                                                          : Colors.white),
-                                      ),
-                                      onPressed: !canRender
-                                          ? null
-                                          : () {
-                                              _stopSequencePlayback();
-                                              showDialog(
-                                                context: context,
-                                                barrierDismissible: false,
-                                                builder:
-                                                    (BuildContext context) {
-                                                  bool _isSaving = false;
-                                                  String _loadingMessage =
-                                                      "Saving render packet...";
-                                                  return StatefulBuilder(
-                                                    builder: (context,
-                                                        setDialogState) {
-                                                      return AlertDialog(
-                                                        title: const Text(
-                                                            'Start Video Render?'),
-                                                        content: Column(
-                                                          mainAxisSize:
-                                                              MainAxisSize.min,
-                                                          crossAxisAlignment:
-                                                              CrossAxisAlignment
-                                                                  .start,
-                                                          children: [
-                                                            const Text(
-                                                              "This will assemble all final data (scenes, timing, and styles) and send it to the render queue.\n\n"
-                                                              "This action cannot be undone.",
-                                                            ),
-                                                            if (_isSaving)
-                                                              Padding(
-                                                                padding:
-                                                                    const EdgeInsets
-                                                                        .only(
-                                                                        top: 16.0),
-                                                                child: Row(
-                                                                  children: [
-                                                                    const SizedBox(
-                                                                      width: 20,
-                                                                      height:
-                                                                          20,
-                                                                      child:
-                                                                          CircularProgressIndicator(
-                                                                        strokeWidth:
-                                                                            3),
-                                                                    ),
-                                                                    const SizedBox(
-                                                                        width:
-                                                                            12),
-                                                                    Flexible(
-                                                                        child: Text(
-                                                                            _loadingMessage)),
-                                                                  ],
+                                    
+                                    Stack(
+                                      clipBehavior: Clip.none,
+                                      alignment: Alignment.center,
+                                      children: [
+                                        ElevatedButton(
+                                          style: ElevatedButton.styleFrom(
+                                                  backgroundColor:
+                                                      Colors.red.shade700,
+                                                  foregroundColor: Colors.white,
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                          horizontal: 20,
+                                                          vertical: 12),
+                                                  textStyle: const TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight: FontWeight.bold))
+                                              .copyWith(
+                                                  backgroundColor: MaterialStateProperty
+                                                      .resolveWith<Color?>(
+                                                          (states) => states.contains(
+                                                                  MaterialState.disabled)
+                                                              ? Colors.red.shade200
+                                                              : Colors.red.shade700),
+                                                  foregroundColor: MaterialStateProperty
+                                                      .resolveWith<Color?>(
+                                                          (states) => states.contains(
+                                                                  MaterialState.disabled)
+                                                              ? Colors.white70
+                                                              : Colors.white),
+                                          ),
+                                          onPressed: !canRender
+                                              ? null
+                                              : () {
+                                                  setState(() {
+                                                    _hasDismissedRenderPopup = true; 
+                                                  });
+                                                  _stopSequencePlayback();
+                                                  showDialog(
+                                                    context: context,
+                                                    barrierDismissible: false,
+                                                    builder:
+                                                        (BuildContext context) {
+                                                      bool _isSaving = false;
+                                                      String _loadingMessage =
+                                                          "Saving render packet...";
+                                                      return StatefulBuilder(
+                                                        builder: (context,
+                                                            setDialogState) {
+                                                          return AlertDialog(
+                                                            title: const Text(
+                                                                'Start Video Render?'),
+                                                            content: Column(
+                                                              mainAxisSize:
+                                                                  MainAxisSize.min,
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .start,
+                                                              children: [
+                                                                const Text(
+                                                                  "This will assemble all final data (scenes, timing, and styles) and send it to the render queue.\n\n"
+                                                                  "This action cannot be undone.",
                                                                 ),
-                                                              ),
-                                                          ],
-                                                        ),
-                                                        actions: <Widget>[
-                                                          TextButton(
-                                                            child: const Text(
-                                                                'Cancel'),
-                                                            onPressed: _isSaving
-                                                                ? null
-                                                                : () =>
-                                                                    Navigator.of(
-                                                                            context)
-                                                                        .pop(),
-                                                          ),
-                                                          TextButton(
-                                                            child: Text(
-                                                              _isSaving
-                                                                  ? 'SAVING...'
-                                                                  : 'RENDER',
-                                                              style: TextStyle(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                  color:
-                                                                      _isSaving
-                                                                          ? Colors
-                                                                              .grey
-                                                                          : Colors
-                                                                              .red),
+                                                                if (_isSaving)
+                                                                  Padding(
+                                                                    padding:
+                                                                        const EdgeInsets
+                                                                            .only(
+                                                                            top: 16.0),
+                                                                    child: Row(
+                                                                      children: [
+                                                                        const SizedBox(
+                                                                          width: 20,
+                                                                          height:
+                                                                              20,
+                                                                          child:
+                                                                              CircularProgressIndicator(
+                                                                            strokeWidth:
+                                                                                3),
+                                                                        ),
+                                                                        const SizedBox(
+                                                                          width:
+                                                                              12),
+                                                                        Flexible(
+                                                                          child: Text(
+                                                                              _loadingMessage)),
+                                                                      ],
+                                                                    ),
+                                                                  ),
+                                                              ],
                                                             ),
-                                                            onPressed: _isSaving
-                                                                ? null
-                                                                : () async {
-                                                                    setDialogState(
-                                                                      () {
-                                                                        _isSaving =
-                                                                            true;
-                                                                        _loadingMessage =
-                                                                            "Saving render packet...";
-                                                                      },
-                                                                    );
-                                                                    try {
-                                                                      logger.info(
-                                                                          "Step 1/2: Preparing and saving full render packet for ${widget.projectId}...");
-                                                                      await prepareAndSaveRenderPacket(
-                                                                          ref,
-                                                                          widget
-                                                                              .projectId);
-                                                                      setDialogState(
-                                                                        () {
-                                                                          _loadingMessage =
-                                                                              "Triggering backend render...";
-                                                                        },
-                                                                      );
-                                                                      await Future
-                                                                          .delayed(
-                                                                        const Duration(
-                                                                            milliseconds:
-                                                                                200),
-                                                                      );
-                                                                      logger.info(
-                                                                          "Step 2/2: Updating status to RENDER_START for ${widget.projectId}...");
-                                                                      await ref
-                                                                          .read(
-                                                                              firestoreServiceProvider)
-                                                                          .updateProject(
+                                                            actions: <Widget>[
+                                                              TextButton(
+                                                                child: const Text(
+                                                                    'Cancel'),
+                                                                onPressed: _isSaving
+                                                                    ? null
+                                                                    : () =>
+                                                                        Navigator.of(
+                                                                                context)
+                                                                            .pop(),
+                                                              ),
+                                                              TextButton(
+                                                                child: Text(
+                                                                  _isSaving
+                                                                      ? 'SAVING...'
+                                                                      : 'RENDER',
+                                                                  style: TextStyle(
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .bold,
+                                                                      color:
+                                                                          _isSaving
+                                                                              ? Colors
+                                                                                  .grey
+                                                                              : Colors
+                                                                                  .red),
+                                                                ),
+                                                                onPressed: _isSaving
+                                                                    ? null
+                                                                    : () async {
+                                                                        setDialogState(
+                                                                          () {
+                                                                            _isSaving =
+                                                                                true;
+                                                                            _loadingMessage =
+                                                                                "Saving render packet...";
+                                                                          },
+                                                                        );
+                                                                        try {
+                                                                          logger.info(
+                                                                              "Step 1/2: Preparing and saving full render packet for ${widget.projectId}...");
+                                                                          await prepareAndSaveRenderPacket(
+                                                                              ref,
                                                                               widget
-                                                                                  .projectId,
-                                                                              {
+                                                                                  .projectId);
+                                                                          setDialogState(
+                                                                            () {
+                                                                              _loadingMessage =
+                                                                                  "Triggering backend render...";
+                                                                            },
+                                                                          );
+                                                                          await Future
+                                                                              .delayed(
+                                                                            const Duration(
+                                                                                milliseconds:
+                                                                                    200),
+                                                                          );
+                                                                          logger.info(
+                                                                              "Step 2/2: Updating status to RENDER_START for ${widget.projectId}...");
+                                                                          await ref
+                                                                              .read(
+                                                                                  firestoreServiceProvider)
+                                                                              .updateProject(
+                                                                                  widget
+                                                                                      .projectId,
+                                                                                  {
                                                                                 'status':
                                                                                     'RENDER_START',
                                                                                 'renderStartedAt': FieldValue
@@ -1653,48 +1758,103 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                                                                 'errorDetail': FieldValue
                                                                                     .delete()
                                                                               });
-                                                                      logger.info(
-                                                                          "Render trigger successful for ${widget.projectId}");
-                                                                      if (mounted) {
-                                                                        Navigator.of(
-                                                                                context)
-                                                                            .pop();
-                                                                        setState(
-                                                                          () {
-                                                                            _isTriggeringRender =
-                                                                                true;
-                                                                          },
-                                                                        );
-                                                                      }
-                                                                    } catch (e) {
-                                                                      logger.error(
-                                                                          "Failed to prepare or trigger render for ${widget.projectId}",
-                                                                          e);
-                                                                      if (mounted) {
-                                                                        Navigator.of(
-                                                                                context)
-                                                                            .pop();
-                                                                        ScaffoldMessenger.of(
-                                                                                context)
-                                                                            .showSnackBar(
-                                                                          SnackBar(
-                                                                              content: Text(
-                                                                                  '❌ Failed to send render packet: $e'),
-                                                                              backgroundColor:
-                                                                                  Colors.red),
-                                                                        );
-                                                                      }
-                                                                    }
-                                                                  },
-                                                          ),
-                                                        ],
+                                                                          logger.info(
+                                                                              "Render trigger successful for ${widget.projectId}");
+                                                                          if (mounted) {
+                                                                            Navigator.of(
+                                                                                    context)
+                                                                                .pop();
+                                                                            setState(
+                                                                              () {
+                                                                                _isTriggeringRender =
+                                                                                    true;
+                                                                              },
+                                                                            );
+                                                                          }
+                                                                        } catch (e) {
+                                                                          logger.error(
+                                                                              "Failed to prepare or trigger render for ${widget.projectId}",
+                                                                              e);
+                                                                          if (mounted) {
+                                                                            Navigator.of(
+                                                                                    context)
+                                                                                .pop();
+                                                                            ScaffoldMessenger.of(
+                                                                                    context)
+                                                                                .showSnackBar(
+                                                                              SnackBar(
+                                                                                content: Text(
+                                                                                    '❌ Failed to send render packet: $e'),
+                                                                                backgroundColor:
+                                                                                    Colors.red),
+                                                                            );
+                                                                          }
+                                                                        }
+                                                                      },
+                                                              ),
+                                                            ],
+                                                          );
+                                                        },
                                                       );
                                                     },
                                                   );
                                                 },
-                                              );
-                                            },
-                                      child: const Text('RENDER'),
+                                          child: const Text('RENDER'),
+                                        ),
+                                        if (canRender && !_hasDismissedRenderPopup)
+                                          Positioned(
+                                            bottom: 50,
+                                            child: TweenAnimationBuilder<double>(
+                                              tween: Tween(begin: 0.0, end: 1.0),
+                                              duration: const Duration(milliseconds: 600),
+                                              curve: Curves.elasticOut,
+                                              builder: (context, value, child) {
+                                                return Transform.scale(
+                                                  scale: value,
+                                                  alignment: Alignment.bottomCenter,
+                                                  child: child,
+                                                );
+                                              },
+                                              child: IgnorePointer(
+                                                child: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.green.shade600,
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        boxShadow: const [
+                                                          BoxShadow(
+                                                            color: Colors.black26,
+                                                            blurRadius: 4,
+                                                            offset: Offset(0, 3),
+                                                          )
+                                                        ],
+                                                      ),
+                                                      child: const Text(
+                                                        "✨ Finish & Export to MP4",
+                                                        style: TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 12,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Transform.translate(
+                                                      offset: const Offset(0, -6),
+                                                      child: Icon(
+                                                        Icons.arrow_drop_down,
+                                                        color: Colors.green.shade600,
+                                                        size: 32,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -1716,7 +1876,10 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
       ),
     );
   }
+//----------------------------------------------------------------------------------------------------//
 
+//No ke-6: HELPERS, RENDER LOGIC (MANUAL) & STYLING //
+//Warna status, dialog regenerasi aset, dan logika RENDER MANUAL lama. //
   Color _getStatusColor(String? status) {
     switch (status) {
       case 'COMPLETED':
@@ -1936,8 +2099,79 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
       },
     );
   }
-} 
+//----------------------------------------------------------------------------------------------------//
 
+//No ke-7: REPORT SCENE LOGIC //
+//Logika pelaporan konten pada scene. //
+  void _showSceneReportDialog(Scene scene) {
+    final TextEditingController reasonController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("Lapor Scene ${scene.segmentIndex + 1}"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Apakah gambar atau narasi scene ini melanggar kebijakan?",
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                hintText: "Alasan (SARA, Kekerasan, dll)...",
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Batal"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              final user = ref.read(firestoreUserProvider).valueOrNull;
+              final userId = user?.uid ?? 'anonymous'; 
+
+              FirebaseFirestore.instance.collection('reports').add({
+                'projectId': widget.projectId,
+                'sceneId': scene.id,
+                'content': scene.imageUrl, 
+                'contentType': 'scene_image',
+                'reason': reasonController.text.isEmpty ? 'No reason provided' : reasonController.text,
+                'reportedAt': FieldValue.serverTimestamp(),
+                'userId': userId,
+                'feature': 'Timeline Review', 
+              }).then((_) {
+                if (mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Laporan dikirim. Terima kasih."),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              });
+            },
+            child: const Text("Lapor", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+//----------------------------------------------------------------------------------------------------//
+
+//No ke-8: DUMMY LOGGER //
+//Utilitas logger sementara untuk output debug. //
 class _DummyLogger {
   void warn(String message, [dynamic error, StackTrace? stackTrace]) {
     debugPrint('WARN: $message ${error ?? ''}');
@@ -1953,3 +2187,4 @@ class _DummyLogger {
 }
 
 final logger = _DummyLogger();
+//----------------------------------------------------------------------------------------------------//

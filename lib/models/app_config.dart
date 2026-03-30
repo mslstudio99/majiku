@@ -1,9 +1,10 @@
-// KATEGORI_MODEL_UPDATE NO_URUT_01 (ENABLE PACKAGES)
+// KATEGORI_MODEL_UPDATE NO_URUT_01 (ENABLE PACKAGES & REMOTE FREE TOKENS - FIXED)
 // NAMA FILE: lib/models/app_config.dart
 // TUJUAN:
 // - [FITUR] Mengaktifkan parsing data 'packages' agar UI tahu harga & token.
-// - [ANTI-REGRESI] Mempertahankan kelas 'Costs' 100% sama dengan kode asli.
-// - [KOMPATIBILITAS] Menambahkan default value pada constructor agar Provider aman.
+// - [FITUR] Menambahkan 'freeTokens' yang bisa diatur remote via Firestore.
+// - [FIX] Menghapus parameter tak terdaftar yang menyebabkan gagal compile.
+// - [ANTI-REGRESI] Mempertahankan variabel asli 100% sesuai constructor.
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -34,23 +35,23 @@ class PackageConfig {
 class AppConfig {
   final Costs costs;
   
-  // [DIUBAH] Field ini sekarang diaktifkan (sebelumnya diabaikan)
+  // Field ini diaktifkan untuk mendukung sistem pembelian paket
   final Map<String, PackageConfig> packages;
 
   AppConfig({
     required this.costs,
-    // [ANTI-REGRESI] Default ke map kosong agar tidak error jika data belum ada
+    // Default ke map kosong agar tidak error jika data belum ada di Firestore
     this.packages = const {}, 
   });
 
   factory AppConfig.fromFirestore(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? {};
     
-    // 1. Parsing 'costs' dengan aman (Logika Lama)
+    // 1. Parsing 'costs' dengan aman
     final costsData = data['costs'] as Map<String, dynamic>? ?? {};
     final costs = Costs.fromMap(costsData);
 
-    // 2. [BARU] Parsing 'packages'
+    // 2. Parsing 'packages'
     final packagesData = data['packages'] as Map<String, dynamic>? ?? {};
     final packages = packagesData.map(
       (key, value) => MapEntry(
@@ -62,16 +63,18 @@ class AppConfig {
     return AppConfig(costs: costs, packages: packages);
   }
 
-  // [BARU] Helper untuk mengambil paket spesifik dengan mudah di UI
+  // Helper untuk mengambil paket spesifik (misal: 'basic_monthly')
   PackageConfig? getPackage(String key) {
     return packages[key];
   }
 }
 
 /// [Costs]
-/// BAGIAN INI DIPERTAHANKAN 100% SESUAI KODE ASLI ANDA
-/// AGAR TIDAK ADA REGRESI PADA FITUR GENERATE KONTEN.
+/// Mengatur biaya token untuk setiap aksi di aplikasi Majiku.
 class Costs {
+  // --- BARU: REMOTE INITIAL TOKENS ---
+  final int freeTokens;
+
   // --- VARIABEL ASLI (CamelCase) ---
   final int motionPerScene;
   final int footagePerScene;
@@ -86,6 +89,7 @@ class Costs {
   final int createThumbnailPerClick;
 
   Costs({
+    required this.freeTokens, 
     required this.motionPerScene,
     required this.footagePerScene,
     required this.ideKontenPerClick,
@@ -99,18 +103,19 @@ class Costs {
     required this.createThumbnailPerClick,
   });
 
-  // --- [PATCH BARU] GETTER ALIAS (SnakeCase) ---
+  // --- [PATCH] GETTER ALIAS (SnakeCase) ---
   int get motion_per_scene => motionPerScene;
   int get footage_per_scene => footagePerScene;
-  // ---------------------------------------------
 
-  /// Helper: Nilai fallback (Jaring Pengaman) jika Firestore gagal
+  /// Helper: Nilai fallback (Jaring Pengaman) jika Firestore gagal diakses
   factory Costs.fallback() {
     return Costs(
+      freeTokens: 200, 
       motionPerScene: 100,
       footagePerScene: 800,
       ideKontenPerClick: 10,
       kontenUmumPerClick: 20,
+      // FIXED: Menghapus parameter 'contentTypeShortPerClick' yang tidak ada di constructor
       kontenShortPerClick: 20,
       kisahSejarahPerClick: 20,
       kisahIslamiPerClick: 20,
@@ -121,11 +126,14 @@ class Costs {
     );
   }
 
-  /// Helper: Parsing dari Map (Firestore)
+  /// Helper: Parsing dari Map Firestore ke Objek Dart
   factory Costs.fromMap(Map<String, dynamic> map) {
-    // Menggunakan fallback() untuk jaminan anti-regresi (anti-null)
     final defaults = Costs.fallback();
     return Costs(
+      // Parsing field baru 'free_tokens'
+      freeTokens: map['free_tokens'] as int? ?? defaults.freeTokens,
+      
+      // Parsing field lama sesuai key Firestore
       motionPerScene: map['motion_per_scene'] as int? ?? defaults.motionPerScene,
       footagePerScene: map['footage_per_scene'] as int? ?? defaults.footagePerScene,
       ideKontenPerClick: map['ide_konten_per_click'] as int? ?? defaults.ideKontenPerClick,

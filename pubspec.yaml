@@ -1,12 +1,19 @@
+#..........#
+# PUBSPEC.YAML #
+# ROOT/PUBSPEC.YAML #
+#..........#
+
 name: majiku
 description: "Majiku — Proyek Flutter dengan integrasi Firestore dan Audio Timeline."
 publish_to: 'none' # Private project (tidak dipublikasikan ke pub.dev)
 
-version: 1.0.0+1
+version: 1.0.7+11
 
 environment:
   sdk: '>=3.2.6 <4.0.0'
 
+#No ke-1 KELOMPOK DEPENDENCIES UTAMA#
+#...................................#
 dependencies:
   flutter:
     sdk: flutter
@@ -23,6 +30,11 @@ dependencies:
   # ⚙️ State Management
   # ------------------------------------------------------------
   flutter_riverpod: ^2.5.1
+
+  # ------------------------------------------------------------
+  # 💰 Pembayaran (Hybrid)
+  # ------------------------------------------------------------
+  in_app_purchase: ^3.2.0  # <-- KATEGORI_FITUR_BARU: Google Play Billing (Android)
 
   # ------------------------------------------------------------
   # 🎧 Audio, Media, dan UI
@@ -47,13 +59,25 @@ dependencies:
   firebase_storage: ^12.4.10
   cloud_functions: ^5.6.2
   intl: ^0.20.2
+  firebase_app_check: ^0.3.2+10
+
+  # ------------------------------------------------------------
+  # 🛡️ KEAMANAN & PELACAKAN PERANGKAT (ANTI-FRAUD DEVICE BINDING)
+  # ------------------------------------------------------------
+  device_info_plus: ^10.1.0    # Untuk membaca KTP Hardware Android/iOS/Web
+  shared_preferences: ^2.2.3   # Untuk menyimpan UUID di Local Storage Web
+  uuid: ^4.5.3                 # Untuk men-generate UUID acak bagi pengguna Web
+  android_id: ^0.5.1
 
   # ------------------------------------------------------------
   # 💬 Animasi & UI Ekstra (opsional, jika kamu pakai di widget)
   # ------------------------------------------------------------
   # lottie: ^3.1.0
   # animations: ^2.0.8
+#...................................#
 
+#No ke-2 KELOMPOK DEV DEPENDENCIES & KONFIGURASI#
+#...............................................#
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -82,3 +106,4 @@ flutter_launcher_icons:
     image_path: "assets/icon/icon.png"
     background_color: "#ffffff" # Ganti jika ingin background selain putih
     theme_color: "#ffffff"
+#...............................................#
