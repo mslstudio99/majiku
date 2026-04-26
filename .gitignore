@@ -49,3 +49,19 @@ app.*.map.json
 
 # Keystore files
 *.jks
+
+# ---------------------------------------------------
+# TAMBAHAN KHUSUS MAJIKU (ANDROID & SECURITY)
+# ---------------------------------------------------
+
+# Android Build Artifacts & Gradle
+android/build/
+android/app/build/
+.gradle/
+local.properties
+
+# Firebase & Secret Configurations
+google-services.json
+GoogleService-Info.plist
+firebase.json
+.env

@@ -1,11 +1,10 @@
-// [RILIS FINAL - TIMELINE VEO: POLICY COMPLIANCE & DARK THEME]
-// KATEGORI_POLICY_UPDATE NO_URUT_04
-// NAMA FILE: lib/screens_veo/timeline_review_veo_screen.dart
-// TUJUAN:
-// - [POLICY] Menambahkan tombol Lapor (Flag) per Scene untuk kepatuhan Google Play.
-// - [CRITICAL] Integrasi User ID untuk pelaporan.
-// - [MAINTENANCE] Mempertahankan Tema Dark Modern dan fitur Edit Prompt yang sudah ada.
+//====================================================================================================//
+// NAMA FILE: TIMELINE_REVIEW_VEO_SCREEN.DART                                                         //
+// DIREKTORI: lib/screens_veo/timeline_review_veo_screen.dart                                         //
+//====================================================================================================//
 
+//No ke-1: IMPOR & PROVIDER GLOBAL....................................................................//
+//Sub-judul: Memuat dependensi, tema, model, dan Riverpod Provider....................................//
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -14,24 +13,24 @@ import 'package:video_player/video_player.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-// --- (Impor Tema BARU) ---
 import '../theme/app_theme.dart';
-
-// --- (Impor Proyek) ---
 import '../models_veo/scene_veo.dart';
 import '../models_veo/video_project_veo.dart';
 import '../services_veo/firestore_veo_service.dart';
 import '../view_model_veo/timeline_veo_view_model.dart';
 import 'visual_setting_veo_screen.dart';
 import '../providers_veo/visual_settings_veo_provider.dart';
-import '../providers/user_provider.dart'; // [WAJIB] Untuk user.uid saat lapor
+import '../providers/user_provider.dart';
 
-// --- (Definisi Provider Tidak Berubah) ---
 final firestoreVeoServiceProvider =
     Provider<FirestoreVeoService>((ref) => FirestoreVeoService());
 final selectedSceneVeoProvider =
     StateProvider.autoDispose<SceneVeo?>((ref) => null);
+//Akhir Blok 1........................................................................................//
 
+
+//No ke-2: DEKLARASI KELAS & STATE UTAMA..............................................................//
+//Sub-judul: Inisialisasi ConsumerStatefulWidget, variabel kontrol render, dan flag navigasi..........//
 class TimelineReviewVeoScreen extends ConsumerStatefulWidget {
   final String projectId;
   const TimelineReviewVeoScreen({super.key, required this.projectId});
@@ -41,9 +40,8 @@ class TimelineReviewVeoScreen extends ConsumerStatefulWidget {
       _TimelineReviewVeoScreenState();
 }
 
-class _TimelineReviewVeoScreenState
-    extends ConsumerState<TimelineReviewVeoScreen> {
-  // (State internal tidak berubah)
+class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScreen> {
+  
   VideoPlayerController? _videoController;
   bool _isPlayingSequence = false;
   int _currentSequenceIndex = -1;
@@ -53,16 +51,33 @@ class _TimelineReviewVeoScreenState
   Timer? _playbackTimer;
   bool _showTitleOverlay = false;
   bool _showDescriptionOverlay = false;
+  
+  // [STATE KONTROL RENDER]
   bool _isTriggeringRender = false;
+  bool _hasAutoTriggeredRender = false; 
   static const int _renderTimeoutDuration = 3600;
   Timer? _uiRefreshTimer;
+  
+  // Status pop-up panduan render
+  bool _hasDismissedRenderPopup = false; 
+//Akhir Blok 2........................................................................................//
 
+
+//No ke-3: FUNGSI LIFECYCLE & TIMER...................................................................//
+//Sub-judul: Pengaturan siklus hidup widget dan penanganan timeout render backend.....................//
   @override
   void initState() {
     super.initState();
   }
 
-  // (Fungsi _startUiRefreshTimer Tidak Berubah)
+  @override
+  void dispose() {
+    _playbackTimer?.cancel();
+    _uiRefreshTimer?.cancel();
+    _videoController?.dispose();
+    super.dispose();
+  }
+
   void _startUiRefreshTimer() {
     if (_uiRefreshTimer != null && _uiRefreshTimer!.isActive) {
       return;
@@ -76,14 +91,12 @@ class _TimelineReviewVeoScreenState
     });
   }
 
-  // (Fungsi _cancelUiRefreshTimer Tidak Berubah)
   void _cancelUiRefreshTimer() {
     if (_uiRefreshTimer != null && _uiRefreshTimer!.isActive) {
       _uiRefreshTimer!.cancel();
     }
   }
 
-  // (Fungsi _handleRenderTimeout Tidak Berubah)
   Future<void> _handleRenderTimeout() async {
     _cancelUiRefreshTimer();
     try {
@@ -93,34 +106,28 @@ class _TimelineReviewVeoScreenState
 
       if (currentStatus == 'RENDER_START' || currentStatus == 'RENDERING') {
         logger.error(
-            "Render timeout! Project ${widget.projectId} stuck in $currentStatus for > 60 minutes (V1.7).");
+            "Render timeout! Project ${widget.projectId} stuck in $currentStatus for > 60 minutes.");
         await firestore.updateProject(
           widget.projectId,
           {
             'status': 'ERROR_RENDER',
-            'errorDetail': 'Render process timed out after 60 minutes (V1.7).',
+            'errorDetail': 'Render process timed out after 60 minutes.',
             'renderStartedAt': FieldValue.delete(),
           },
         );
       } else {
         logger.error(
-            "[DEBUG] Timeout check skipped — current status is $currentStatus, not RENDER_START/RENDERING.");
+            "[DEBUG] Timeout check skipped — current status is $currentStatus.");
       }
     } catch (e) {
-      logger.error("Failed to set ERROR_RENDER status after timeout (V1.7): $e");
+      logger.error("Failed to set ERROR_RENDER status after timeout: $e");
     }
   }
+//Akhir Blok 3........................................................................................//
 
-  // (Fungsi _formatDuration Tidak Berubah)
-  String _formatDuration(int totalSeconds) {
-    final secondsClamped = totalSeconds.clamp(0, _renderTimeoutDuration);
-    final duration = Duration(seconds: secondsClamped);
-    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return "$minutes:$seconds";
-  }
 
-  // (Fungsi _updatePlaybackTime Tidak Berubah)
+//No ke-4: FUNGSI PLAYER VIDEO & TIMELINE CONTROL.....................................................//
+//Sub-judul: Logika pemutaran, jeda, dan navigasi otomatis perpindahan video scene Veo................//
   void _updatePlaybackTime(double time) {
     if (!mounted) return;
     if (time < _currentPlaybackTime && (_currentPlaybackTime - time).abs() > 0.1) {
@@ -130,42 +137,6 @@ class _TimelineReviewVeoScreenState
     _updateOverlayVisibility();
   }
 
-  // (Fungsi _updateOverlayVisibility Tidak Berubah)
-  void _updateOverlayVisibility() {
-    if (!mounted) return;
-    final settings = ref.read(visualSettingsVeoProvider(widget.projectId));
-    bool needsSetState = false;
-
-    final titleStartTime = settings.titleSettings.startTime;
-    final titleEndTime = titleStartTime + settings.titleSettings.duration;
-    final bool shouldShowTitle = _isPlayingSequence &&
-        settings.titleSettings.text.isNotEmpty &&
-        _currentPlaybackTime >= titleStartTime &&
-        _currentPlaybackTime < titleEndTime;
-
-    if (_showTitleOverlay != shouldShowTitle) {
-      _showTitleOverlay = shouldShowTitle;
-      needsSetState = true;
-    }
-
-    final descStartTime = settings.descriptionSettings.startTime;
-    final descEndTime = descStartTime + settings.descriptionSettings.duration;
-    final bool shouldShowDescription = _isPlayingSequence &&
-        settings.descriptionSettings.text.isNotEmpty &&
-        _currentPlaybackTime >= descStartTime &&
-        _currentPlaybackTime < descEndTime;
-
-    if (_showDescriptionOverlay != shouldShowDescription) {
-      _showDescriptionOverlay = shouldShowDescription;
-      needsSetState = true;
-    }
-
-    if (needsSetState) {
-      setState(() {});
-    }
-  }
-
-  // (Fungsi _startPlaybackTimer Tidak Berubah)
   void _startPlaybackTimer() {
     _playbackTimer?.cancel();
     const tickDuration = Duration(milliseconds: 50);
@@ -181,23 +152,6 @@ class _TimelineReviewVeoScreenState
     });
   }
 
-  // (Fungsi sceneIdFromIndex Tidak Berubah)
-  String? sceneIdFromIndex(int sceneIndex) {
-    if (sceneIndex >= 0 && sceneIndex < _currentScenes.length) {
-      return _currentScenes[sceneIndex].id;
-    }
-    return null;
-  }
-
-  @override
-  void dispose() {
-    _playbackTimer?.cancel();
-    _uiRefreshTimer?.cancel();
-    _videoController?.dispose();
-    super.dispose();
-  }
-
-  // (Fungsi _startOrResumeSequencePlayback Tidak Berubah)
   void _startOrResumeSequencePlayback() async {
     if (_currentSequenceIndex == -1) {
       _updatePlaybackTime(0.0);
@@ -246,7 +200,6 @@ class _TimelineReviewVeoScreenState
     }
   }
 
-  // (Fungsi _pauseSequencePlayback Tidak Berubah)
   void _pauseSequencePlayback() {
     if (!_isPlayingSequence) return;
     _playbackTimer?.cancel();
@@ -257,7 +210,6 @@ class _TimelineReviewVeoScreenState
     });
   }
 
-  // (Fungsi _stopSequencePlayback Tidak Berubah)
   void _stopSequencePlayback({bool resetIndex = true}) {
     _playbackTimer?.cancel();
     _updatePlaybackTime(0.0);
@@ -286,7 +238,6 @@ class _TimelineReviewVeoScreenState
     }
   }
 
-  // (Fungsi _replaySequence Tidak Berubah)
   void _replaySequence() {
     logger.info("Replaying sequence from beginning.");
     _stopSequencePlayback(resetIndex: true);
@@ -297,7 +248,6 @@ class _TimelineReviewVeoScreenState
     });
   }
 
-  // (Fungsi _videoPlaybackListener Tidak Berubah)
   void _videoPlaybackListener() {
     if (!mounted ||
         _videoController == null ||
@@ -327,7 +277,6 @@ class _TimelineReviewVeoScreenState
     }
   }
 
-  // (Fungsi _initializeAndPlayVideo Tidak Berubah)
   Future<void> _initializeAndPlayVideo(int sceneIndex) async {
     if (!_isPlayingSequence ||
         sceneIndex < 0 ||
@@ -372,7 +321,6 @@ class _TimelineReviewVeoScreenState
     }
   }
 
-  // (Fungsi _handlePlaybackErrorOrSkip Tidak Berubah)
   void _handlePlaybackErrorOrSkip(int currentSceneIndex) {
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted &&
@@ -392,8 +340,60 @@ class _TimelineReviewVeoScreenState
       }
     });
   }
+//Akhir Blok 4........................................................................................//
 
-  // (Fungsi _launchURL Tidak Berubah)
+
+//No ke-5: WIDGET BANTUAN & UTILITAS..................................................................//
+//Sub-judul: Overlay Rendering Elegan Vmotion, Formatting Waktu, dan Kalkulasi Layout.................//
+  String _formatDuration(int totalSeconds) {
+    final secondsClamped = totalSeconds.clamp(0, _renderTimeoutDuration);
+    final duration = Duration(seconds: secondsClamped);
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return "$minutes:$seconds";
+  }
+
+  void _updateOverlayVisibility() {
+    if (!mounted) return;
+    final settings = ref.read(visualSettingsVeoProvider(widget.projectId));
+    bool needsSetState = false;
+
+    final titleStartTime = settings.titleSettings.startTime;
+    final titleEndTime = titleStartTime + settings.titleSettings.duration;
+    final bool shouldShowTitle = _isPlayingSequence &&
+        settings.titleSettings.text.isNotEmpty &&
+        _currentPlaybackTime >= titleStartTime &&
+        _currentPlaybackTime < titleEndTime;
+
+    if (_showTitleOverlay != shouldShowTitle) {
+      _showTitleOverlay = shouldShowTitle;
+      needsSetState = true;
+    }
+
+    final descStartTime = settings.descriptionSettings.startTime;
+    final descEndTime = descStartTime + settings.descriptionSettings.duration;
+    final bool shouldShowDescription = _isPlayingSequence &&
+        settings.descriptionSettings.text.isNotEmpty &&
+        _currentPlaybackTime >= descStartTime &&
+        _currentPlaybackTime < descEndTime;
+
+    if (_showDescriptionOverlay != shouldShowDescription) {
+      _showDescriptionOverlay = shouldShowDescription;
+      needsSetState = true;
+    }
+
+    if (needsSetState) {
+      setState(() {});
+    }
+  }
+
+  String? sceneIdFromIndex(int sceneIndex) {
+    if (sceneIndex >= 0 && sceneIndex < _currentScenes.length) {
+      return _currentScenes[sceneIndex].id;
+    }
+    return null;
+  }
+
   Future<void> _launchURL(String urlString) async {
     final Uri url = Uri.parse(urlString);
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
@@ -409,7 +409,6 @@ class _TimelineReviewVeoScreenState
     }
   }
 
-  // (Fungsi _calculateAspectRatio Tidak Berubah)
   double _calculateAspectRatio(String? ratioString) {
     if (ratioString == null || ratioString.isEmpty) {
       return 16 / 9;
@@ -427,7 +426,6 @@ class _TimelineReviewVeoScreenState
     return 16 / 9;
   }
 
-  // (Fungsi _buildVideoDisplay Tidak Berubah)
   Widget _buildVideoDisplay({Key? key}) {
     if (_isPlayingSequence &&
         _videoController != null &&
@@ -437,12 +435,11 @@ class _TimelineReviewVeoScreenState
     return Tooltip(
       key: key,
       message: 'Video not playing. No thumbnail available.',
-      child: Icon(Icons.video_camera_back_outlined,
+      child: const Icon(Icons.video_camera_back_outlined,
           color: Colors.white54, size: 60),
     );
   }
 
-  // (Fungsi _buildRenderingOverlay Tidak Berubah)
   Widget _buildRenderingOverlay(int secondsRemaining, bool hasValidStartTime) {
     return Positioned.fill(
       child: AbsorbPointer(
@@ -452,11 +449,11 @@ class _TimelineReviewVeoScreenState
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Colors.grey[900], 
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: const [
                   BoxShadow(
-                    color: Colors.black26,
+                    color: Colors.black54, 
                     blurRadius: 10,
                     offset: Offset(0, 4),
                   )
@@ -465,26 +462,27 @@ class _TimelineReviewVeoScreenState
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const CircularProgressIndicator(),
+                  const CircularProgressIndicator(color: Colors.blueAccent), 
                   const SizedBox(height: 16),
                   const Text(
-                    "Rendering Video Dalam Beberapa Menit...",
+                    "Rendering in minutes... You may safely leave this page",
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      color: Colors.white, 
                     ),
                   ),
                   const SizedBox(height: 10),
                   if (hasValidStartTime)
                     Text(
-                      "Batas waktu cancel otomatis: ${_formatDuration(secondsRemaining)}",
-                      style: const TextStyle(fontSize: 14, color: Colors.black54),
+                      "Auto Cancel in: ${_formatDuration(secondsRemaining)}",
+                      style: const TextStyle(fontSize: 14, color: Colors.white70), 
                     )
                   else
                     const Text(
                       "Menunggu respons backend...",
-                      style: TextStyle(fontSize: 14, color: Colors.black54),
+                      style: TextStyle(fontSize: 14, color: Colors.white70), 
                     ),
                 ],
               ),
@@ -494,11 +492,13 @@ class _TimelineReviewVeoScreenState
       ),
     );
   }
+//Akhir Blok 5........................................................................................//
 
-  // ### METODE BUILD UTAMA ###
+
+//No ke-6: WIDGET UTAMA (METHOD BUILD)................................................................//
+//Sub-judul: Membangun struktur UI, Smart Controller Auto-Render, dan List Scene Timeline.............//
   @override
   Widget build(BuildContext context) {
-    // (Provider watches tidak berubah)
     final projectAsyncValue =
         ref.watch(projectVeoStreamProvider(widget.projectId));
     final processedTimelineAsync =
@@ -509,14 +509,87 @@ class _TimelineReviewVeoScreenState
     final projectData = projectAsyncValue.asData?.value;
     final bool isCalculating =
         processedTimelineAsync.asData?.value?.isCalculating ?? true;
-    final bool canPlayOrReplay = projectData != null && !isCalculating;
-    final double aspectRatioValue =
-        _calculateAspectRatio(projectData?.aspectRatio);
+        
+    // [GATEKEEPER VALIDASI MUTLAK] - Hanya mengecek Video URL untuk VEO
+    final bool areAllScenesValid = processedTimelineAsync.maybeWhen(
+      data: (timeline) {
+        if (timeline.scenes.isEmpty) return false; 
+        
+        return timeline.scenes.every((s) {
+          final scene = s.originalScene;
+          final hasValidVideo = scene.videoUrl.isNotEmpty;
+          final hasNoErrors = scene.status == null || !scene.status!.startsWith('ERROR');
+          final isNotGenerating = scene.status != 'PENDING_REFINEMENT' &&
+                                  scene.status != 'QUEUED_FOR_REFINE' &&
+                                  scene.status != 'IS_REFINING' &&
+                                  scene.status != 'QUEUED_FOR_VIDEO' &&
+                                  scene.status != 'GENERATING_VIDEO';
+          return hasValidVideo && hasNoErrors && isNotGenerating;
+        });
+      },
+      orElse: () => false,
+    );
 
+    // [DETEKSI RENDER SUKSES UNTUK MEMBLOKIR TOMBOL PLAY/RENDER]
+    final bool isRenderSuccessGlobal = projectData != null &&
+        projectData.status == 'RENDER_COMPLETED' &&
+        projectData.finalVideoUrl != null &&
+        projectData.finalVideoUrl!.isNotEmpty;
+
+    // [SMART CONTROLLER: AUTO-TRIGGER RENDER]
+    if (projectData != null &&
+        projectData.status == 'ASSETS_COMPLETE' &&
+        areAllScenesValid &&
+        !_hasAutoTriggeredRender &&
+        !_isTriggeringRender &&
+        !isRenderSuccessGlobal) {
+      
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        setState(() {
+          _hasAutoTriggeredRender = true; 
+          _isTriggeringRender = true;     
+        });
+        
+        try {
+          logger.info("[AUTO-RENDER VEO] Preparing and saving render packet...");
+          await prepareAndSaveRenderPacketVeo(ref, widget.projectId);
+          
+          logger.info("[AUTO-RENDER VEO] Updating status to RENDER_READY...");
+          await ref.read(firestoreVeoServiceProvider).updateProject(
+            widget.projectId,
+            {
+              'status': 'RENDER_READY',
+              'renderStartedAt': FieldValue.serverTimestamp(),
+              'errorDetail': FieldValue.delete()
+            }
+          );
+          logger.info("[AUTO-RENDER VEO] Trigger successful for ${widget.projectId}");
+        } catch (e) {
+          logger.error("[AUTO-RENDER VEO] Failed to auto-trigger render", e);
+          if (mounted) {
+            setState(() {
+              _isTriggeringRender = false;
+              _hasAutoTriggeredRender = false; // Buka kunci agar bisa coba manual jika error
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('❌ Auto-Render failed: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      });
+    }
+
+    // Jika render sudah sukses, matikan Play/Replay agar fokus pada Download
+    final bool canPlayOrReplay = projectData != null && !isCalculating && areAllScenesValid && !isRenderSuccessGlobal;
+    final double aspectRatioValue = _calculateAspectRatio(projectData?.aspectRatio);
     const double previewScaleFactor = 0.2315;
 
-    // (Fungsi _getTextStyle Tidak Berubah)
-    TextStyle _getTextStyle(double baseFontSize, Color color) {
+    // [MODIFIKASI OUTLINE EFFECT & FONT WEIGHT]
+    TextStyle _getTextStyle(double baseFontSize, Color color, {FontWeight weight = FontWeight.normal}) {
       double multiplier = 1.0;
       final double actualRenderFontSize = baseFontSize * multiplier;
       final double previewFontSize = actualRenderFontSize * previewScaleFactor;
@@ -524,24 +597,22 @@ class _TimelineReviewVeoScreenState
       return TextStyle(
         fontSize: previewFontSize,
         color: color,
-        fontWeight: FontWeight.bold,
+        fontWeight: weight,
+        // Simulasi FFmpeg ASS BorderStyle=1 (Outline tebal)
         shadows: const [
-          Shadow(
-            blurRadius: 3.0,
-            color: Colors.black87,
-            offset: Offset(1.5, 1.5),
-          )
+          Shadow(blurRadius: 1.5, color: Colors.black, offset: Offset( 1.5,  1.5)),
+          Shadow(blurRadius: 1.5, color: Colors.black, offset: Offset(-1.5, -1.5)),
+          Shadow(blurRadius: 1.5, color: Colors.black, offset: Offset( 1.5, -1.5)),
+          Shadow(blurRadius: 1.5, color: Colors.black, offset: Offset(-1.5,  1.5)),
         ],
       );
     }
 
-    // [BARU] Menerapkan tema Dark Modern HANYA ke halaman ini
     return Theme(
       data: AppTheme.darkTheme,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Review Project (Veo)'),
-          // [DIHAPUS] Warna AppBar akan diwarisi dari AppTheme
           actions: [
             IconButton(
               icon: const Icon(Icons.tune),
@@ -575,42 +646,31 @@ class _TimelineReviewVeoScreenState
               );
             }
 
-            // (Logika status tidak berubah)
             if (_isTriggeringRender &&
                 (project.status == 'RENDERING' ||
-                    project.status == 'RENDER_START')) {
+                 project.status == 'RENDER_READY' ||
+                 project.status == 'RENDER_START' ||
+                 project.status == 'RENDER_COMPLETED' ||
+                 (project.status != null && project.status!.startsWith('ERROR')))) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) setState(() => _isTriggeringRender = false);
               });
             }
-            final bool scenesAreReadyOrError = processedTimelineAsync.maybeWhen(
-              data: (timeline) =>
-                  !timeline.scenes.any((s) => s.originalScene.status == 'ERROR'),
-              orElse: () => false,
-            );
-            final bool isRenderSuccess = project.status == 'RENDER_COMPLETED' &&
-                project.finalVideoUrl != null &&
-                project.finalVideoUrl!.isNotEmpty;
-            final bool isRenderComplete = isRenderSuccess;
+
+            final bool isRenderComplete = isRenderSuccessGlobal;
             final String? finalVideoUrl = project.finalVideoUrl;
-            final bool canRender;
-            if (isRenderSuccess) {
-              canRender = false;
-            } else if (project.status == 'ASSETS_COMPLETE' ||
-                project.status == 'ERROR_RENDER' ||
-                project.status == 'RENDER_READY' ||
-                project.status == 'ERROR_TRIGGER' ||
+            
+            final bool isProjectRendering = (project.status == 'RENDER_READY' || 
                 project.status == 'RENDER_START' ||
-                (project.status == 'RENDER_COMPLETED' && !isRenderSuccess)) {
-              canRender = scenesAreReadyOrError;
-            } else {
-              canRender = false;
-            }
-            final bool isProjectRendering = (project.status == 'RENDER_START' ||
                 project.status == 'RENDERING' ||
                 _isTriggeringRender);
+
+            // Manual Render hanya bisa diklik jika ada validitas penuh dan belum selesai rendering
+            final bool canRender = areAllScenesValid && !isRenderComplete && !isProjectRendering;
+            
             bool hasValidStartTime = false;
             int secondsRemainingForOverlay = _renderTimeoutDuration;
+            
             if (isProjectRendering) {
               final Timestamp? startTime = project.renderStartedAt;
               if (startTime != null) {
@@ -634,7 +694,6 @@ class _TimelineReviewVeoScreenState
               _cancelUiRefreshTimer();
             }
             
-            // Tampilan Utama (Column)
             return Stack(
               children: [
                 Column(
@@ -643,20 +702,16 @@ class _TimelineReviewVeoScreenState
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                       child: Text(
                         visualSettings.titleSettings.text,
-                        // [MODIFIKASI TEMA] Menggunakan style tema
                         style: Theme.of(context)
                             .textTheme
                             .headlineSmall
-                            ?.copyWith(
-                                // [PERBAIKAN] Memaksa warna putih agar kontras
-                                color: Colors.white),
+                            ?.copyWith(color: Colors.white),
                         textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
 
-                    // --- Viewer Atas DINAMIS ---
                     Padding(
                       padding: const EdgeInsets.symmetric(
                           vertical: 8.0, horizontal: 16.0),
@@ -668,11 +723,9 @@ class _TimelineReviewVeoScreenState
                             child: Container(
                               decoration: BoxDecoration(
                                 border: Border.all(
-                                  // [ANTI-REGRESI] Warna border abu-abu dipertahankan
                                   color: Colors.grey.shade400,
                                   width: 2.0,
                                 ),
-                                // [ANTI-REGRESI] Backdrop hitam video dipertahankan
                                 color: Colors.black87,
                               ),
                               child: ClipRRect(
@@ -684,7 +737,6 @@ class _TimelineReviewVeoScreenState
                                               ?.dataSource ??
                                           'no_video'),
                                     ),
-                                    // (Layer 2: Title Overlay - Tidak Berubah)
                                     AnimatedOpacity(
                                       key: ValueKey(
                                           'title_${_showTitleOverlay}_${visualSettings.titleSettings.text.hashCode}'),
@@ -709,12 +761,7 @@ class _TimelineReviewVeoScreenState
                                                   const EdgeInsets.symmetric(
                                                       horizontal: 12,
                                                       vertical: 6),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black
-                                                    .withOpacity(0.6),
-                                                borderRadius:
-                                                    BorderRadius.circular(4),
-                                              ),
+                                              // [PEMBERSIHAN] Menghapus BoxDecoration (Kotak Hitam)
                                               child: Text(
                                                 visualSettings
                                                     .titleSettings.text,
@@ -723,6 +770,7 @@ class _TimelineReviewVeoScreenState
                                                       .baseFontSize,
                                                   visualSettings
                                                       .titleSettings.color,
+                                                  weight: FontWeight.bold, // [MODIFIKASI] Title = Bold
                                                 ),
                                                 textAlign: TextAlign.center,
                                                 maxLines: visualSettings
@@ -734,7 +782,6 @@ class _TimelineReviewVeoScreenState
                                         ),
                                       ),
                                     ),
-                                    // (Layer 3: Description Overlay - Tidak Berubah)
                                     AnimatedOpacity(
                                       key: ValueKey(
                                           'desc_${_showDescriptionOverlay}_${visualSettings.descriptionSettings.text.hashCode}'),
@@ -760,12 +807,7 @@ class _TimelineReviewVeoScreenState
                                                   const EdgeInsets.symmetric(
                                                       horizontal: 12,
                                                       vertical: 6),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black
-                                                    .withOpacity(0.6),
-                                                borderRadius:
-                                                    BorderRadius.circular(4),
-                                              ),
+                                              // [PEMBERSIHAN] Menghapus BoxDecoration (Kotak Hitam)
                                               child: Text(
                                                 visualSettings
                                                     .descriptionSettings.text,
@@ -776,6 +818,7 @@ class _TimelineReviewVeoScreenState
                                                   visualSettings
                                                       .descriptionSettings
                                                       .color,
+                                                  weight: FontWeight.normal, // [MODIFIKASI] Desc = Normal
                                                 ),
                                                 textAlign: TextAlign.center,
                                                 maxLines: visualSettings
@@ -796,9 +839,7 @@ class _TimelineReviewVeoScreenState
                         ),
                       ),
                     ),
-                    // --- AKHIR BLOK PREVIEWER ---
 
-                    // (Tombol Download Tidak Berubah)
                     if (isRenderComplete &&
                         finalVideoUrl != null &&
                         finalVideoUrl.isNotEmpty)
@@ -822,7 +863,6 @@ class _TimelineReviewVeoScreenState
 
                     const Divider(height: 1, thickness: 1),
 
-                    // (Timeline List dengan Editor Prompt Manual)
                     Expanded(
                       child: processedTimelineAsync.when(
                         loading: () => const Center(
@@ -882,7 +922,6 @@ class _TimelineReviewVeoScreenState
                                             scene.status == 'PENDING_REFINEMENT' ||
                                             false;
 
-                                    // Logika Visibilitas Tombol Edit (Hanya jika ERROR)
                                     final bool isError = (scene.status ?? '').startsWith('ERROR');
 
                                     return Card(
@@ -892,7 +931,7 @@ class _TimelineReviewVeoScreenState
                                           ? Colors.lightBlue[50]
                                           : (isSelectedManually
                                               ? Colors.grey[200]
-                                              : null), // null = pakai tema
+                                              : null),
                                       elevation: isCurrentlyPlayingInSequence
                                           ? 4
                                           : (isSelectedManually ? 2 : 1),
@@ -906,13 +945,11 @@ class _TimelineReviewVeoScreenState
                                               .read(selectedSceneVeoProvider
                                                   .notifier)
                                               .state = scene;
-                                          // Note: Tidak perlu set imageUrl di Veo
                                         },
                                         child: Padding(
                                           padding: const EdgeInsets.all(8.0),
                                           child: Row(
                                             children: [
-                                              // Nomor Urut Scene
                                               Container(
                                                 width: 32,
                                                 alignment: Alignment.centerLeft,
@@ -932,7 +969,6 @@ class _TimelineReviewVeoScreenState
                                               ),
                                               const SizedBox(width: 4),
 
-                                              // THUMBNAIL
                                               Container(
                                                 width: 80,
                                                 height: 60,
@@ -969,7 +1005,6 @@ class _TimelineReviewVeoScreenState
                                               ),
                                               const SizedBox(width: 12),
 
-                                              // TEKS
                                               Expanded(
                                                 child: Column(
                                                   crossAxisAlignment:
@@ -1012,7 +1047,6 @@ class _TimelineReviewVeoScreenState
                                                 ),
                                               ),
 
-                                              // TOMBOL EDIT PROMPT (Jika Error)
                                               if (isError)
                                                 IconButton(
                                                   icon: Icon(Icons.edit, 
@@ -1086,7 +1120,6 @@ class _TimelineReviewVeoScreenState
                                                   },
                                                 ),
                                               
-                                              // [PATCH 2] TOMBOL LAPOR / FLAG
                                               const SizedBox(width: 4),
                                               IconButton(
                                                 icon: const Icon(Icons.flag_outlined, 
@@ -1096,7 +1129,6 @@ class _TimelineReviewVeoScreenState
                                                 tooltip: 'Lapor Konten Scene ${index + 1}',
                                                 onPressed: () => _showSceneReportDialog(scene, index),
                                               ),
-
                                             ],
                                           ),
                                         ),
@@ -1105,7 +1137,7 @@ class _TimelineReviewVeoScreenState
                                   },
                                 ),
                               ),
-                              // Tombol Kontrol Bawah (Tetap ada di sini)
+
                               Padding(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 8.0, vertical: 12.0),
@@ -1180,203 +1212,266 @@ class _TimelineReviewVeoScreenState
                                           ? null
                                           : _replaySequence,
                                     ),
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                              backgroundColor:
-                                                  Colors.red.shade700,
-                                              foregroundColor: Colors.white,
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 20,
-                                                      vertical: 12),
-                                              textStyle: const TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold))
-                                          .copyWith(
-                                        backgroundColor: MaterialStateProperty
-                                            .resolveWith<Color?>(
-                                                (states) => states.contains(
-                                                        MaterialState.disabled)
-                                                    ? Colors.red.shade200
-                                                    : Colors.red.shade700),
-                                        foregroundColor: MaterialStateProperty
-                                            .resolveWith<Color?>(
-                                                (states) => states.contains(
-                                                        MaterialState.disabled)
-                                                    ? Colors.white70
-                                                    : Colors.white),
-                                      ),
-                                      onPressed: !canRender
-                                          ? null
-                                          : () {
-                                              _stopSequencePlayback();
-                                              showDialog(
-                                                context: context,
-                                                barrierDismissible: false,
-                                                builder:
-                                                    (BuildContext context) {
-                                                  bool _isSaving = false;
-                                                  String _loadingMessage =
-                                                      "Saving render packet...";
-                                                  return StatefulBuilder(
-                                                    builder: (context,
-                                                        setDialogState) {
-                                                      return AlertDialog(
-                                                        title: const Text(
-                                                            'Start Video Render?'),
-                                                        content: Column(
-                                                          mainAxisSize:
-                                                              MainAxisSize.min,
-                                                          crossAxisAlignment:
-                                                              CrossAxisAlignment
-                                                                  .start,
-                                                          children: [
-                                                            const Text(
-                                                              "This will assemble all final data (scenes, timing, and styles) and send it to the render queue.\n\n"
-                                                              "This action cannot be undone.",
-                                                            ),
-                                                            if (_isSaving)
-                                                              Padding(
-                                                                padding:
-                                                                    const EdgeInsets
-                                                                        .only(
-                                                                        top: 16.0),
-                                                                child: Row(
-                                                                  children: [
-                                                                    const SizedBox(
-                                                                        width: 20,
-                                                                        height:
-                                                                            20,
-                                                                        child:
-                                                                            CircularProgressIndicator(
-                                                                                strokeWidth:
-                                                                                    3)),
-                                                                    const SizedBox(
-                                                                        width:
-                                                                            12),
-                                                                    Flexible(
-                                                                        child: Text(
-                                                                            _loadingMessage)),
-                                                                  ],
+                                    
+                                    Stack(
+                                      clipBehavior: Clip.none,
+                                      alignment: Alignment.center,
+                                      children: [
+                                        ElevatedButton(
+                                          style: ElevatedButton.styleFrom(
+                                                  backgroundColor:
+                                                      Colors.red.shade700,
+                                                  foregroundColor: Colors.white,
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                          horizontal: 20,
+                                                          vertical: 12),
+                                                  textStyle: const TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight: FontWeight.bold))
+                                              .copyWith(
+                                            backgroundColor: MaterialStateProperty
+                                                .resolveWith<Color?>(
+                                                    (states) => states.contains(
+                                                            MaterialState.disabled)
+                                                        ? Colors.red.shade200
+                                                        : Colors.red.shade700),
+                                            foregroundColor: MaterialStateProperty
+                                                .resolveWith<Color?>(
+                                                    (states) => states.contains(
+                                                            MaterialState.disabled)
+                                                        ? Colors.white70
+                                                        : Colors.white),
+                                          ),
+                                          onPressed: !canRender
+                                              ? null
+                                              : () {
+                                                  setState(() {
+                                                    _hasDismissedRenderPopup = true; 
+                                                  });
+                                                  _stopSequencePlayback();
+                                                  showDialog(
+                                                    context: context,
+                                                    barrierDismissible: false,
+                                                    builder:
+                                                        (BuildContext context) {
+                                                      bool _isSaving = false;
+                                                      String _loadingMessage =
+                                                          "Saving render packet...";
+                                                      return StatefulBuilder(
+                                                        builder: (context,
+                                                            setDialogState) {
+                                                          return AlertDialog(
+                                                            title: const Text(
+                                                                'Start Video Render?'),
+                                                            content: Column(
+                                                              mainAxisSize:
+                                                                  MainAxisSize.min,
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .start,
+                                                              children: [
+                                                                const Text(
+                                                                  "This will assemble all final data (scenes, timing, and styles) and send it to the render queue.\n\n"
+                                                                  "This action cannot be undone.",
                                                                 ),
-                                                              ),
-                                                          ],
-                                                        ),
-                                                        actions: <Widget>[
-                                                          TextButton(
-                                                            child: const Text(
-                                                                'Cancel'),
-                                                            onPressed: _isSaving
-                                                                ? null
-                                                                : () =>
-                                                                    Navigator.of(
-                                                                            context)
-                                                                        .pop(),
-                                                          ),
-                                                          TextButton(
-                                                            child: Text(
-                                                              _isSaving
-                                                                  ? 'SAVING...'
-                                                                  : 'RENDER',
-                                                              style: TextStyle(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                  color:
-                                                                      _isSaving
-                                                                          ? Colors
-                                                                              .grey
-                                                                          : Colors
-                                                                              .red),
+                                                                if (_isSaving)
+                                                                  Padding(
+                                                                    padding:
+                                                                        const EdgeInsets
+                                                                            .only(
+                                                                            top: 16.0),
+                                                                    child: Row(
+                                                                      children: [
+                                                                        const SizedBox(
+                                                                            width: 20,
+                                                                            height:
+                                                                                20,
+                                                                            child:
+                                                                                CircularProgressIndicator(
+                                                                                    strokeWidth:
+                                                                                        3)),
+                                                                        const SizedBox(
+                                                                            width:
+                                                                                12),
+                                                                        Flexible(
+                                                                            child: Text(
+                                                                                _loadingMessage)),
+                                                                      ],
+                                                                    ),
+                                                                  ),
+                                                              ],
                                                             ),
-                                                            onPressed: _isSaving
-                                                                ? null
-                                                                : () async {
-                                                                    setDialogState(
-                                                                      () {
-                                                                        _isSaving =
-                                                                            true;
-                                                                        _loadingMessage =
-                                                                            "Saving render packet...";
-                                                                      },
-                                                                    );
-                                                                    try {
-                                                                      logger.info(
-                                                                          "Step 1/2: Preparing and saving full render packet for ${widget.projectId}...");
-                                                                      await prepareAndSaveRenderPacketVeo(
-                                                                          ref,
-                                                                          widget
-                                                                              .projectId);
-                                                                      setDialogState(
-                                                                        () {
-                                                                          _loadingMessage =
-                                                                              "Triggering backend render...";
-                                                                        },
-                                                                      );
-                                                                      await Future
-                                                                          .delayed(
-                                                                        const Duration(
-                                                                            milliseconds:
-                                                                                200),
-                                                                      );
-                                                                      logger.info(
-                                                                          "Step 2/2: Updating status to RENDER_READY for ${widget.projectId}...");
-                                                                      await ref
-                                                                          .read(
-                                                                              firestoreVeoServiceProvider)
-                                                                          .updateProject(
-                                                                              widget
-                                                                                  .projectId,
-                                                                              {
-                                                                            'status':
-                                                                                'RENDER_READY',
-                                                                            'renderStartedAt': FieldValue
-                                                                                .serverTimestamp(),
-                                                                            'errorDetail': FieldValue
-                                                                                .delete()
-                                                                          });
-                                                                      logger.info(
-                                                                          "Render trigger successful for ${widget.projectId}");
-                                                                      if (mounted) {
+                                                            actions: <Widget>[
+                                                              TextButton(
+                                                                child: const Text(
+                                                                    'Cancel'),
+                                                                onPressed: _isSaving
+                                                                    ? null
+                                                                    : () =>
                                                                         Navigator.of(
                                                                                 context)
-                                                                            .pop();
-                                                                        setState(
+                                                                            .pop(),
+                                                              ),
+                                                              TextButton(
+                                                                child: Text(
+                                                                  _isSaving
+                                                                      ? 'SAVING...'
+                                                                      : 'RENDER',
+                                                                  style: TextStyle(
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .bold,
+                                                                      color:
+                                                                          _isSaving
+                                                                              ? Colors
+                                                                                  .grey
+                                                                              : Colors
+                                                                                  .red),
+                                                                ),
+                                                                onPressed: _isSaving
+                                                                    ? null
+                                                                    : () async {
+                                                                        setDialogState(
                                                                           () {
-                                                                            _isTriggeringRender =
+                                                                            _isSaving =
                                                                                 true;
+                                                                            _loadingMessage =
+                                                                                "Saving render packet...";
                                                                           },
                                                                         );
-                                                                      }
-                                                                    } catch (e) {
-                                                                      logger.error(
-                                                                          "Failed to prepare or trigger render for ${widget.projectId}",
-                                                                          e);
-                                                                      if (mounted) {
-                                                                        Navigator.of(
-                                                                                context)
-                                                                            .pop();
-                                                                        ScaffoldMessenger.of(
-                                                                                context)
-                                                                            .showSnackBar(
-                                                                          SnackBar(
-                                                                              content: Text(
-                                                                                  '❌ Failed to send render packet: $e'),
-                                                                              backgroundColor:
-                                                                                  Colors.red),
-                                                                        );
-                                                                      }
-                                                                    }
-                                                                  },
-                                                          ),
-                                                        ],
+                                                                        try {
+                                                                          logger.info(
+                                                                              "Step 1/2: Preparing and saving full render packet for ${widget.projectId}...");
+                                                                          await prepareAndSaveRenderPacketVeo(
+                                                                              ref,
+                                                                              widget
+                                                                                  .projectId);
+                                                                          setDialogState(
+                                                                            () {
+                                                                              _loadingMessage =
+                                                                                  "Triggering backend render...";
+                                                                            },
+                                                                          );
+                                                                          await Future
+                                                                              .delayed(
+                                                                            const Duration(
+                                                                                milliseconds:
+                                                                                    200),
+                                                                          );
+                                                                          logger.info(
+                                                                              "Step 2/2: Updating status to RENDER_READY for ${widget.projectId}...");
+                                                                          await ref
+                                                                              .read(
+                                                                                  firestoreVeoServiceProvider)
+                                                                              .updateProject(
+                                                                                  widget
+                                                                                      .projectId,
+                                                                                  {
+                                                                                'status':
+                                                                                    'RENDER_READY',
+                                                                                'renderStartedAt': FieldValue
+                                                                                    .serverTimestamp(),
+                                                                                'errorDetail': FieldValue
+                                                                                    .delete()
+                                                                              });
+                                                                          logger.info(
+                                                                              "Render trigger successful for ${widget.projectId}");
+                                                                          if (mounted) {
+                                                                            Navigator.of(
+                                                                                    context)
+                                                                                .pop();
+                                                                            setState(
+                                                                              () {
+                                                                                _isTriggeringRender =
+                                                                                    true;
+                                                                              },
+                                                                            );
+                                                                          }
+                                                                        } catch (e) {
+                                                                          logger.error(
+                                                                              "Failed to prepare or trigger render for ${widget.projectId}",
+                                                                              e);
+                                                                          if (mounted) {
+                                                                            Navigator.of(
+                                                                                    context)
+                                                                                .pop();
+                                                                            ScaffoldMessenger.of(
+                                                                                    context)
+                                                                                .showSnackBar(
+                                                                              SnackBar(
+                                                                                  content: Text(
+                                                                                      '❌ Failed to send render packet: $e'),
+                                                                                  backgroundColor:
+                                                                                      Colors.red),
+                                                                            );
+                                                                          }
+                                                                        }
+                                                                      },
+                                                              ),
+                                                            ],
+                                                          );
+                                                        },
                                                       );
                                                     },
                                                   );
                                                 },
-                                              );
-                                            },
-                                      child: const Text('RENDER'),
+                                          child: const Text('RENDER'),
+                                        ),
+                                        if (canRender && !_hasDismissedRenderPopup)
+                                          Positioned(
+                                            bottom: 50,
+                                            child: TweenAnimationBuilder<double>(
+                                              tween: Tween(begin: 0.0, end: 1.0),
+                                              duration: const Duration(milliseconds: 600),
+                                              curve: Curves.elasticOut,
+                                              builder: (context, value, child) {
+                                                return Transform.scale(
+                                                  scale: value,
+                                                  alignment: Alignment.bottomCenter,
+                                                  child: child,
+                                                );
+                                              },
+                                              child: IgnorePointer(
+                                                child: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.green.shade600,
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        boxShadow: const [
+                                                          BoxShadow(
+                                                            color: Colors.black26,
+                                                            blurRadius: 4,
+                                                            offset: Offset(0, 3),
+                                                          )
+                                                        ],
+                                                      ),
+                                                      child: const Text(
+                                                        "✨ Finish & Export to MP4",
+                                                        style: TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 12,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Transform.translate(
+                                                      offset: const Offset(0, -6),
+                                                      child: Icon(
+                                                        Icons.arrow_drop_down,
+                                                        color: Colors.green.shade600,
+                                                        size: 32,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -1398,8 +1493,11 @@ class _TimelineReviewVeoScreenState
       ),
     );
   }
+//Akhir Blok 6........................................................................................//
 
-  // --- [PATCH START] FEATURE: REPORT PER SCENE ---
+
+//No ke-7: FITUR LAPOR / FLAG SCENE...................................................................//
+//Sub-judul: Memunculkan dialog pelaporan pelanggaran ke database.....................................//
   void _showSceneReportDialog(SceneVeo scene, int index) {
     final TextEditingController reasonController = TextEditingController();
     
@@ -1440,7 +1538,7 @@ class _TimelineReviewVeoScreenState
               FirebaseFirestore.instance.collection('reports').add({
                 'projectId': widget.projectId,
                 'sceneId': scene.id,
-                'content': scene.videoUrl, // URL Video Veo
+                'content': scene.videoUrl,
                 'contentType': 'veo_video',
                 'reason': reasonController.text.isEmpty ? 'No reason provided' : reasonController.text,
                 'reportedAt': FieldValue.serverTimestamp(),
@@ -1464,11 +1562,12 @@ class _TimelineReviewVeoScreenState
       ),
     );
   }
-  // --- [PATCH END] ---
+} 
+//Akhir Blok 7........................................................................................//
 
-} // Akhir _TimelineReviewVeoScreenState
 
-// --- (Widget _VideoThumbnailItem Tidak Berubah) ---
+//No ke-8: CLASS PELENGKAP............................................................................//
+//Sub-judul: Thumbnail Item State & Dummy Logger......................................................//
 class _VideoThumbnailItem extends StatefulWidget {
   final String videoUrl;
   const _VideoThumbnailItem({required this.videoUrl});
@@ -1528,7 +1627,6 @@ class _VideoThumbnailItemState extends State<_VideoThumbnailItem> {
   }
 }
 
-// --- (Dummy Logger Tidak Berubah) ---
 class _DummyLoggerVeo {
   void warn(String message, [dynamic error, StackTrace? stackTrace]) {
     debugPrint('WARN: $message ${error ?? ''}');
@@ -1544,4 +1642,4 @@ class _DummyLoggerVeo {
 }
 
 final logger = _DummyLoggerVeo();
-// --- Akhir Dummy Logger ---
+//Akhir Blok 8........................................................................................//

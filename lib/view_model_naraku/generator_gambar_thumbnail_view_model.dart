@@ -1,23 +1,24 @@
-// [RILIS UTUH - INTEGRASI STABLE DIFFUSION 3.5 LARGE]
-// KATEGORI_NARAKU_TOKEN NO_URUT_20
-// TUJUAN: Mengganti Imagen dengan SD 3.5 Engine (Cloud Run) secara transparan.
+//================================================================//
+// NAMA FILE: GENERATOR_GAMBAR_THUMBNAIL_VIEW_MODEL.DART          //
+// DIREKTORI: lib/view_model_naraku/generator_gambar_thumbnail_view_model.dart //
+//================================================================//
 
+//No ke-1.........................................................//
+//IMPORT MODULE & DEPENDENCIES                                    //
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'dart:ui';
 import 'dart:typed_data';
 
 import 'package:path_provider/path_provider.dart';
 import 'dart:html' if (dart.library.io) '../utils/html_stub.dart' as html;
+//................................................................//
 
-import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
-import '../view_model/auth_view_model.dart'; 
-
-// --- HELPER LOKALISASI (TETAP SAMA) ---
+//No ke-2.........................................................//
+//HELPER LOKALISASI (SINKRONISASI TEKS IMAGEN 4.0)                //
 class GambarThumbnailLocalizationHelper {
   static const Map<String, Map<String, String>> translations = {
     'id': {
@@ -26,14 +27,14 @@ class GambarThumbnailLocalizationHelper {
       'promptPlaceholder': "Contoh: Seekor naga emas terbang di atas kerajaan...",
       'labelStyle': "Gaya Visual:",
       'labelRatio': "Rasio Gambar:",
-      'btnGenerate': "Buat Gambar SD 3.5",
+      'btnGenerate': "Buat Gambar Majiku AI",
       'outputTitle': "Hasil Gambar Majiku Engine",
-      'outputPlaceholder': "Gambar sedang dilukis oleh SD 3.5 Large...",
+      'outputPlaceholder': "Gambar sedang dilukis oleh Imagen 4.0 Fast...",
       'btnDownload': "Simpan ke Galeri",
       'btnClear': "Hapus Hasil",
       'alertNoInput': "Silakan masukkan narasi terlebih dahulu.",
       'statusGenerating': "Mesin Berputar...",
-      'statusLoading': "SD 3.5 sedang menggambar, mohon tunggu sekitar 30 detik...",
+      'statusLoading': "AI sedang menggambar, mohon tunggu sekitar 30 detik...",
       'statusDownloadSuccess': "Gambar disimpan di: {path}",
       'statusDownloadFailed': "Gagal mengunduh gambar.",
       'alertApiError': "Terjadi kesalahan mesin: {message}",
@@ -44,14 +45,14 @@ class GambarThumbnailLocalizationHelper {
       'promptPlaceholder': "Example: A golden dragon flies over a kingdom...",
       'labelStyle': "Visual Style:",
       'labelRatio': "Image Ratio:",
-      'btnGenerate': "Create SD 3.5 Image",
+      'btnGenerate': "Create Majiku AI Image",
       'outputTitle': "Majiku Engine Result",
-      'outputPlaceholder': "SD 3.5 Large is painting your image...",
+      'outputPlaceholder': "Imagen 4.0 Fast is painting your image...",
       'btnDownload': "Download Image",
       'btnClear': "Clear Results",
       'alertNoInput': "Please enter a narrative first.",
       'statusGenerating': "Engine Spinning...",
-      'statusLoading': "SD 3.5 is painting, please wait ~30 seconds...",
+      'statusLoading': "AI is painting, please wait ~30 seconds...",
       'statusDownloadSuccess': "Image saved to: {path}",
       'statusDownloadFailed': "Failed to download image.",
       'alertApiError': "Engine Error: {message}",
@@ -65,12 +66,14 @@ class GambarThumbnailLocalizationHelper {
     return translationMap[key] ?? key;
   }
 }
+//................................................................//
 
-// --- STATE CLASS ---
+//No ke-3.........................................................//
+//STATE CLASS                                                     //
 @immutable
 class GeneratorGambarThumbnailState {
   final bool isLoading;
-  final String generatedImageUrl; // Sekarang bisa berisi URL atau Base64
+  final String generatedImageUrl; // URL Publik dari Firebase Storage
   final String? errorMessage;
   final String? successMessage;
   final String loadingText;
@@ -109,8 +112,10 @@ class GeneratorGambarThumbnailState {
     );
   }
 }
+//................................................................//
 
-// --- VIEW MODEL ---
+//No ke-4.........................................................//
+//VIEW MODEL LOGIC (FIREBASE FUNCTIONS CALL & TOKEN HANDLING)     //
 class GeneratorGambarThumbnailViewModel
     extends StateNotifier<GeneratorGambarThumbnailState> {
   final TextEditingController narrativeController = TextEditingController();
@@ -118,10 +123,6 @@ class GeneratorGambarThumbnailViewModel
 
   GeneratorGambarThumbnailViewModel(this._ref)
       : super(const GeneratorGambarThumbnailState());
-
-  // URL ENGINE BARU (SD 3.5 LARGE)
-  final String _engineUrl = "https://majiku-sd35-engine-595802795623.asia-southeast1.run.app/generate";
-  final String _engineApiKey = "031284";
 
   void setStyle(String? value) {
     if (value == null) return;
@@ -148,43 +149,43 @@ class GeneratorGambarThumbnailViewModel
         isLoading: true, clearError: true, clearSuccess: true, loadingText: 'GENERATING');
 
     try {
-      // Prompt engineering sederhana: menggabungkan narasi dan gaya pilihan user
-      final combinedPrompt = "$narrative, ${state.selectedStyle}, 8k resolution, cinematic lighting";
+      // SINKRONISASI BACKEND: Memanggil fungsi 'generatorGambarThumbnail' Firebase Cloud Functions
+      // Payload Disesuaikan dengan Index.ts (narrativeValue, selectedStyle, selectedRatio)
+      final callable = FirebaseFunctions.instanceFor(region: 'asia-southeast2')
+          .httpsCallable('generatorGambarThumbnail');
 
-      final body = jsonEncode({
-        'prompt': combinedPrompt,
-        'aspectRatio': state.selectedRatio,
-      });
+      final payload = {
+        'narrativeValue': narrative,
+        'selectedStyle': state.selectedStyle,
+        'selectedRatio': state.selectedRatio,
+      };
 
-      final response = await http
-          .post(
-            Uri.parse(_engineUrl),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $_engineApiKey',
-            },
-            body: body,
-          )
-          .timeout(const Duration(seconds: 300)); // SD 3.5 butuh waktu lebih lama
+      // PERBAIKAN 1: Hapus bungkus manual {'data': payload}. Firebase httpsCallable sudah membungkusnya secara otomatis di balik layar.
+      final result = await callable.call(payload);
 
-      if (response.statusCode == 200) {
-        final responseBody = jsonDecode(response.body);
-        
-        // Mengambil data Base64 dari response engine
-        final base64String = responseBody['predictions'][0]['bytesBase64Encoded'];
+      // PERBAIKAN 2: Tangkap respons. Backend mengembalikan tipe String (URL) secara langsung, bukan Map.
+      final String? imageUrl = result.data as String?;
 
-        if (base64String != null) {
-          state = state.copyWith(
-            isLoading: false,
-            generatedImageUrl: base64String, // Kita simpan Base64 di sini
-            loadingText: '',
-          );
-        } else {
-          throw Exception("Gagal mendapatkan data gambar dari mesin.");
-        }
+      if (imageUrl != null && imageUrl.isNotEmpty) {
+        state = state.copyWith(
+          isLoading: false,
+          generatedImageUrl: imageUrl,
+          loadingText: '',
+        );
       } else {
-        throw Exception("Mesin SD 3.5 Error (${response.statusCode}): ${response.body}");
+        throw Exception("Gagal mendapatkan URL gambar dari mesin.");
       }
+    } on FirebaseFunctionsException catch (e) {
+      // Penanganan khusus error Token Habis (Sesuai backend: 402 / insufficient_tokens)
+      String errorMsg = e.message ?? "Terjadi kesalahan server.";
+      if (e.code == 'insufficient_tokens' || e.code == 'payment-required') {
+        errorMsg = "Token Anda tidak mencukupi untuk melakukan tindakan ini.";
+      }
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: errorMsg,
+        loadingText: '',
+      );
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -199,20 +200,14 @@ class GeneratorGambarThumbnailViewModel
     if (state.generatedImageUrl.isEmpty) return;
 
     try {
-      Uint8List bytes;
-      
-      // LOGIKA HYBRID: Cek apakah data ini Base64 (Engine Baru) atau URL (Legacy)
-      if (!state.generatedImageUrl.startsWith('http')) {
-        // Ini adalah Base64 dari SD 3.5
-        bytes = base64Decode(state.generatedImageUrl);
-      } else {
-        // Ini adalah URL lama (jika ada sisa-sisa Imagen)
-        final response = await http.get(Uri.parse(state.generatedImageUrl));
-        if (response.statusCode != 200) throw Exception('Gagal ambil URL');
-        bytes = response.bodyBytes;
+      // Karena respons sekarang murni URL, kita gunakan http.get untuk mengunduh byte gambar
+      final response = await http.get(Uri.parse(state.generatedImageUrl));
+      if (response.statusCode != 200) {
+        throw Exception('Gagal mengunduh gambar dari server.');
       }
+      final Uint8List bytes = response.bodyBytes;
 
-      final String fileName = 'majiku_sd35_${DateTime.now().millisecondsSinceEpoch}.png';
+      final String fileName = 'majiku_thumbnail_${DateTime.now().millisecondsSinceEpoch}.png';
 
       if (kIsWeb) {
         final blob = html.Blob([bytes], 'image/png');
@@ -268,3 +263,4 @@ final generatorGambarThumbnailViewModelProvider = StateNotifierProvider.autoDisp
     GeneratorGambarThumbnailViewModel, GeneratorGambarThumbnailState>(
   (ref) => GeneratorGambarThumbnailViewModel(ref),
 );
+//................................................................//

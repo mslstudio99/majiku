@@ -1,9 +1,8 @@
-// KATEGORI_CONFIG_UPDATE NO_URUT_01
-// NAMA FILE: lib/providers/config_provider.dart
-// TUJUAN: 
-// 1. (Tetap) Memuat config/token_settings dari Firestore.
-// 2. (Baru) Menyediakan state bahasa (Inggris/Indo) untuk aplikasi.
+// [NAMA FILE: lib/providers/config_provider.dart] //
+// [KATEGORI: PROVIDER / STATE MANAGEMENT] //
+// [TUJUAN: Memuat config/token_settings dari Firestore dan mengatur State Bahasa] //
 
+// No ke-1: IMPORT & SETUP //
 import 'package:flutter/material.dart'; // Dibutuhkan untuk Locale
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,13 +10,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 // Impor model
 import '../models/app_config.dart';
 
-// Impor provider firestore
-import './user_provider.dart';
+// [PERBAIKAN KRITIS ANTI-REGRESI]: 
+// Import './user_provider.dart' DIHAPUS TOTAL dari sini.
+// Tujuannya untuk memutus "Circular Dependency" yang menyebabkan error
+// "Bad state: Could not find summary for library" pada Flutter Web.
+//.......................................................//
 
-// =============================================================================
-// BAGIAN 1: STATE BAHASA (BARU)
-// =============================================================================
-
+// No ke-2: STATE BAHASA (APP LANGUAGE PROVIDER) //
 /// [appLanguageProvider]
 /// Provider sederhana untuk mengatur bahasa aplikasi secara lokal.
 /// Default: English ('en').
@@ -27,38 +26,48 @@ final appLanguageProvider = StateProvider<Locale>((ref) {
   // Nanti bisa dikembangkan untuk membaca dari SharedPreferences jika perlu persistensi.
   return const Locale('en');
 });
+//.......................................................//
 
-// =============================================================================
-// BAGIAN 2: CONFIG FIRESTORE (EXISTING)
-// =============================================================================
-
+// No ke-3: CONFIG FIRESTORE (APP CONFIG PROVIDER) //
 /// [appConfigProvider]
 /// Provider ini adalah 'FutureProvider' yang memuat dokumen
 /// 'config/token_settings' dari Firestore.
 final appConfigProvider = FutureProvider.autoDispose<AppConfig>((ref) async {
-  // 1. Dapatkan instance Firestore dari provider yang sudah ada
-  final db = ref.watch(firestoreProvider);
+  // [PERBAIKAN KRITIS]: Langsung memanggil instance Firestore bawaan Firebase.
+  // Ini menghindari ketergantungan pada firestoreProvider di user_provider.dart.
+  final db = FirebaseFirestore.instance;
 
-  // 2. Tentukan path dokumen
+  // Tentukan path dokumen
   final docRef = db.collection('config').doc('token_settings');
 
   try {
-    // 3. Ambil dokumen
+    // Ambil dokumen
     final doc = await docRef.get();
 
     if (doc.exists) {
-      // 4. SUKSES: Dokumen ada, parse menggunakan model
+      // SUKSES: Dokumen ada, parse menggunakan model
       return AppConfig.fromFirestore(doc);
     } else {
-      // 5. GAGAL (Ringan): Dokumen tidak ditemukan.
-      print(
-          "[AppConfigProvider] WARNING: Dokumen 'config/token_settings' tidak ditemukan. Menggunakan nilai fallback.");
-      return AppConfig(costs: Costs.fallback());
+      // GAGAL (Ringan): Dokumen tidak ditemukan.
+      debugPrint("[AppConfigProvider] WARNING: Dokumen 'config/token_settings' tidak ditemukan. Menggunakan nilai fallback.");
+      // [MODIFIKASI] Menambahkan parameter minAppVersion & playStoreUrl pada fallback
+      return AppConfig(
+        costs: Costs.fallback(), 
+        packages: const {},
+        minAppVersion: '1.0.0',
+        playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mslstudio.majiku',
+      );
     }
   } catch (e) {
-    // 6. GAGAL (Kritis): Error saat mengambil data
-    print(
-        "[AppConfigProvider] ERROR: Gagal memuat config: $e. Menggunakan nilai fallback.");
-    return AppConfig(costs: Costs.fallback());
+    // GAGAL (Kritis): Error saat mengambil data
+    debugPrint("[AppConfigProvider] ERROR: Gagal memuat config: $e. Menggunakan nilai fallback.");
+    // [MODIFIKASI] Menambahkan parameter minAppVersion & playStoreUrl pada fallback
+    return AppConfig(
+      costs: Costs.fallback(), 
+      packages: const {},
+      minAppVersion: '1.0.0',
+      playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mslstudio.majiku',
+    );
   }
 });
+//.......................................................//

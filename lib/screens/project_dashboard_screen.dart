@@ -1,44 +1,54 @@
-// [RILIS FINAL - DASHBOARD: NOTIFIKASI AUTO-DELETE NON-INTRUSIF]
-// KATEGORI_UI_UPDATE_07
-// Lokasi: lib/screens/project_dashboard_screen.dart
-// TUJUAN:
-// - [UX] Mengubah peringatan Auto-Delete dari Auto-Popup menjadi Tombol Notifikasi Manual.
-// - [UI] Menambahkan ikon peringatan di sebelah kiri judul "Majiku".
-// - [MAINTENANCE] Mempertahankan dukungan Bahasa dan Tema Dark Modern.
+// PROJECT_DASHBOARD_SCREEN.DART //
+// LIB/SCREENS/PROJECT_DASHBOARD_SCREEN.DART //
+// DASHBOARD UTAMA //
 
-import 'dart:ui'; // Diperlukan untuk ImageFilter (Blur Effect)
+// No ke-1 - IMPOR DEPENDENSI & LAYAR TERKAIT //
+// Konfigurasi provider, layar generator, histori, dan tema //
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // --- [CONFIG] Provider Bahasa ---
 import '../providers/config_provider.dart';
 
-// --- [LAMA] Impor untuk Alur IMAGEN (Motion) ---
-import '../models/video_project.dart';
-import '../view_model/dashboard_view_model.dart';
-import 'input_script_screen.dart';
-import 'timeline_review_screen.dart';
-import 'project_loading_screen.dart';
+// --- [BARU] Impor Layar Generator (Menu Utama) ---
+import '../screens_naraku/generator_konten_short_screen.dart'; // Narrative
+import '../screens_naraku/t2video_screen.dart'; // T2Video
+import '../screens_naraku/t2image_screen.dart'; // T2Image
+import '../screens_naraku/image2video_screen.dart'; // [AKTIF] Integrasi Image2Video
+import '../screens_naraku/t2video-plus_screen.dart'; // [AKTIF] T2Video-Plus
+import '../screens_storinema/input_script_storinema_screen.dart'; // VStorinema
+import 'input_script_screen.dart'; // VMotion
+import '../screens_veo/input_script_veo_screen.dart'; // VFootage
 
-// --- [LAMA] Impor Alur VEO (Footage) ---
-import '../screens_veo/input_script_veo_screen.dart';
-import '../models_veo/video_project_veo.dart';
-import '../view_model_veo/dashboard_veo_view_model.dart';
-import '../screens_veo/project_loading_veo_screen.dart';
-import '../screens_veo/timeline_review_veo_screen.dart';
+// --- [BARU] Impor Layar Histori ---
+import 'history_motion_screen.dart'; // Histori VMotion
+import '../screens_veo/history_footage_screen.dart'; // Histori VFootage
+import '../screens_storinema/history_storinema_screen.dart'; // Histori VStorinema
+import '../screens_naraku/history_t2video_screen.dart'; // Histori T2Video
+import '../screens_naraku/history_t2image_screen.dart'; // Histori T2Image
+import '../screens_naraku/history_image2video_screen.dart'; // [AKTIF] Histori Image2Video
+import '../screens_naraku/history_t2video-plus_screen.dart'; // [AKTIF] Histori T2Video-Plus
 
-// --- [BARU] Impor Layar Generator Short ---
-import '../screens_naraku/generator_konten_short_screen.dart';
+// --- [NARACINEMA PLUS] Impor Layar Generator & Histori Baru ---
+import '../screens_naracinema_plus/input_script_naracinema_plus_screen.dart'; 
+import '../screens_naracinema_plus/history_naracinema_plus_screen.dart';
 
-// --- [LAMA] Integrasi Token & Akun ---
+// --- [LAMA] Integrasi Token & Akun (Dipertahankan 100%) ---
 import '../providers/user_provider.dart';
 import 'user_account_screen.dart'; 
 import 'upgrade_screen.dart';
 import 'top_up_screen.dart';
 
+// --- [BARU] Impor Layar Produk/Bantuan & Rate Us ---
+import 'majiku_product.dart';
+import 'user_rate_us_screen.dart'; // [TAMBAHAN BARU UNTUK FITUR RATE US]
+
 // --- [BARU] Impor Tema Dark Modern ---
 import '../theme/app_theme.dart';
+// Penutup Blok //
 
+// No ke-2 - STATEFUL WIDGET DASHBOARD & HELPER //
+// Manajemen state untuk Dashboard dan fungsi utilitas navigasi //
 class ProjectDashboardScreen extends ConsumerStatefulWidget {
   const ProjectDashboardScreen({super.key});
 
@@ -51,292 +61,65 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
   @override
   void initState() {
     super.initState();
-    // [PERUBAHAN UX] Dialog otomatis dihapus agar tidak mengganggu.
-    // Peringatan sekarang diakses via tombol notifikasi di AppBar.
   }
 
-  // --- [FITUR BARU] MODERN ALERT DIALOG (MULTI-LANGUAGE) ---
-  void _showModernAutoDeleteDialog() {
-    // Ambil status bahasa saat dialog muncul (Snapshot)
-    final currentLocale = ref.read(appLanguageProvider);
-    final isIndo = currentLocale.languageCode == 'id';
-
-    // Helper teks lokal
-    String t(String en, String id) => isIndo ? id : en;
-
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Dismiss',
-      barrierColor: Colors.black.withOpacity(0.8), // Latar belakang gelap pekat
-      transitionDuration: const Duration(milliseconds: 400),
-      pageBuilder: (ctx, anim1, anim2) {
-        return Center(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5), // Efek Blur Mewah
-            child: Container(
-              width: MediaQuery.of(context).size.width * 0.85,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E), // Dark Surface
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: Colors.amber.withOpacity(0.3), // Glowing Border Tipis
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.amber.withOpacity(0.1),
-                    blurRadius: 20,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // 1. Ikon Peringatan Besar
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.timer_off_outlined, // Ikon Waktu Habis
-                      size: 48,
-                      color: Colors.amberAccent[400],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  
-                  // 2. Judul
-                  Text(
-                    t("Auto-Delete Warning", "Peringatan Hapus Otomatis"),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      decoration: TextDecoration.none,
-                      fontFamily: 'Poppins',
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  // 3. Pesan Body
-                  Text(
-                    t(
-                      "System will automatically delete project data every week to maintain server performance.", 
-                      "Sistem akan otomatis menghapus data proyek setiap minggu untuk menjaga performa server."
-                    ),
-                    style: TextStyle(
-                      color: Colors.grey[300],
-                      fontSize: 14,
-                      height: 1.5,
-                      decoration: TextDecoration.none,
-                      fontWeight: FontWeight.normal,
-                      fontFamily: 'Poppins',
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    t(
-                      "Immediately DOWNLOAD your generated videos to your device.",
-                      "Segera DOWNLOAD video hasil generasi Anda ke perangkat."
-                    ),
-                    style: TextStyle(
-                      color: Colors.amber[200], // Highlight warna emas
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      decoration: TextDecoration.none,
-                      fontFamily: 'Poppins',
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  
-                  // 4. Tombol Mengerti
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.deepPurple.shade800,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 4,
-                      ),
-                      child: Text(
-                        t("I Understand", "Saya Mengerti"),
-                        style: const TextStyle(
-                          fontSize: 16, 
-                          fontWeight: FontWeight.bold
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-      // Efek animasi masuk (Scale & Fade)
-      transitionBuilder: (ctx, anim1, anim2, child) {
-        return Transform.scale(
-          scale: Curves.easeOutBack.transform(anim1.value),
-          child: FadeTransition(
-            opacity: anim1,
-            child: child,
-          ),
-        );
-      },
-    );
+  // --- [HELPER] Navigasi & Coming Soon ---
+  void _navigateTo(Widget screen) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (context) => screen));
   }
 
-  // --- FUNGSI HELPER UNTUK IMAGEN (Motion) ---
-  Widget _buildStatus(BuildContext context, VideoProject project, bool isIndo) {
-    final String status = project.status ?? 'UNKNOWN';
-
-    // Helper lokal untuk status
-    String t(String en, String id) => isIndo ? id : en;
-
-    if (status == 'RENDER_COMPLETED' &&
-        project.finalVideoUrl != null &&
-        project.finalVideoUrl!.isNotEmpty) {
-      return Text(
-        t('Render Success', 'Render Berhasil'),
-        style: TextStyle(
-          color: Colors.green.shade700,
-          fontWeight: FontWeight.bold,
+  void _showComingSoon() {
+    final isIndo = ref.read(appLanguageProvider).languageCode == 'id';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isIndo ? 'Fitur ini segera hadir!' : 'This feature is coming soon!',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-      );
-    }
-
-    return Text('Status: $status');
-  }
-
-  // --- FUNGSI HELPER UNTUK VEO (Footage) ---
-  Widget _buildStatusVeo(BuildContext context, VideoProjectVeo project, bool isIndo) {
-    final String status = project.status ?? 'UNKNOWN';
-
-    // Helper lokal untuk status
-    String t(String en, String id) => isIndo ? id : en;
-
-    if (status == 'ASSETS_COMPLETE') {
-      return Text(
-        t('Assets Ready', 'Aset Siap'),
-        style: TextStyle(
-          color: Colors.green.shade700,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-    }
-
-    if (status == 'RENDER_READY') {
-      return Text(
-        t('Ready to Render', 'Siap Render'),
-        style: const TextStyle(
-          color: Colors.blueAccent,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-    }
-
-    if (status == 'RENDER_COMPLETED' &&
-        project.finalVideoUrl != null &&
-        project.finalVideoUrl!.isNotEmpty) {
-      return Text(
-        t('Render Success', 'Render Berhasil'),
-        style: TextStyle(
-          color: Colors.green.shade700,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-    }
-
-    if (status.startsWith('ERROR_')) {
-      return Text(
-        '${t('Error', 'Eror')}: $status',
-        style: const TextStyle(
-          color: Colors.redAccent,
-          fontWeight: FontWeight.bold,
-        ),
-        overflow: TextOverflow.ellipsis,
-      );
-    }
-
-    return Text('Status: $status');
-  }
-
-  // --- Helper untuk Judul Bagian ---
-  Widget _buildSectionHeader(BuildContext context, String title) {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20.0, 20.0, 16.0, 8.0),
-        child: Text(
-          title,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: Colors.white, // <-- Paksa warna putih
-              ),
-        ),
+        backgroundColor: Colors.amber.shade800,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
+// Penutup Blok //
 
+// No ke-3 - BUILD METHOD UTAMA //
+// Merender AppBar Token/Akun dan Layout Grid Menu //
   @override
   Widget build(BuildContext context) {
-    // Provider 1 (Imagen / Motion)
-    final projectsAsyncValue = ref.watch(projectsStreamProvider);
-
-    // Provider 2 (Veo / Footage)
-    final projectsVeoAsyncValue = ref.watch(projectsVeoStreamProvider);
-
-    // Provider 3 (User / Token)
     final userAsyncValue = ref.watch(firestoreUserProvider);
-
-    // [BARU] Provider Bahasa
     final currentLocale = ref.watch(appLanguageProvider);
     final isIndo = currentLocale.languageCode == 'id';
     
-    // Helper lokal untuk build utama
     String t(String en, String id) => isIndo ? id : en;
 
-    // [BARU] Menerapkan tema Dark Modern HANYA ke halaman ini
     return Theme(
       data: AppTheme.darkTheme,
       child: Scaffold(
         appBar: AppBar(
-          // [MODIFIKASI] Menambahkan Tombol Notifikasi di sebelah kiri Judul
-          title: Row(
-            mainAxisSize: MainAxisSize.min, // Agar tidak mengambil lebar penuh
-            children: [
-              // Tombol Notifikasi Kecil (Pop-up trigger)
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                icon: Icon(
-                  Icons.info_outline, // Ikon Info/Peringatan
-                  color: Colors.amber[700], // Warna Amber agar mencolok sedikit
-                  size: 20,
+          title: const SizedBox.shrink(),
+          
+          // --- [BARU] Tombol Bantuan (Kiri Atas) mengarah ke MajikuProductScreen ---
+          leading: IconButton(
+            icon: const Icon(Icons.help_outline, color: Colors.white70),
+            tooltip: t('Help & Features', 'Bantuan & Fitur'),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const MajikuProductScreen(),
                 ),
-                tooltip: t('Auto-Delete Info', 'Info Hapus Otomatis'),
-                onPressed: _showModernAutoDeleteDialog, // Panggil dialog manual
-              ),
-            ],
+              );
+            },
           ),
+          
           actions: [
             // 1. Tampilan Saldo Token
             userAsyncValue.when(
               data: (user) {
-                if (user.uid.isEmpty) {
-                  return const SizedBox.shrink();
-                }
+                if (user.uid.isEmpty) return const SizedBox.shrink();
                 return Padding(
                   padding: const EdgeInsets.only(right: 12.0),
                   child: Center(
@@ -376,8 +159,8 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
                   ),
                 );
               },
-              loading: () => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
                 child: SizedBox(
                   width: 24,
                   height: 24,
@@ -394,10 +177,8 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
             userAsyncValue.when(
               data: (user) {
                 if (user.uid.isEmpty) return const SizedBox.shrink();
-                final bool isFreeUser = (user.userTier == 'free');
                 return Row(
                   children: [
-                    // Tombol Upgrade
                     SizedBox(
                       height: 36,
                       child: ElevatedButton(
@@ -411,7 +192,7 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
                           elevation: 2,
                         ),
                         child: Text(
-                          t('Upgrade', 'Upgrade'), // Terjemahan tombol
+                          t('Upgrade', 'Upgrade'), 
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                         ),
                         onPressed: () {
@@ -422,8 +203,6 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
                       ),
                     ),
                     const SizedBox(width: 8),
-                    
-                    // Tombol +Token
                     SizedBox(
                       height: 36,
                       child: ElevatedButton(
@@ -436,17 +215,15 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
                             borderRadius: BorderRadius.circular(6),
                           ),
                         ),
-                        child: Text(
-                          '+Token', // Universal, tidak perlu translate
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        child: const Text(
+                          '+Token', 
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                         ),
-                        onPressed: isFreeUser
-                            ? null 
-                            : () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(builder: (context) => const TopUpScreen()),
-                                );
-                              },
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (context) => const TopUpScreen()),
+                          );
+                        },
                       ),
                     ),
                     const SizedBox(width: 4),
@@ -472,318 +249,298 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
           ],
         ),
 
-        // --- Body: CustomScrollView ---
-        body: CustomScrollView(
-          slivers: [
-            _buildSectionHeader(context, t('My Projects (Motion)', 'Proyek Saya (Motion)')),
-            _buildImagenProjectList(context, ref, projectsAsyncValue, isIndo),
-
-            _buildSectionHeader(context, t('My Projects (Footage)', 'Proyek Saya (Footage)')),
-            _buildVeoProjectList(context, ref, projectsVeoAsyncValue, isIndo),
-
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
-          ],
-        ),
-
-        // Footer Buttons (Warna Gelap & Teks Kontras)
-        persistentFooterButtons: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                // --- Tombol +Narrative ---
-                Expanded(
-                  child: ElevatedButton(
-                    child: Text(
-                      t('+Narrative', '+Narasi'), // Terjemahan
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      backgroundColor: Colors.teal.shade800,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => GeneratorKontenShortScreen(), 
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                
-                const SizedBox(width: 8),
-                
-                // --- Tombol +VMotion ---
-                Expanded(
-                  child: ElevatedButton(
-                    child: const Text(
-                      '+VMotion', // Nama Fitur (Brand), tidak perlu translate
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      backgroundColor: Colors.blue.shade900,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => InputScriptScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                
-                const SizedBox(width: 8),
-                
-                // --- Tombol +VFootage ---
-                Expanded(
-                  child: ElevatedButton(
-                    child: const Text(
-                      '+VFootage', // Nama Fitur (Brand), tidak perlu translate
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      backgroundColor: Colors.deepPurple.shade900,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => InputScriptVeoScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
+        // --- BODY: Layout Modern Grid ---
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF121212), Color(0xFF000000)],
             ),
           ),
-        ],
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // --- HEADER CREATE PROYEK ---
+                  Text(
+                    t('Create New Project', 'Buat Proyek Baru'),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white.withOpacity(0.9),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // --- GRID IMAGE TOMBOL (3x3) ---
+                  _buildImageButtonsGrid(),
+                  
+                  const SizedBox(height: 36),
+                  
+                  // --- [MODIFIKASI BARU] HEADER HISTORI & TOMBOL RATE US ---
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        t('Project History', 'Histori Proyek'),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white.withOpacity(0.9),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (context) => const UserRateUsScreen()),
+                          );
+                        },
+                        icon: Icon(Icons.star, color: Colors.amberAccent[400], size: 16),
+                        label: Text(
+                          t('Rate Us', 'Nilai Kami'),
+                          style: TextStyle(
+                            color: Colors.amberAccent[400],
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          backgroundColor: Colors.amberAccent.withOpacity(0.1),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            side: BorderSide(color: Colors.amberAccent.withOpacity(0.3)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // --- GRID HISTORI TOMBOL (3x3) ---
+                  _buildHistoryButtonsGrid(),
+                  
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
+// Penutup Blok //
 
-  // --- Helper Daftar Proyek IMAGEN (Motion) ---
-  Widget _buildImagenProjectList(BuildContext context, WidgetRef ref,
-      AsyncValue<List<VideoProject>> asyncValue, bool isIndo) {
-    
-    String t(String en, String id) => isIndo ? id : en;
+// No ke-4 - WIDGET BUILDER UNTUK GRID MENU //
+// Membangun Grid Proyek Baru dan Grid Histori dengan Ikon Miniatur //
 
-    return asyncValue.when(
-      loading: () => const SliverToBoxAdapter(
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(16.0),
-            child: CircularProgressIndicator(),
-          ),
-        ),
+  // --- 1. Grid Image Utama (Baris Atas - Buat Proyek) ---
+  Widget _buildImageButtonsGrid() {
+    final List<Map<String, dynamic>> menuItems = [
+      {'img': 'narrative.png', 'title': 'AUTO NARRATIVE', 'action': () => _navigateTo(GeneratorKontenShortScreen())},
+      {'img': 't2image.png', 'title': 'TEXT TO IMAGE', 'action': () => _navigateTo(T2ImageScreen())},
+      {'img': 't2video.png', 'title': 'TEXT TO VIDEO', 'action': () => _navigateTo(T2VideoScreen())},
+      {'img': 'i2video.png', 'title': 'IMAGE TO VIDEO', 'action': () => _navigateTo(Image2VideoScreen())},
+      {'img': 't2videoplus.png', 'title': 'TEXT TO VIDEOPLUS', 'action': () => _navigateTo(T2videoPlusScreen())},
+      {'img': 'vstorinema.png', 'title': 'AUTO NARA CINEMA', 'action': () => _navigateTo(InputScriptStorinemaScreen())},
+      {'img': 'vstorimotion.png', 'title': 'AUTO NARA MOTION', 'action': () => _navigateTo(InputScriptScreen())},
+      
+      // [UPDATE] Mengubah AUTO CINEMA menjadi AUTO NARACINEMA-PLUS & Menghubungkan Navigasi
+      {'img': 'vcinema.png', 'title': 'AUTO NARACINEMA-PLUS', 'action': () => _navigateTo(const InputScriptNaracinemaPlusScreen())},
+      
+      {'img': 'vmovie.png', 'title': 'AUTO MOVIE', 'action': () => _navigateTo(InputScriptVeoScreen())},
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 20.0, 
+        mainAxisSpacing: 32.0,  
+        childAspectRatio: 0.90, 
       ),
-      error: (error, stack) => SliverToBoxAdapter(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text('Error loading Motion projects: $error'),
-          ),
-        ),
-      ),
-      data: (projects) {
-        if (projects.isEmpty) {
-          return SliverToBoxAdapter(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  t('No (Motion) projects yet. Create one below!', 'Belum ada proyek (Motion). Buat baru di bawah!'),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              ),
-            ),
-          );
-        }
-        return SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
-              final VideoProject project = projects[index];
-              return Card(
-                elevation: 2,
-                color: Colors.grey[900],
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: InkWell(
-                  hoverColor: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () {
-                    final String status = project.status ?? '';
-                    if (status == 'ASSETS_COMPLETE' ||
-                        status == 'RENDER_START' ||
-                        status == 'RENDERING' ||
-                        status == 'RENDER_COMPLETED' ||
-                        status.startsWith('ERROR_')) {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              TimelineReviewScreen(projectId: project.id),
-                        ),
-                      );
-                    } else {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              ProjectLoadingScreen(projectId: project.id),
-                        ),
-                      );
-                    }
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4.0),
-                    child: ListTile(
-                      leading: const Icon(Icons.image_search, color: Colors.blueAccent),
-                      title: Text(
-                        project.title,
-                        style: const TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                      subtitle: _buildStatus(context, project, isIndo),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline,
-                            color: Colors.redAccent),
-                        tooltip: t('Delete Project', 'Hapus Proyek'),
-                        onPressed: () {
-                          ref
-                              .read(dashboardViewModelProvider)
-                              .deleteProject(project.id);
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-            childCount: projects.length,
-          ),
+      itemCount: menuItems.length,
+      itemBuilder: (context, index) {
+        final item = menuItems[index];
+        final bool isActive = item['action'] != null; 
+        
+        return _buildImageButton(
+          imagePath: 'assets/tombol-dashboard/${item['img']}',
+          title: item['title'] as String,
+          onTap: isActive ? item['action'] as VoidCallback : _showComingSoon,
+          isActive: isActive, 
         );
       },
     );
   }
 
-  // --- Helper Daftar Proyek VEO (Footage) ---
-  Widget _buildVeoProjectList(BuildContext context, WidgetRef ref,
-      AsyncValue<List<VideoProjectVeo>> asyncValue, bool isIndo) {
-    
-    String t(String en, String id) => isIndo ? id : en;
+  // --- 2. Grid Histori (Baris Bawah - Riwayat Proyek) ---
+  Widget _buildHistoryButtonsGrid() {
+    final List<Map<String, dynamic>> historyItems = [
+      {'img': 'narrative.png', 'title': 'Narrative', 'action': null},
+      {'img': 't2image.png', 'title': 'T2Image', 'action': () => _navigateTo(HistoryT2ImageScreen())},
+      {'img': 't2video.png', 'title': 'T2Video', 'action': () => _navigateTo(HistoryT2VideoScreen())},
+      {'img': 'i2video.png', 'title': 'I2Video', 'action': () => _navigateTo(HistoryImage2VideoScreen())}, 
+      {'img': 't2videoplus.png', 'title': 'T2Video+', 'action': () => _navigateTo(HistoryT2videoPlusScreen())},
+      {'img': 'vstorinema.png', 'title': 'VStorinema', 'action': () => _navigateTo(HistoryStorinemaScreen())},
+      {'img': 'vstorimotion.png', 'title': 'VStorimotion', 'action': () => _navigateTo(HistoryMotionScreen())},
+      
+      // [UPDATE] Menghubungkan Histori Naracinema-Plus
+      {'img': 'vcinema.png', 'title': 'VNaracinema+', 'action': () => _navigateTo(const HistoryNaracinemaPlusScreen())},
+      
+      {'img': 'vmovie.png', 'title': 'VMovie', 'action': () => _navigateTo(HistoryFootageScreen())},
+    ];
 
-    return asyncValue.when(
-      loading: () => const SliverToBoxAdapter(
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(16.0),
-            child: CircularProgressIndicator(),
-          ),
-        ),
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 20.0, 
+        mainAxisSpacing: 24.0,  
+        childAspectRatio: 0.90, 
       ),
-      error: (error, stack) => SliverToBoxAdapter(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text('Error loading Footage projects: $error'),
-          ),
-        ),
-      ),
-      data: (projects) {
-        if (projects.isEmpty) {
-          return SliverToBoxAdapter(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  t('No (Footage) projects yet. Create one below!', 'Belum ada proyek (Footage). Buat baru di bawah!'),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              ),
-            ),
-          );
-        }
-        return SliverList(
-          delegate: SliverChildBuilderDelegate(
-            (context, index) {
-              final VideoProjectVeo project = projects[index];
-              return Card(
-                elevation: 2,
-                color: Colors.grey[900],
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: InkWell(
-                  hoverColor: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () {
-                    final String status = project.status ?? '';
-
-                    if (status == 'ASSETS_COMPLETE' ||
-                        status == 'RENDER_READY' ||
-                        status == 'RENDER_START' ||
-                        status == 'RENDERING' ||
-                        status == 'RENDER_COMPLETED' ||
-                        status.startsWith('ERROR_')) {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              TimelineReviewVeoScreen(projectId: project.id),
-                        ),
-                      );
-                    } else {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              ProjectLoadingVeoScreen(projectId: project.id),
-                        ),
-                      );
-                    }
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4.0),
-                    child: ListTile(
-                      leading: const Icon(Icons.movie_filter, color: Colors.deepPurpleAccent),
-                      title: Text(
-                        project.title,
-                        style: const TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                      subtitle: _buildStatusVeo(context, project, isIndo),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline,
-                            color: Colors.redAccent),
-                        tooltip: t('Delete Project', 'Hapus Proyek'),
-                        onPressed: () {
-                          ref
-                              .read(dashboardVeoViewModelProvider)
-                              .deleteProject(project.id);
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-            childCount: projects.length,
-          ),
+      itemCount: historyItems.length,
+      itemBuilder: (context, index) {
+        final item = historyItems[index];
+        return _buildHistoryButton(
+          imagePath: 'assets/tombol-dashboard/${item['img']}',
+          title: item['title'] as String,
+          onTap: item['action'] != null ? item['action'] as VoidCallback : _showComingSoon,
+          isActive: item['action'] != null,
         );
       },
     );
   }
-}
+
+  // --- Komponen Satuan: Tombol Gambar Utama (Create) ---
+  Widget _buildImageButton({
+    required String imagePath, 
+    required String title, 
+    required VoidCallback onTap,
+    required bool isActive, 
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isActive ? Colors.grey[900]?.withOpacity(0.3) : Colors.grey[900]?.withOpacity(0.1), 
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isActive ? Colors.white12 : Colors.white10.withOpacity(0.02), 
+          width: 1.5
+        ), 
+        boxShadow: isActive ? [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ] : [], 
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          splashColor: isActive ? Colors.white24 : Colors.transparent, 
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Expanded(
+                child: FractionallySizedBox(
+                  widthFactor: 0.75,
+                  heightFactor: 0.85,
+                  child: Opacity(
+                    opacity: isActive ? 1.0 : 0.3, 
+                    child: Image.asset(imagePath, fit: BoxFit.contain),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12.0, left: 4, right: 4),
+                child: Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  style: TextStyle(
+                    fontSize: 11, 
+                    fontWeight: FontWeight.bold, 
+                    color: isActive ? Colors.white70 : Colors.white38 
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- Komponen Satuan: Tombol Histori (Miniatur Grid) ---
+  Widget _buildHistoryButton({
+    required String imagePath, 
+    required String title, 
+    required VoidCallback onTap, 
+    required bool isActive
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isActive ? Colors.grey[850] : Colors.grey[900]?.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isActive ? Colors.white24 : Colors.white10,
+          width: 1,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Center(
+                  child: FractionallySizedBox(
+                    widthFactor: 0.5, 
+                    heightFactor: 0.5,
+                    child: Opacity(
+                      opacity: isActive ? 1.0 : 0.3,
+                      child: Image.asset(imagePath, fit: BoxFit.contain),
+                    ),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8.0, left: 4, right: 4),
+                child: Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11, 
+                    fontWeight: FontWeight.bold,
+                    color: isActive ? Colors.white : Colors.white38,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+ }
+// Penutup Blok //

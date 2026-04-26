@@ -1,4 +1,11 @@
-// --- KATEGORI_ISOLASI_VEO: Path file: services_veo/firestore_veo_service.dart ---
+//................................................................//
+// NAMA FILE: FIRESTORE_VEO_SERVICE.DART                          //
+// PATH: LIB/SERVICES_VEO/FIRESTORE_VEO_SERVICE.DART              //
+//................................................................//
+
+//No ke-1.........................................................//
+// IMPORT & SETUP CLASS                                           //
+//................................................................//
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +25,9 @@ class FirestoreVeoService {
       : _dbInstance = db,
         _authInstance = auth;
 
+//No ke-2.........................................................//
+// READ OPERATIONS - GET & STREAM                                 //
+//................................................................//
   /// Mengambil stream real-time dari semua proyek VEO milik pengguna saat ini.
   Stream<List<VideoProjectVeo>> getProjectsForUser() {
     final user = _auth.currentUser;
@@ -111,7 +121,9 @@ class FirestoreVeoService {
     }).where((list) => list.isNotEmpty); // Opsional: pastikan list tidak kosong jika perlu
   }
 
-  // --- Operasi Update & Delete ---
+//No ke-3.........................................................//
+// WRITE OPERATIONS - UPDATE, DELETE, REGENERATE                  //
+//................................................................//
   /// Memperbarui field spesifik pada dokumen proyek VEO.
   Future<void> updateProject(String projectId, Map<String, dynamic> data) async {
     final user = _auth.currentUser;
@@ -239,14 +251,15 @@ class FirestoreVeoService {
     }
   }
 
-  // --- PEMBARUAN UTAMA: Metode addProject (VEO) ---
-  // [CLEANUP] Menghapus parameter voice karena Veo 3.1 sudah Integrated Audio
+//No ke-4.........................................................//
+// CREATE OPERATION - ADD PROJECT                                 //
+//................................................................//
   Future<String?> addProject({
     required String title,
     required String rawScript,
     required String imageStyle,
     required String aspectRatio,
-    required String language,
+    required String resolution, // [MODIFIKASI] Menerima parameter resolusi
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -273,8 +286,7 @@ class FirestoreVeoService {
         'rawScript': rawScript,
         'imageStyle': imageStyle,
         'aspectRatio': aspectRatio,
-        'language': language, // Dipertahankan untuk konteks bahasa Veo
-        // [CLEANUP] Voice field dihapus total
+        'resolution': resolution, // [MODIFIKASI] Menyimpan resolusi ke Firestore
         
         'status': 'PROCESSING_SCENE', // Langsung memicu backend (VEO)
         
@@ -289,7 +301,7 @@ class FirestoreVeoService {
         'errorDetail': null,
       });
 
-      debugPrint('✅ Project (VEO) created with ID ${docRef.id} and default visual settings. Backend auto-triggered.');
+      debugPrint('✅ Project (VEO) created with ID ${docRef.id} and resolution $resolution. Backend auto-triggered.');
       return docRef.id;
 
     } catch (e) {
@@ -314,3 +326,4 @@ class FirestoreVeoService {
     return 16 / 9;
   }
 }
+//................................................................//

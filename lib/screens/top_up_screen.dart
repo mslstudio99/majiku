@@ -45,13 +45,11 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
 
   // Opsi Pembayaran Web (Duitku)
   final Map<String, String> paymentOptionsWeb = {
-    'BC': 'BCA Virtual Account',
     'M2': 'Mandiri Virtual Account (HP)',
     'I1': 'BNI Virtual Account',
     'BR': 'BRIVA (BRI)',
     'BV': 'BSI Virtual Account',
-    'SP': 'ShopeePay (QRIS)',
-    'VC': 'Kartu Kredit (Visa/Master/JCB)',
+
   };
 
   // Helper Cek Platform

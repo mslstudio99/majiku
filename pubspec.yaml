@@ -1,88 +1,62 @@
-#..........#
-# PUBSPEC.YAML #
-# ROOT/PUBSPEC.YAML #
-#..........#
+#......................................................#
+# PUBSPEC.YAML                                         #
+#......................................................#
 
 name: majiku
 description: "Majiku — Proyek Flutter dengan integrasi Firestore dan Audio Timeline."
-publish_to: 'none' # Private project (tidak dipublikasikan ke pub.dev)
+publish_to: 'none' 
 
-version: 1.0.7+11
+# [MODIFIKASI] Versi dinaikkan untuk update rilis Play Store
+version: 2.1.2+24
 
 environment:
   sdk: '>=3.2.6 <4.0.0'
 
-#No ke-1 KELOMPOK DEPENDENCIES UTAMA#
-#...................................#
+# No ke-1: KELOMPOK DEPENDENCIES UTAMA #
+#......................................................#
 dependencies:
   flutter:
     sdk: flutter
 
-  # ------------------------------------------------------------
-  # 🔥 Firebase Core & Services
-  # ------------------------------------------------------------
   firebase_core: ^3.1.0
   firebase_auth: ^5.1.0
-  # google_sign_in: ^6.2.1  <-- DIHAPUS (Tidak digunakan lagi)
   cloud_firestore: ^5.0.1
-
-  # ------------------------------------------------------------
-  # ⚙️ State Management
-  # ------------------------------------------------------------
-  flutter_riverpod: ^2.5.1
-
-  # ------------------------------------------------------------
-  # 💰 Pembayaran (Hybrid)
-  # ------------------------------------------------------------
-  in_app_purchase: ^3.2.0  # <-- KATEGORI_FITUR_BARU: Google Play Billing (Android)
-
-  # ------------------------------------------------------------
-  # 🎧 Audio, Media, dan UI
-  # ------------------------------------------------------------
-  audioplayers: ^6.0.0      # ✅ Digunakan oleh alur IMAGEN (Tetap)
-  video_player: ^2.8.6      # <-- KATEGORI_PENYESUAIAN_VEO: Dibutuhkan oleh alur VEO
-  
-  # --- [PERBAIKAN THUMBNAIL] ---
-  # video_thumbnail: ^0.5.3 # <-- DIHAPUS (Tidak support Flutter Web)
-  # --- [AKHIR PERBAIKAN] ---
-  
-  url_launcher: ^6.3.0
-  cupertino_icons: ^1.0.8
-  flutter_colorpicker: ^1.0.3 # <-- Ditambahkan di sini
-
-  # ------------------------------------------------------------
-  # 📁 File, Path, & Network Utils
-  # ------------------------------------------------------------
-  file_picker: ^8.0.5       # Untuk dialog simpan file
-  path_provider: ^2.1.3     # Untuk direktori lokal
-  http: ^1.2.1              # Untuk unduhan file & API eksternal
   firebase_storage: ^12.4.10
   cloud_functions: ^5.6.2
-  intl: ^0.20.2
   firebase_app_check: ^0.3.2+10
 
-  # ------------------------------------------------------------
-  # 🛡️ KEAMANAN & PELACAKAN PERANGKAT (ANTI-FRAUD DEVICE BINDING)
-  # ------------------------------------------------------------
-  device_info_plus: ^10.1.0    # Untuk membaca KTP Hardware Android/iOS/Web
-  shared_preferences: ^2.2.3   # Untuk menyimpan UUID di Local Storage Web
-  uuid: ^4.5.3                 # Untuk men-generate UUID acak bagi pengguna Web
+  flutter_riverpod: ^2.5.1
+  in_app_purchase: ^3.2.0
+
+  audioplayers: ^6.0.0      
+  video_player: ^2.8.6      
+  url_launcher: ^6.3.0      
+  cupertino_icons: ^1.0.8
+  flutter_colorpicker: ^1.0.3 
+  image_picker: ^1.2.1
+
+  file_picker: ^8.0.5       
+  path_provider: ^2.1.3     
+  http: ^1.2.1              
+  intl: ^0.20.2
+  gal: ^2.3.0 # ✅ SOLUSI FINAL ANDROID: Package modern tanpa error Gradle
+
+  device_info_plus: ^10.1.0    
+  shared_preferences: ^2.2.3   
+  uuid: ^4.5.3                 
   android_id: ^0.5.1
+  universal_html: ^2.3.0
+  
+  # [TAMBAHAN BARU] Wajib untuk membaca versi aplikasi saat ini (Force Update)
+  package_info_plus: ^8.0.0
+#......................................................#
 
-  # ------------------------------------------------------------
-  # 💬 Animasi & UI Ekstra (opsional, jika kamu pakai di widget)
-  # ------------------------------------------------------------
-  # lottie: ^3.1.0
-  # animations: ^2.0.8
-#...................................#
-
-#No ke-2 KELOMPOK DEV DEPENDENCIES & KONFIGURASI#
-#...............................................#
+# No ke-2: KELOMPOK DEV DEPENDENCIES & KONFIGURASI #
+#......................................................#
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
-  # Tambahkan library untuk generate icon:
   flutter_launcher_icons: "^0.13.1"
 
 flutter:
@@ -90,20 +64,17 @@ flutter:
 
   assets:
     - assets/
-    # Pastikan Anda memiliki gambar master icon di sini:
-    # - assets/icon/icon.png 
+    - assets/icon/
+    - assets/tombol-dashboard/
 
-# ------------------------------------------------------------
-# 🎨 Konfigurasi Icon Launcher (Otomatis)
-# ------------------------------------------------------------
 flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
-  image_path: "assets/icon/icon.png" # Pastikan file gambar master ada di folder ini
+  image_path: "assets/icon/icon.png"
   min_sdk_android: 21
   web:
     generate: true
     image_path: "assets/icon/icon.png"
-    background_color: "#ffffff" # Ganti jika ingin background selain putih
+    background_color: "#ffffff"
     theme_color: "#ffffff"
-#...............................................#
+#......................................................#

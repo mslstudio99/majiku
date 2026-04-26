@@ -1,22 +1,20 @@
-// KATEGORI_UI_UPDATE NO_URUT_02
-// NAMA FILE: lib/screens/user_account_screen.dart
-// TUJUAN:
-// - Menampilkan data user.
-// - Menambahkan fitur Ganti Bahasa (Inggris <-> Indonesia).
-// - Menerapkan terjemahan pada teks UI.
+//..................................................//
+// LIB/SCREENS/USER_ACCOUNT_SCREEN.DART             //
+//..................................................//
 
+//No ke-1: IMPORTS .................................//
+//..................................................//
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart'; // Tambahan untuk eksekusi tautan
 
-// 1. Impor provider data user
 import '../providers/user_provider.dart';
-
-// 2. Impor provider auth (untuk logout)
 import '../view_model/auth_view_model.dart';
-
-// 3. Impor provider config (untuk bahasa)
 import '../providers/config_provider.dart';
+//..................................................//
 
+//No ke-2: WIDGET CLASS & HELPERS ..................//
+//..................................................//
 class UserAccountScreen extends ConsumerWidget {
   const UserAccountScreen({super.key});
 
@@ -51,6 +49,90 @@ class UserAccountScreen extends ConsumerWidget {
     );
   }
 
+  // Helper untuk membuka URL eksternal (Browser / PlayStore)
+  Future<void> _launchURL(String urlString) async {
+    final Uri url = Uri.parse(urlString);
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      debugPrint('Could not launch $urlString');
+    }
+  }
+
+  // Helper untuk UI Tombol Platform yang Modern (Solid Color & Ripple Effect)
+  Widget _buildPlatformButton({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String url,
+    required Color color,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.4), // Shadow lebih kuat untuk kesan melayang (3D)
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          )
+        ],
+      ),
+      child: Material(
+        color: color, // Latar belakang warna solid
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          splashColor: Colors.white.withOpacity(0.3), // Efek ripple putih saat disentuh
+          highlightColor: Colors.white.withOpacity(0.1), // Efek hover/tekan
+          onTap: () => _launchURL(url),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+               children: [
+                 Container(
+                   padding: const EdgeInsets.all(12),
+                   decoration: BoxDecoration(
+                     color: Colors.white.withOpacity(0.2), // Lingkaran transparan
+                     shape: BoxShape.circle,
+                   ),
+                   child: Icon(icon, color: Colors.white, size: 28),
+                 ),
+                 const SizedBox(width: 16),
+                 Expanded(
+                   child: Column(
+                     crossAxisAlignment: CrossAxisAlignment.start,
+                     children: [
+                       Text(
+                         title,
+                         style: const TextStyle(
+                           fontWeight: FontWeight.bold, 
+                           fontSize: 16,
+                           color: Colors.white, // Teks putih agar kontras
+                         ),
+                       ),
+                       const SizedBox(height: 4),
+                       Text(
+                         subtitle,
+                         style: const TextStyle(
+                           color: Colors.white70, // Teks subtitle putih agak pudar
+                           fontSize: 13
+                         ),
+                       ),
+                     ],
+                   ),
+                 ),
+                 const Icon(Icons.open_in_new, color: Colors.white70, size: 20),
+               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+//..................................................//
+
+//No ke-3: MAIN BUILD & APPBAR .....................//
+//..................................................//
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // KUNCI 1: Watch Data User
@@ -77,6 +159,10 @@ class UserAccountScreen extends ConsumerWidget {
           ),
         ],
       ),
+//..................................................//
+
+//No ke-4: STATE HANDLING (LOADING & ERROR) ........//
+//..................................................//
       body: userAsyncValue.when(
         // --- 1. State Loading ---
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -92,7 +178,10 @@ class UserAccountScreen extends ConsumerWidget {
             ),
           ),
         ),
+//..................................................//
 
+//No ke-5: STATE DATA (SUCCESS) & MAIN UI ..........//
+//..................................................//
         // --- 3. State Data (Sukses) ---
         data: (user) {
           if (user.uid.isEmpty) {
@@ -137,7 +226,7 @@ class UserAccountScreen extends ConsumerWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 16),
               
               // Kartu Pengaturan Bahasa
               Card(
@@ -155,10 +244,8 @@ class UserAccountScreen extends ConsumerWidget {
                         onChanged: (val) {
                           // Logika Ganti Bahasa
                           if (val) {
-                            // Jika Switch ON -> Set ke Indonesia
                             ref.read(appLanguageProvider.notifier).state = const Locale('id');
                           } else {
-                            // Jika Switch OFF -> Set ke English
                             ref.read(appLanguageProvider.notifier).state = const Locale('en');
                           }
                         },
@@ -167,6 +254,38 @@ class UserAccountScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+
+              const SizedBox(height: 40),
+
+              // --- Bagian Platform Eksternal (BARU) ---
+              Text(
+                _t(isIndo, 'Other Platforms', 'Platform Lainnya'),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // Tombol Versi Web (Ungu)
+              _buildPlatformButton(
+                icon: Icons.language,
+                title: _t(isIndo, 'Web Version', 'Versi Web'),
+                subtitle: 'app.majiku.net',
+                url: 'https://app.majiku.net/',
+                color: Colors.deepPurple,
+              ),
+
+              // Tombol Versi App (Google Play - Hijau)
+              _buildPlatformButton(
+                icon: Icons.shop,
+                title: _t(isIndo, 'App Version', 'Versi Aplikasi'),
+                subtitle: 'Google Play Store',
+                url: 'https://play.google.com/store/apps/details?id=com.mslstudio.majiku',
+                color: Colors.green,
+              ),
+              
+              const SizedBox(height: 20), // Spacing tambahan di paling bawah
             ],
           );
         },
@@ -174,3 +293,4 @@ class UserAccountScreen extends ConsumerWidget {
     );
   }
 }
+//..................................................//

@@ -1,19 +1,20 @@
-// [RILIS FINAL - THUMBNAIL: SD 3.5 INTEGRATION & POLICY COMPLIANCE]
-// KATEGORI_POLICY_UPDATE NO_URUT_04
-// Lokasi: lib/screens_naraku/generator_gambar_thumbnail_screen.dart
+//================================================================//
+// NAMA FILE: GENERATOR_GAMBAR_THUMBNAIL_SCREEN.DART              //
+// DIREKTORI: lib/screens_naraku/generator_gambar_thumbnail_screen.dart //
+//================================================================//
 
-import 'dart:convert'; // [PENTING] Untuk mendecode Base64 dari SD 3.5
+//No ke-1.........................................................//
+//IMPORT MODULE & DEPENDENCIES                                    //
+import 'dart:convert'; 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
 
-// [IMPORT NAVIGASI MASTER]
 import '../screens/input_script_screen.dart';
 import '../screens_veo/input_script_veo_screen.dart';
 import '../screens/project_dashboard_screen.dart';
 
-// [IMPORT GENERATOR LAIN]
 import './konsultan_ide_konten_screen.dart';
 import './generator_kisah_sejarah_screen.dart';
 import './generator_konten_umum_screen.dart';
@@ -23,39 +24,36 @@ import './generator_kisah_horor_screen.dart';
 import './generator_kisah_custom_screen.dart';
 import './generator_konten_short_screen.dart';
 
-// [IMPORT VIEWMODEL]
 import '../view_model_naraku/generator_gambar_thumbnail_view_model.dart';
-
-// [IMPORT PROVIDER & MODELS]
 import '../providers/user_provider.dart';
 import '../providers/config_provider.dart'; 
 import '../models/app_user.dart';
 import '../models/app_config.dart';
+//................................................................//
 
+//No ke-2.........................................................//
+//MAIN CLASS DECLARATION                                          //
 class GeneratorGambarThumbnailScreen extends ConsumerWidget {
   const GeneratorGambarThumbnailScreen({super.key});
 
-  final int _maxPromptLength = 15000; // SD 3.5 Large mampu memproses prompt yang lebih detail
+  final int _maxPromptLength = 15000; 
+//................................................................//
 
+//No ke-3.........................................................//
+//MAIN BUILD METHOD & SCAFFOLD                                    //
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // [STATE MANAGEMENT]
     final state = ref.watch(generatorGambarThumbnailViewModelProvider);
     final viewModel = ref.read(generatorGambarThumbnailViewModelProvider.notifier);
-
-    // [USER & CONFIG STATE]
     final AsyncValue<AppUser> userState = ref.watch(firestoreUserProvider);
     final AsyncValue<AppConfig> configState = ref.watch(appConfigProvider);
 
-    // [BAHASA]
     final currentLocale = ref.watch(appLanguageProvider);
     final isIndo = currentLocale.languageCode == 'id';
     String t(String en, String id) => isIndo ? id : en;
 
-    // [THEME SHORTCUT]
     final theme = Theme.of(context);
 
-    // [ERROR LISTENER]
     ref.listen<GeneratorGambarThumbnailState>(
         generatorGambarThumbnailViewModelProvider, (previous, next) {
       if (next.errorMessage != null && previous?.errorMessage == null) {
@@ -112,8 +110,10 @@ class GeneratorGambarThumbnailScreen extends ConsumerWidget {
       ),
     );
   }
+//................................................................//
 
-  // --- [LOGIC REAL] LAPOR KONTEN KE FIRESTORE (MENDUKUNG BASE64) ---
+//No ke-4.........................................................//
+//ACTION LOGIC (FIRESTORE REPORT)                                 //
   void _showReportDialog(BuildContext context, WidgetRef ref, String imageUrl) {
     final TextEditingController reasonController = TextEditingController();
     
@@ -148,18 +148,16 @@ class GeneratorGambarThumbnailScreen extends ConsumerWidget {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () {
-              // [FIREBASE LOGIC FIX] Menggunakan .uid pelapor
               final user = ref.read(firestoreUserProvider).valueOrNull;
               final userId = user?.uid ?? 'anonymous'; 
 
               FirebaseFirestore.instance.collection('reports').add({
-                // Jika base64 terlalu panjang, kita simpan cuplikannya saja untuk metadata Firestore
                 'content_preview': imageUrl.length > 100 ? imageUrl.substring(0, 100) : imageUrl, 
-                'contentType': 'image_sd35_base64', 
+                'contentType': 'image_imagen4_url', 
                 'reason': reasonController.text.isEmpty ? 'No reason provided' : reasonController.text,
                 'reportedAt': FieldValue.serverTimestamp(),
                 'userId': userId,
-                'feature': 'Generator Thumbnail SD 3.5', 
+                'feature': 'Generator Thumbnail Imagen 4.0', 
               }).then((_) {
                 if (context.mounted) {
                   Navigator.pop(ctx);
@@ -188,8 +186,10 @@ class GeneratorGambarThumbnailScreen extends ConsumerWidget {
       ),
     );
   }
+//................................................................//
 
-  // --- Helper Kartu Input ---
+//No ke-5.........................................................//
+//UI HELPERS (INPUT CARD & MODERN DROPDOWNS)                      //
   Widget _buildInputCard(
     BuildContext context,
     WidgetRef ref,
@@ -232,6 +232,18 @@ class GeneratorGambarThumbnailScreen extends ConsumerWidget {
         ? theme.disabledColor
         : theme.primaryColor;
 
+    final Map<String, String> styleOptions = {
+      'Hyperrealistic Style': t('Realistic', 'Realistis'),
+      '3D Render Style': t('3D Render', 'Render 3D'),
+      '2D Cartoon Style': t('2D Flat', 'Kartun 2D'),
+    };
+
+    final Map<String, String> ratioOptions = {
+      '16:9': 'Landscape (16:9)',
+      '9:16': 'Portrait (9:16)',
+      '1:1': 'Square (1:1)',
+    };
+
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -244,6 +256,7 @@ class GeneratorGambarThumbnailScreen extends ConsumerWidget {
               style: theme.textTheme.headlineSmall,
             ),
             const SizedBox(height: 20),
+            
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -268,6 +281,7 @@ class GeneratorGambarThumbnailScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 10),
+            
             TextField(
               controller: viewModel.narrativeController,
               maxLines: 4,
@@ -289,21 +303,64 @@ class GeneratorGambarThumbnailScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
-            Text(
-              t('Visual Style', 'Gaya Visual'),
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            _buildStyleOptions(context, viewModel, state, t),
-            const SizedBox(height: 20),
-            Text(
-              t('Aspect Ratio', 'Rasio Aspek'),
-              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            _buildRatioOptions(context, viewModel, state),
             const SizedBox(height: 24),
+            
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: styleOptions.containsKey(state.selectedStyle) ? state.selectedStyle : 'Hyperrealistic Style',
+                    isExpanded: true,
+                    dropdownColor: theme.cardTheme.color,
+                    decoration: InputDecoration(
+                      labelText: t('Visual Style', 'Gaya Visual'),
+                      filled: true,
+                      fillColor: theme.scaffoldBackgroundColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    items: styleOptions.entries
+                        .map((entry) => DropdownMenuItem(
+                              value: entry.key,
+                              child: Text(entry.value, overflow: TextOverflow.ellipsis),
+                            ))
+                        .toList(),
+                    onChanged: state.isLoading ? null : (value) {
+                      if (value != null) viewModel.setStyle(value);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: ratioOptions.containsKey(state.selectedRatio) ? state.selectedRatio : '16:9',
+                    isExpanded: true,
+                    dropdownColor: theme.cardTheme.color,
+                    decoration: InputDecoration(
+                      labelText: t('Aspect Ratio', 'Rasio Aspek'),
+                      filled: true,
+                      fillColor: theme.scaffoldBackgroundColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    items: ratioOptions.entries.map((entry) => DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value, overflow: TextOverflow.ellipsis),
+                        )).toList(),
+                    onChanged: state.isLoading ? null : (value) {
+                      if (value != null) viewModel.setRatio(value);
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 32),
+            
             ElevatedButton.icon(
               icon: vmIsLoading
                   ? const SizedBox(
@@ -329,62 +386,10 @@ class GeneratorGambarThumbnailScreen extends ConsumerWidget {
       ),
     );
   }
+//................................................................//
 
-  // --- Pilihan Style (HORIZONTAL SCROLL) ---
-  Widget _buildStyleOptions(
-      BuildContext context,
-      GeneratorGambarThumbnailViewModel viewModel,
-      GeneratorGambarThumbnailState state,
-      String Function(String, String) t) {
-    
-    final options = {
-      'Hyperrealistic Style': t('Realistic', 'Realistis'),
-      '3D Render Style': t('3D Render', 'Render 3D'),
-      '2D Cartoon Style': t('2D Flat', 'Kartun 2D'),
-    };
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: options.entries.map((entry) {
-          return SizedBox(
-            width: 130,
-            child: RadioListTile<String>(
-              title: Text(entry.value, style: const TextStyle(fontSize: 11)),
-              value: entry.key,
-              groupValue: state.selectedStyle,
-              onChanged: state.isLoading ? null : (val) => viewModel.setStyle(val),
-              activeColor: Theme.of(context).colorScheme.secondary,
-              contentPadding: EdgeInsets.zero,
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildRatioOptions(
-      BuildContext context,
-      GeneratorGambarThumbnailViewModel viewModel,
-      GeneratorGambarThumbnailState state) {
-    final options = ["16:9", "9:16", "1:1"];
-    return Row(
-      children: options.map((value) {
-        return Expanded(
-          child: RadioListTile<String>(
-            title: Text(value, style: const TextStyle(fontSize: 14)),
-            value: value,
-            groupValue: state.selectedRatio,
-            onChanged: state.isLoading ? null : (val) => viewModel.setRatio(val),
-            activeColor: Theme.of(context).colorScheme.secondary,
-            contentPadding: EdgeInsets.zero,
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  // --- [CRITICAL UPDATE] KARTU OUTPUT UNTUK SD 3.5 BASE64 ---
+//No ke-6.........................................................//
+//MODERN OUTPUT CARD (SESUAI DENGAN IMAGEN 4.0 URL)               //
   Widget _buildOutputCard(
     BuildContext context,
     WidgetRef ref,
@@ -394,9 +399,25 @@ class GeneratorGambarThumbnailScreen extends ConsumerWidget {
   ) {
     final theme = Theme.of(context);
     final bool hasImageUrl = state.generatedImageUrl.isNotEmpty;
+    final screenSize = MediaQuery.of(context).size;
+
+    double getAspectRatio(String ratio) {
+      try {
+        final parts = ratio.split(':');
+        if (parts.length == 2) {
+          return double.parse(parts[0]) / double.parse(parts[1]);
+        }
+      } catch (_) {}
+      return 16 / 9; 
+    }
 
     return Card(
       margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: theme.dividerColor.withOpacity(0.5), width: 1),
+      ),
+      elevation: 8,
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
@@ -406,70 +427,137 @@ class GeneratorGambarThumbnailScreen extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  t('Generated Result', 'Hasil Karya SD 3.5'),
-                  style: theme.textTheme.headlineSmall,
+                  t('Generated Result', 'Hasil Gambar Majiku AI'),
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 if (hasImageUrl)
                   IconButton(
                     icon: const Icon(Icons.flag_outlined, color: Colors.redAccent),
                     onPressed: () => _showReportDialog(context, ref, state.generatedImageUrl),
+                    tooltip: t('Report Image', 'Lapor Gambar'),
                   ),
               ],
             ),
             const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              constraints: const BoxConstraints(minHeight: 250),
-              decoration: BoxDecoration(
-                color: theme.scaffoldBackgroundColor,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: theme.dividerColor),
+            
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 500),
+              curve: Curves.easeInOut,
+              constraints: BoxConstraints(
+                minHeight: 200,
+                maxHeight: screenSize.height * 0.5,
               ),
-              child: state.isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : hasImageUrl
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: AspectRatio(
-                            aspectRatio: _parseRatio(state.selectedRatio),
-                            // [LOGIKA DUAL: BASE64 & URL]
-                            child: !state.generatedImageUrl.startsWith('http')
-                                ? Image.memory(
-                                    base64Decode(state.generatedImageUrl),
-                                    fit: BoxFit.contain,
-                                  )
-                                : Image.network(
-                                    state.generatedImageUrl,
-                                    fit: BoxFit.contain,
-                                    loadingBuilder: (ctx, child, progress) =>
-                                        progress == null ? child : const Center(child: CircularProgressIndicator()),
-                                  ),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: state.isLoading 
+                  ? LinearGradient(
+                      colors: [theme.primaryColor.withOpacity(0.3), theme.colorScheme.secondary.withOpacity(0.3)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : null,
+                color: state.isLoading ? null : theme.scaffoldBackgroundColor,
+                border: Border.all(
+                  color: state.isLoading ? theme.colorScheme.secondary.withOpacity(0.5) : theme.dividerColor
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: state.isLoading
+                    ? Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            height: 50,
+                            width: 50,
+                            child: CircularProgressIndicator(color: theme.colorScheme.secondary, strokeWidth: 3),
                           ),
-                        )
-                      : Center(
-                          child: Text(
-                            t('Your masterpiece will appear here...', 'Karya Anda akan muncul di sini...'),
-                            style: const TextStyle(fontStyle: FontStyle.italic),
+                          const SizedBox(height: 24),
+                          Text(
+                            t('AI is painting your vision...', 'AI sedang melukis visimu...'),
+                            style: TextStyle(
+                              color: theme.colorScheme.secondary, 
+                              fontWeight: FontWeight.bold, 
+                              letterSpacing: 1.2
+                            ),
                           ),
-                        ),
+                        ],
+                      )
+                    : hasImageUrl
+                        ? Center(
+                            child: AspectRatio(
+                              aspectRatio: getAspectRatio(state.selectedRatio),
+                              child: Image.network(
+                                state.generatedImageUrl,
+                                fit: BoxFit.contain,
+                                loadingBuilder: (ctx, child, progress) =>
+                                    progress == null ? child : const Center(child: CircularProgressIndicator()),
+                              ),
+                            ),
+                          )
+                        : Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.image_outlined, size: 48, color: theme.disabledColor),
+                                const SizedBox(height: 16),
+                                Text(
+                                  t('Your masterpiece will appear here...', 'Mahakarya Anda akan muncul di sini...'),
+                                  style: TextStyle(fontStyle: FontStyle.italic, color: theme.disabledColor, fontSize: 13),
+                                ),
+                              ],
+                            ),
+                          ),
+              ),
             ),
             const SizedBox(height: 20),
+            
             if (hasImageUrl)
-              Row(
+              Column(
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.save_alt),
-                      label: Text(t('Save', 'Simpan')),
-                      onPressed: viewModel.downloadImage,
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.download_rounded, size: 22),
+                    label: Text(
+                      t('Save Image', 'Simpan Gambar'),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                     ),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      minimumSize: const Size(double.infinity, 50),
+                      backgroundColor: Colors.green.shade600,
+                      foregroundColor: Colors.white,
+                      elevation: 5,
+                      shadowColor: Colors.greenAccent.withOpacity(0.4),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () {
+                      HapticFeedback.mediumImpact();
+                      viewModel.downloadImage();
+                    },
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.refresh),
-                      label: Text(t('Clear', 'Hapus')),
-                      onPressed: viewModel.clearAll,
+                  const SizedBox(height: 16),
+                  InkWell(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      viewModel.clearAll();
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.refresh_rounded, size: 18, color: Colors.white54),
+                          const SizedBox(width: 6),
+                          Text(
+                            t('Clear / Create New', 'Hapus / Buat Baru'),
+                            style: const TextStyle(color: Colors.white54, fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -479,17 +567,10 @@ class GeneratorGambarThumbnailScreen extends ConsumerWidget {
       ),
     );
   }
+//................................................................//
 
-  double _parseRatio(String ratio) {
-    final parts = ratio.split(':');
-    if (parts.length == 2) {
-      final w = double.tryParse(parts[0]) ?? 16;
-      final h = double.tryParse(parts[1]) ?? 9;
-      return w / h;
-    }
-    return 16 / 9;
-  }
-
+//No ke-7.........................................................//
+//DRAWER BUILDER                                                  //
   Widget _buildNarakuDrawer(BuildContext context, String Function(String, String) t) {
     final theme = Theme.of(context);
     void navigate(Widget s) {
@@ -522,3 +603,4 @@ class GeneratorGambarThumbnailScreen extends ConsumerWidget {
     );
   }
 }
+//................................................................//

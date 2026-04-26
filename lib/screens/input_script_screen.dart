@@ -460,6 +460,56 @@ class _InputScriptScreenState extends ConsumerState<InputScriptScreen> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
 
+      // --- [LAPISAN PERTAHANAN 1: CEK SALDO REAL-TIME SAAT KLIK] ---
+      final userAsync = ref.read(firestoreUserProvider);
+      final configAsync = ref.read(appConfigProvider);
+
+      if (userAsync.value == null || configAsync.value == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sistem belum siap. Gagal memuat data dompet.'), backgroundColor: Colors.red),
+        );
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final int currentBalance = userAsync.value!.tokenBalance;
+      final int costPerScene = configAsync.value!.costs.motion_per_scene;
+
+      // --- LOGIKA PENGAMAN BARU DI FUNGSI SUBMIT ---
+      final String text = _scriptController.text.trim();
+      final int textLength = text.length;
+
+      int sentenceCount = 0;
+      if (textLength > 0) {
+        List<String> sentences = text.split(RegExp(r'[.!?]+'));
+        sentenceCount = sentences.where((s) => s.trim().isNotEmpty).length;
+      }
+
+      int estimatedScenes = (sentenceCount / 2).ceil();
+      // [PERBAIKAN ESTIMASI] Menggunakan tolak ukur 200 karakter = 1 scene
+      int estimatedByLength = (textLength / 200).ceil();
+      
+      if (estimatedByLength > estimatedScenes) {
+        estimatedScenes = estimatedByLength;
+      }
+      if (estimatedScenes == 0 && textLength > 0) estimatedScenes = 1;
+      // --- AKHIR LOGIKA PENGAMAN BARU ---
+
+      final int requiredTokens = estimatedScenes * costPerScene;
+
+      // Jika state ternyata usang dan saldo asli tidak cukup, BATALKAN proses
+      if (currentBalance < requiredTokens) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal diproses: Saldo tidak cukup. Estimasi butuh $requiredTokens token, tersedia $currentBalance.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        setState(() => _isLoading = false);
+        return; 
+      }
+      // --- [AKHIR LAPISAN PERTAHANAN 1] ---
+
       final firestoreService = ref.read(firestoreServiceProvider);
       try {
         final String? newProjectId = await firestoreService.addProject(
@@ -521,9 +571,33 @@ class _InputScriptScreenState extends ConsumerState<InputScriptScreen> {
     final userAsync = ref.watch(firestoreUserProvider);
     final configAsync = ref.watch(appConfigProvider);
 
-    final int textLength = _scriptController.text.trim().length;
-    int estimatedScenes = (textLength / 150).ceil();
-    if (estimatedScenes == 0 && textLength > 0) estimatedScenes = 1;
+    // --- LOGIKA BARU: PREDIKSI BERDASARKAN KALIMAT ATAU KARAKTER ---
+    final String text = _scriptController.text.trim();
+    final int textLength = text.length;
+
+    int sentenceCount = 0;
+    if (textLength > 0) {
+      // Memecah teks berdasarkan titik, tanda seru, atau tanda tanya
+      List<String> sentences = text.split(RegExp(r'[.!?]+'));
+      // Menghitung potongan kalimat valid (mengabaikan spasi kosong)
+      sentenceCount = sentences.where((s) => s.trim().isNotEmpty).length;
+    }
+
+    // Kalkulasi: 1 Segmen = 2 Kalimat (dibulatkan ke atas)
+    int estimatedScenes = (sentenceCount / 2).ceil();
+    // Kalkulasi Pengaman [PERBAIKAN ESTIMASI]: 1 Segmen = 200 Karakter
+    int estimatedByLength = (textLength / 200).ceil();
+    
+    // Gunakan yang paling tinggi agar aman dari eksploitasi spam tanpa tanda baca
+    if (estimatedByLength > estimatedScenes) {
+      estimatedScenes = estimatedByLength;
+    }
+    
+    // Fallback: Jika ada teks tapi nol
+    if (estimatedScenes == 0 && textLength > 0) {
+      estimatedScenes = 1;
+    }
+    // --- AKHIR LOGIKA BARU ---
     
     int currentBalance = 0;
     int costPerScene = 0;
@@ -552,7 +626,7 @@ class _InputScriptScreenState extends ConsumerState<InputScriptScreen> {
       data: AppTheme.darkTheme,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('VMotion'),
+          title: const Text('VNaramotion'),
           actions: [
             Padding(
               padding: const EdgeInsets.only(right: 20.0),
@@ -629,7 +703,7 @@ class _InputScriptScreenState extends ConsumerState<InputScriptScreen> {
                           maxLength: 15000,
                           decoration: InputDecoration(
                             labelText: t('Paste or send your narration here..', 'Paste atau kirim narasimu kesini'),
-                            hintText: t('Paste or type your full video Narration here...', 'Tempel atau ketik naskah narasi lengkap di sini...'),
+                            hintText: t("Exp: Located in the Kedu Plain of Central Java, Borobudur Temple stands majestically as the world's largest Buddhist monument and a silent witness to the glory of the Shailendra Dynasty during the 8th and 9th centuries. Its construction is estimated to have taken decades, if not a century, finally completed around 825 AD during the reign of King Samaratungga....", "Contoh: Terletak di dataran Kedu, Jawa Tengah, Candi Borobudur berdiri megah sebagai monumen Buddhis terbesar di dunia sekaligus saksi bisu kejayaan Wangsa Syailendra pada abad ke-8 dan ke-9. Pembangunannya diperkirakan memakan waktu puluhan hingga ratusan tahun, selesai sekitar tahun 825 Masehi pada masa pemerintahan Raja Samaratungga...."),
                           ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
@@ -749,9 +823,11 @@ class _InputScriptScreenState extends ConsumerState<InputScriptScreen> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 32),
                         
                         // --- KATEGORI_UX_OTOMATIS (NO_URUT_03): UI Toggle Subtitle ---
+                        // [DINONAKTIFKAN SEMENTARA ATAS PERMINTAAN KOMANDAN]
+                        /*
                         Container(
                           decoration: BoxDecoration(
                             color: Colors.black12,
@@ -776,8 +852,9 @@ class _InputScriptScreenState extends ConsumerState<InputScriptScreen> {
                             },
                           ),
                         ),
-                        // --- AKHIR TAMBAHAN ---
                         const SizedBox(height: 32),
+                        */
+                        // --- AKHIR BLOK DINONAKTIFKAN ---
 
                         ElevatedButton.icon(
                           onPressed: canSubmit ? _submitData : null,
@@ -851,10 +928,13 @@ class _InputScriptScreenState extends ConsumerState<InputScriptScreen> {
                       children: [
                         const Icon(Icons.info_outline_rounded, color: Colors.white, size: 24),
                         const SizedBox(width: 12),
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            "Out of tokens. Upgrade or add more via the dashboard!",
-                            style: TextStyle(
+                            t(
+                              "Out of tokens. Upgrade or add more via the dashboard!",
+                              "Token habis. Upgrade atau tambah lagi via dasbor!"
+                            ),
+                            style: const TextStyle(
                               color: Colors.white, // Teks Putih
                               fontWeight: FontWeight.bold, 
                               fontSize: 14,

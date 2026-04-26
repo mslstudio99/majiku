@@ -1,18 +1,21 @@
 ﻿//................................................................//
 // NAMA FILE: GENERATOR_KONTEN_SHORT_SCREEN.DART                  //
-// PATH: LIB/SCREENS/GENERATOR_KONTEN_SHORT_SCREEN.DART           //
+// PATH: LIB/SCREENS_NARAKU/GENERATOR_KONTEN_SHORT_SCREEN.DART    //
 //................................................................//
 
 //No ke-1.........................................................//
 //IMPORT MODULE & DEPENDENCIES....................................//
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // [WAJIB] Untuk lapor konten
+import 'package:cloud_firestore/cloud_firestore.dart'; 
 
-// [IMPORT NAVIGASI]
-import '../screens/input_script_screen.dart';
-import '../screens_veo/input_script_veo_screen.dart';
+// [IMPORT NAVIGASI KE 4 APLIKASI UTAMA]
+import '../screens/input_script_screen.dart'; // VMotion
+import '../screens_veo/input_script_veo_screen.dart'; // VFootage
+import '../screens_storinema/input_script_storinema_screen.dart'; // Storinema
+import '../screens_naracinema_plus/input_script_naracinema_plus_screen.dart'; // [BARU] NaraCinema Plus
 import '../screens/project_dashboard_screen.dart';
 
 // [IMPORT GENERATOR LAIN]
@@ -45,6 +48,7 @@ class GeneratorKontenShortScreen extends ConsumerStatefulWidget {
 class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShortScreen> {
   final int _maxPromptLength = 200;
   OverlayEntry? _overlayEntry;
+  Timer? _popupTimer; // [TAMBAHAN] Timer untuk auto-hide popup
 //................................................................//
 
 //No ke-3.........................................................//
@@ -52,7 +56,6 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
   @override
   void initState() {
     super.initState();
-    // [PERBAIKAN] Langsung panggil popup tanpa flag static agar selalu muncul tiap buka halaman
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _showTutorialPopup();
     });
@@ -65,19 +68,18 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
   }
 
   void _removePopup() {
+    _popupTimer?.cancel(); // Membatalkan timer jika popup ditutup manual atau halaman di-dispose
     if (_overlayEntry != null && _overlayEntry!.mounted) {
       _overlayEntry!.remove();
       _overlayEntry = null;
     }
   }
 
-  // --- [LOGIC POP-UP TUTORIAL] ---
   void _showTutorialPopup() {
     _overlayEntry = OverlayEntry(
       builder: (context) {
         final topPadding = MediaQuery.of(context).padding.top;
         return Positioned(
-          // Posisi persis di sebelah kanan ikon garis 3 (hamburger menu)
           top: topPadding + 10,
           left: 56, 
           child: Material(
@@ -85,7 +87,7 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.green, // [PERBAIKAN] Warna background diubah menjadi hijau
+                color: Colors.green, 
                 borderRadius: BorderRadius.circular(8),
                 boxShadow: const [
                   BoxShadow(color: Colors.black45, blurRadius: 6, offset: Offset(2, 2))
@@ -97,9 +99,9 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
                   const Icon(Icons.arrow_back, color: Colors.white, size: 18),
                   const SizedBox(width: 8),
                   const Text(
-                    "Click here to view product list",
+                    "Product list",
                     style: TextStyle(
-                      color: Colors.white, // [PERBAIKAN] Tulisan dipastikan warna putih
+                      color: Colors.white, 
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
                     ),
@@ -118,7 +120,13 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
     );
 
     Overlay.of(context).insert(_overlayEntry!);
-    // [PERBAIKAN] Future.delayed (auto-hide 5 detik) dihapus agar popup selalu ON hingga user aksi
+
+    // [TAMBAHAN] Logika Timer: Hilangkan otomatis setelah 10 Detik
+    _popupTimer = Timer(const Duration(seconds: 10), () {
+      if (mounted) {
+        _removePopup();
+      }
+    });
   }
 //................................................................//
 
@@ -126,23 +134,18 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
 //MAIN BUILD METHOD & SCAFFOLD....................................//
   @override
   Widget build(BuildContext context) {
-    // [STATE LOKAL]
     final state = ref.watch(generatorKontenShortViewModelProvider);
     final viewModel = ref.read(generatorKontenShortViewModelProvider.notifier);
 
-    // [STATE GLOBAL]
     final AsyncValue<AppUser> userState = ref.watch(firestoreUserProvider);
     final AsyncValue<AppConfig> configState = ref.watch(appConfigProvider);
     
-    // [BAHASA]
     final currentLocale = ref.watch(appLanguageProvider);
     final isIndo = currentLocale.languageCode == 'id';
     String t(String en, String id) => isIndo ? id : en;
 
-    // [THEME SHORTCUTS]
     final theme = Theme.of(context);
 
-    // [LISTENER ERROR]
     ref.listen<GeneratorKontenShortState>(generatorKontenShortViewModelProvider,
         (previous, next) {
       if (next.errorMessage != null && previous?.errorMessage == null) {
@@ -156,7 +159,6 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
     });
 
     return Scaffold(
-      // [PERBAIKAN] Deteksi jika user klik menu garis tiga (drawer kebuka), lalu matikan pop-up
       onDrawerChanged: (isOpened) {
         if (isOpened) {
           _removePopup();
@@ -209,7 +211,6 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
 
 //No ke-5.........................................................//
 //ACTION LOGIC (FIRESTORE REPORT).................................//
-  // --- [LOGIC REAL] LAPOR KONTEN KE FIRESTORE ---
   void _showReportDialog(BuildContext context, WidgetRef ref, String content) {
     final TextEditingController reasonController = TextEditingController();
     
@@ -285,7 +286,6 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
 
 //No ke-6.........................................................//
 //UI HELPERS (INPUT, OUTPUT CARD & LOGIC PARSING).................//
-  // --- Helper Kartu Input ---
   Widget _buildInputCard(
       BuildContext context,
       WidgetRef ref,
@@ -460,7 +460,6 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
     );
   }
 
-  // --- Helper Kartu Output ---
   Widget _buildOutputCard(BuildContext context, WidgetRef ref,
       GeneratorKontenShortViewModel viewModel, GeneratorKontenShortState state, String Function(String, String) t) {
     
@@ -579,7 +578,6 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
     );
   }
 
-  // --- Helper: Parsing Hasil Narasi ---
   Map<String, String> _parseGeneratedContent(String rawContent, String defaultTitle) {
     if (rawContent.isEmpty) {
       return {'title': '', 'script': ''};
@@ -614,7 +612,7 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
     return {'title': rawTitle, 'script': cleanedScript};
   }
 
-  // --- Helper: Tombol Kirim -> PopupMenu ---
+  // --- [PERBAIKAN] Helper: Tombol Kirim -> PopupMenu 4 Pilihan ---
   Widget _buildSendToProjectButton(
       BuildContext context, GeneratorKontenShortState state, String Function(String, String) t) {
     
@@ -650,13 +648,23 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
         color: theme.primaryColor,
         borderRadius: BorderRadius.circular(30),
         child: PopupMenuButton<String>(
+          offset: const Offset(40, -210), // Disesuaikan lebih tinggi untuk 4 opsi
           elevation: 6,
           color: theme.cardColor,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           onSelected: (String value) {
-            final Widget targetScreen = value == 'motion'
-                ? InputScriptScreen(initialTitle: cleanTitle, initialScript: cleanScript)
-                : InputScriptVeoScreen(initialTitle: cleanTitle, initialScript: cleanScript);
+            Widget targetScreen;
+            
+            // Logika Penentuan Layar Tujuan (4 Opsi)
+            if (value == 'storinema') {
+              targetScreen = InputScriptStorinemaScreen(initialTitle: cleanTitle, initialScript: cleanScript);
+            } else if (value == 'naracinema_plus') {
+              targetScreen = InputScriptNaracinemaPlusScreen(initialTitle: cleanTitle, initialScript: cleanScript);
+            } else if (value == 'motion') {
+              targetScreen = InputScriptScreen(initialTitle: cleanTitle, initialScript: cleanScript);
+            } else {
+              targetScreen = InputScriptVeoScreen(initialTitle: cleanTitle, initialScript: cleanScript);
+            }
 
             Navigator.of(context).push(
               MaterialPageRoute(builder: (context) => targetScreen),
@@ -664,12 +672,20 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
           },
           itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
             const PopupMenuItem<String>(
+              value: 'storinema',
+              child: Text('Auto NaraCinema', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+            ),
+            const PopupMenuItem<String>(
+              value: 'naracinema_plus',
+              child: Text('Auto NaraCinema Plus', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.lightBlueAccent)),
+            ),
+            const PopupMenuItem<String>(
               value: 'motion',
-              child: Text('To VMotion', style: TextStyle(fontSize: 13)),
+              child: Text('Auto NaraMotion', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.yellowAccent)),
             ),
             const PopupMenuItem<String>(
               value: 'veo',
-              child: Text('To VFootage', style: TextStyle(fontSize: 13)),
+              child: Text('Auto Movie', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.pinkAccent)),
             ),
           ],
           child: Container(
@@ -693,7 +709,6 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
 
 //No ke-7.........................................................//
 //DRAWER BUILDER..................................................//
-  // --- Drawer (Full Original) ---
   Widget _buildNarakuDrawer(BuildContext context, String Function(String, String) t) {
     final theme = Theme.of(context);
 
@@ -781,19 +796,38 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
               style: TextStyle(color: theme.disabledColor, fontSize: 14, fontWeight: FontWeight.w600),
             ),
           ),
-
+          
+          // [PERBAIKAN] Menambahkan Storinema dan NaraCinema Plus di Drawer
           ListTile(
-            leading: const Icon(Icons.image_search, color: Colors.blueAccent),
-            title: const Text('Create Video Motion', style: TextStyle(color: Colors.white)),
+            leading: const Icon(Icons.movie_creation, color: Colors.redAccent),
+            title: const Text('Auto NaraCinema', style: TextStyle(color: Colors.white)),
             onTap: () {
               Navigator.pop(context);
-              Navigator.of(context).push(MaterialPageRoute(builder: (context) => const InputScriptScreen())); 
+              Navigator.of(context).push(MaterialPageRoute(builder: (context) => InputScriptStorinemaScreen())); 
             },
           ),
 
           ListTile(
-            leading: Icon(Icons.movie_filter, color: theme.primaryColor),
-            title: const Text('Create Video Footage', style: TextStyle(color: Colors.white)),
+            leading: const Icon(Icons.slow_motion_video, color: Colors.lightBlueAccent), // Ikon Biru Langit
+            title: const Text('Auto NaraCinema Plus', style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).push(MaterialPageRoute(builder: (context) => InputScriptNaracinemaPlusScreen())); 
+            },
+          ),
+
+          ListTile(
+            leading: const Icon(Icons.image_search, color: Colors.yellowAccent),
+            title: const Text('Auto NaraMotion', style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).push(MaterialPageRoute(builder: (context) => InputScriptScreen())); 
+            },
+          ),
+
+          ListTile(
+            leading: const Icon(Icons.movie_filter, color: Colors.pinkAccent),
+            title: const Text('Auto Movie', style: TextStyle(color: Colors.white)),
             onTap: () {
               Navigator.pop(context);
               Navigator.of(context).push(MaterialPageRoute(builder: (context) => InputScriptVeoScreen())); 

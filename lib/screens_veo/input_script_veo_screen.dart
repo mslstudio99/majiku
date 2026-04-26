@@ -23,19 +23,19 @@ import 'project_loading_veo_screen.dart';
 import '../theme/app_theme.dart';
 
 /*
-[RILIS BERSIH - INPUT SCRIPT VEO: EXPANDED LANGUAGES]
+[RILIS BERSIH - INPUT SCRIPT VEO: RESOLUTION & COMPACT LAYOUT]
 KATEGORI_FITUR_UTAMA NO_URUT_07
 Tujuan:
 - [DATA] Menerima data lemparan (Title/Script).
-- [LOGIC] Menggunakan Provider VEO (Footage).
-- [UI] Mendukung 37 Bahasa/Dialek Spesifik untuk Veo Prompting.
+- [LOGIC] Menggunakan Provider VEO (Footage). Mengirim parameter resolusi (720p/1080p).
+- [UI] Layout Compact: Style & Aspect Ratio sejajar, Resolusi di bawahnya. Bahasa dihapus (Auto-detect di backend).
 - [NEW FEATURE] Pop up animasi peringatan token habis bergaya modern (Hijau/Putih).
 - [ANTI-REGRESI] Menjaga seluruh kalkulasi token Veo (footagePerScene) dan fungsi database.
 */
 //................................................................//
 
 //No ke-2.........................................................//
-// SETUP STATE DAN MAPS OPSI BAHASA VEO                           //
+// SETUP STATE DAN MAPS OPSI VEO                                  //
 class InputScriptVeoScreen extends ConsumerStatefulWidget {
   final String initialTitle;
   final String initialScript;
@@ -59,50 +59,10 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
   String _selectedStyle = 'Realistic';
   String _selectedAspectRatio = '16:9';
   
-  // Default tetap Indonesian
-  String _selectedLanguage = 'Indonesian'; 
+  // [DATA BARU] Menggantikan Bahasa dengan Resolusi, Default 720p
+  String _selectedResolution = '720p'; 
   bool _isLoading = false;
 
-  // [DATA BARU] Daftar Bahasa Lengkap (37 Opsi)
-  static const List<String> _supportedLanguages = [
-    'Indonesian',
-    'English (US)',
-    'English (UK)',
-    'English (Australia)',
-    'English (India)',
-    'Arabic',
-    'Bengali (India)',
-    'Danish',
-    'Dutch (Netherlands)',
-    'Dutch (Belgium)',
-    'Finnish',
-    'French (France)',
-    'French (Canada)',
-    'German',
-    'Gujarati',
-    'Hindi',
-    'Italian',
-    'Japanese',
-    'Kannada',
-    'Korean',
-    'Malayalam',
-    'Mandarin Chinese',
-    'Marathi',
-    'Norwegian',
-    'Polish',
-    'Portuguese (Brazil)',
-    'Russian',
-    'Spanish (Spain)',
-    'Spanish (US)',
-    'Swedish',
-    'Tamil',
-    'Telugu',
-    'Thai',
-    'Turkish',
-    'Ukrainian',
-    'Urdu',
-    'Vietnamese',
-  ];
 //................................................................//
 
 //No ke-3.........................................................//
@@ -141,7 +101,7 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
           rawScript: _scriptController.text,
           imageStyle: _selectedStyle, 
           aspectRatio: _selectedAspectRatio,
-          language: _selectedLanguage, 
+          resolution: _selectedResolution, // [MODIFIKASI] Lempar parameter resolusi
         );
 
         if (mounted) {
@@ -189,9 +149,25 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
     final userAsync = ref.watch(firestoreUserProvider);
     final configAsync = ref.watch(appConfigProvider);
 
-    final int textLength = _scriptController.text.trim().length;
-    int estimatedScenes = (textLength / 150).ceil();
-    if (estimatedScenes == 0 && textLength > 0) estimatedScenes = 1;
+    // [PERBAIKAN ESTIMASI SEGMEN] - Kombinasi Tanda Baca & 200 Karakter
+    final String textInput = _scriptController.text.trim();
+    final int textLength = textInput.length;
+    
+    // 1. Hitung jumlah kalimat berdasarkan tanda baca (. ! ?)
+    final int sentenceCount = RegExp(r'[.!?]+').allMatches(textInput).length;
+    
+    // 2. Estimasi awal AI (Backend membagi 2 kalimat = 1 Segmen)
+    int estimatedScenes = (sentenceCount / 2).ceil();
+    
+    // 3. Fallback: Jika pengguna mengetik tanpa tanda baca, gunakan rasio 200 karakter/segmen
+    if (estimatedScenes == 0 && textLength > 0) {
+      estimatedScenes = (textLength / 200).ceil();
+    }
+    
+    // 4. Pastikan minimal selalu 1 adegan selama ada teks
+    if (estimatedScenes < 1 && textLength > 0) {
+      estimatedScenes = 1;
+    }
 
     int currentBalance = 0;
     int costPerScene = 0;
@@ -203,8 +179,15 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
       userReady = true;
     });
 
+    // [PERBAIKAN ANTI-REGRESI] Kalkulasi Token Veo Dinamis Sesuai Backend
     configAsync.whenData((config) {
-      costPerScene = config.costs.footagePerScene; // Spesifik VEO
+      int costPerSecond = config.costs.veoCosts.res720;
+      if (_selectedResolution == '1080p') {
+        costPerSecond = config.costs.veoCosts.res1080;
+      }
+      
+      // 1 adegan (scene) Veo mutlak berdurasi 8 detik
+      costPerScene = costPerSecond * 8;
       configReady = true;
     });
 
@@ -212,7 +195,7 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
     final bool hasSufficientFunds = currentBalance >= requiredTokens;
     final bool hasInput = textLength > 0;
 
-    // [FITUR BARU] Logika validasi pop up peringatan token
+    // Logika validasi pop up peringatan token
     final bool isOutOfTokens = hasInput && !hasSufficientFunds;
     final bool canSubmit = hasInput && hasSufficientFunds && !_isLoading && userReady && configReady;
 
@@ -259,7 +242,6 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
             ),
           ],
         ),
-        // [FITUR BARU] Stack UI untuk animasi Pop Up melayang
         body: SafeArea(
           child: Stack(
             children: [
@@ -297,68 +279,78 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
                           maxLength: 15000,
                           decoration: InputDecoration(
                             labelText: t('Paste or send your narration here..', 'Paste atau kirim narasi mu disini'),
-                            hintText: t('Paste or type your full video narration here...', 'Tempel atau ketik narasi lengkap di sini...'),
+                            hintText: t('Exp: Prophet Sulaiman (Solomon) was the son of Prophet Daud (David), blessed with an unparalleled kingdom on earth. He is renowned as a wise king and a prophet gifted with extraordinary miracles: the ability to speak to animals, command the jinn, and control the wind. The most popular tale is his encounter with Queen Bilqis of the Kingdom of Sheba. It began when the Hud-hud bird reported a land where the people worshiped the sun. Sulaiman sent a letter of faith, carried by the bird. The wonder peaked when Queen Bilqiss throne was transported to Sulaimans palace in the blink of an eye by a man of great knowledge. Upon seeing the magnificence of the palace—with its floor of crystal clear glass over water—the Queen surrendered herself to Allah....', 'Contoh: Nabi Sulaiman AS adalah putra Nabi Daud AS yang dianugerahi kekuasaan tak tertandingi di bumi. Beliau dikenal sebagai raja yang bijaksana dan nabi yang memiliki mukjizat luar biasa: mampu berbicara dengan hewan, memerintah bangsa jin, serta mengendalikan angin. Kisah paling populer adalah pertemuannya dengan Ratu Balqis dari Kerajaan Saba. Berawal dari laporan burung Hud-hud tentang negeri yang menyembah matahari, Sulaiman mengirim surat dakwah yang dibawa oleh burung tersebut. Keajaiban memuncak saat singgasana Ratu Balqis dipindahkan ke istana Sulaiman hanya dalam sekejap mata oleh seorang yang berilmu. Melihat kemegahan istana yang lantainya berupa kaca bening di atas air, sang ratu pun berserah diri kepada Allah....'),
                           ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
                               return t('Please enter a script for your video.', 'Mohon isi narasi video.');
                             }
                             if (value.length > 15000) {
-                              return t('Script cannot exceed 18,000 characters.', 'Narasi maksimal 18.000 karakter.');
+                              return t('Script cannot exceed 15,000 characters.', 'Narasi maksimal 15.000 karakter.');
                             }
                             return null;
                           },
                         ),
                         const SizedBox(height: 24),
 
-                        DropdownButtonFormField<String>(
-                          value: _selectedStyle,
-                          decoration: InputDecoration(
-                            labelText: t('Visual Style (Veo)', 'Gaya Visual (Veo)'),
-                          ),
-                          items: ['Realistic', 'Cartoon_3D', 'Cartoon_2D']
-                              .map((style) => DropdownMenuItem(
-                                    value: style,
-                                    child: Text(style.replaceAll('_', ' ')),
-                                  ))
-                              .toList(),
-                          onChanged: (value) {
-                            if (value != null) setState(() => _selectedStyle = value);
-                          },
-                        ),
-                        const SizedBox(height: 24),
-
-                        DropdownButtonFormField<String>(
-                            value: _selectedLanguage,
-                            decoration: InputDecoration(
-                              labelText: t('Language (for Veo Dialogue)', 'Bahasa (Dialog Veo)'),
+                        // [MODIFIKASI] Row untuk Visual Style & Aspect Ratio sejajar
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: _selectedStyle,
+                                decoration: InputDecoration(
+                                  labelText: t('Visual Style', 'Gaya Visual'),
+                                ),
+                                items: ['Realistic', 'Cartoon_3D', 'Cartoon_2D']
+                                    .map((style) => DropdownMenuItem(
+                                          value: style,
+                                          child: Text(style.replaceAll('_', ' ')),
+                                        ))
+                                    .toList(),
+                                onChanged: (value) {
+                                  if (value != null) setState(() => _selectedStyle = value);
+                                },
+                              ),
                             ),
-                            menuMaxHeight: 400, 
-                            items: _supportedLanguages
-                                .map((lang) => DropdownMenuItem(
-                                      value: lang,
-                                      child: Text(lang),
-                                    ))
-                                .toList(),
-                            onChanged: (value) {
-                              if (value != null && value != _selectedLanguage) {
-                                setState(() {
-                                  _selectedLanguage = value;
-                                });
-                              }
-                            },
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: _selectedAspectRatio,
+                                decoration: InputDecoration(
+                                  labelText: t('Aspect Ratio', 'Rasio Aspek'),
+                                ),
+                                items: const {
+                                  '16:9': '16:9',
+                                  '9:16': '9:16',
+                                  '1:1': '1:1',
+                                }
+                                    .entries
+                                    .map((entry) => DropdownMenuItem(
+                                          value: entry.value,
+                                          child: Text(entry.key),
+                                        ))
+                                    .toList(),
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() => _selectedAspectRatio = value);
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 24),
 
+                        // [DATA BARU] Dropdown Resolusi di bawahnya
                         DropdownButtonFormField<String>(
-                          value: _selectedAspectRatio,
+                          value: _selectedResolution,
                           decoration: InputDecoration(
-                            labelText: t('Aspect Ratio', 'Rasio Aspek'),
+                            labelText: t('Video Resolution', 'Resolusi Video'),
                           ),
                           items: const {
-                            'Landscape (16:9)': '16:9',
-                            'Potrait (9:16)': '9:16',
-                            'Square (1:1)': '1:1',
+                            '720p (Standard)': '720p',
+                            '1080p (High)': '1080p',
                           }
                               .entries
                               .map((entry) => DropdownMenuItem(
@@ -368,7 +360,7 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
                               .toList(),
                           onChanged: (value) {
                             if (value != null) {
-                              setState(() => _selectedAspectRatio = value);
+                              setState(() => _selectedResolution = value);
                             }
                           },
                         ),
@@ -417,7 +409,7 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
                 ),
               ),
 
-              // --- [FITUR BARU] POP UP ANIMASI TOKEN HABIS ---
+              // --- POP UP ANIMASI TOKEN HABIS ---
               AnimatedPositioned(
                 duration: const Duration(milliseconds: 400),
                 curve: Curves.easeOutBack,

@@ -264,7 +264,7 @@ class _ProjectLoadingScreenState extends ConsumerState<ProjectLoadingScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  "This process may take a few minutes. You will be automatically redirected once the assets are ready.",
+                  "This process may take a few minutes. Keep this page open until rendering begins.",
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),

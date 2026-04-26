@@ -115,20 +115,22 @@ class FirestoreService {
       final doc = await userRef.get();
       
       // 1. Ambil Nilai Config Bonus Langsung Dari Database
-      int configuredBonus = 1000; 
+      // [PERBAIKAN] Fallback default diatur ke 500 sesuai instruksi
+      int configuredBonus = 500; 
       try {
-        final configDoc = await _db.collection('config').doc('tokens_setting').get();
+        // [PERBAIKAN] Typo nama dokumen telah diperbaiki menjadi 'token_settings'
+        final configDoc = await _db.collection('config').doc('token_settings').get();
         if (configDoc.exists) {
           final data = configDoc.data();
           if (data != null && data.containsKey('free_tokens')) {
-            configuredBonus = data['free_tokens'] ?? 1000;
+            configuredBonus = data['free_tokens'] ?? 500;
           } else if (data != null && data.containsKey('costs')) {
             final costsData = data['costs'] as Map<String, dynamic>;
-            configuredBonus = costsData['free_tokens'] ?? 1000;
+            configuredBonus = costsData['free_tokens'] ?? 500;
           }
         }
       } catch (e) {
-        debugPrint("⚠️ FirestoreService: Gagal membaca config tokens_setting: $e");
+        debugPrint("⚠️ FirestoreService: Gagal membaca config token_settings: $e");
       }
 
       // 2. Persiapan Data (Indikator Mutlak + Catatan Kosmetik)
