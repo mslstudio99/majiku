@@ -1,8 +1,9 @@
-// PROJECT_DASHBOARD_SCREEN.DART //
-// LIB/SCREENS/PROJECT_DASHBOARD_SCREEN.DART //
-// DASHBOARD UTAMA //
+//......................................................//
+// LIB/SCREENS/PROJECT_DASHBOARD_SCREEN.DART            //
+// DASHBOARD UTAMA                                      //
+//......................................................//
 
-// No ke-1 - IMPOR DEPENDENSI & LAYAR TERKAIT //
+// No ke-1 - IMPOR DEPENDENSI & LAYAR TERKAIT           //
 // Konfigurasi provider, layar generator, histori, dan tema //
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,6 +34,10 @@ import '../screens_naraku/history_t2video-plus_screen.dart'; // [AKTIF] Histori 
 import '../screens_naracinema_plus/input_script_naracinema_plus_screen.dart'; 
 import '../screens_naracinema_plus/history_naracinema_plus_screen.dart';
 
+// --- [DAILY FREE] Impor Layar Generator Gratis Harian ---
+import '../screens_daily_free/free_t2image_screen.dart';
+import '../screens_daily_free/free_t2speech_screen.dart'; // [BARU] Import Free T2Speech
+
 // --- [LAMA] Integrasi Token & Akun (Dipertahankan 100%) ---
 import '../providers/user_provider.dart';
 import 'user_account_screen.dart'; 
@@ -47,7 +52,7 @@ import 'user_rate_us_screen.dart'; // [TAMBAHAN BARU UNTUK FITUR RATE US]
 import '../theme/app_theme.dart';
 // Penutup Blok //
 
-// No ke-2 - STATEFUL WIDGET DASHBOARD & HELPER //
+// No ke-2 - STATEFUL WIDGET DASHBOARD & HELPER         //
 // Manajemen state untuk Dashboard dan fungsi utilitas navigasi //
 class ProjectDashboardScreen extends ConsumerStatefulWidget {
   const ProjectDashboardScreen({super.key});
@@ -86,8 +91,8 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
   }
 // Penutup Blok //
 
-// No ke-3 - BUILD METHOD UTAMA //
-// Merender AppBar Token/Akun dan Layout Grid Menu //
+// No ke-3 - BUILD METHOD UTAMA                         //
+// Merender AppBar Token/Akun dan Layout Grid Menu      //
   @override
   Widget build(BuildContext context) {
     final userAsyncValue = ref.watch(firestoreUserProvider);
@@ -284,7 +289,7 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
                   
                   const SizedBox(height: 36),
                   
-                  // --- [MODIFIKASI BARU] HEADER HISTORI & TOMBOL RATE US ---
+                  // --- HEADER HISTORI & TOMBOL RATE US ---
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -330,6 +335,23 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
                   // --- GRID HISTORI TOMBOL (3x3) ---
                   _buildHistoryButtonsGrid(),
                   
+                  const SizedBox(height: 36),
+
+                  // --- [BARU] HEADER DAILY FREE ---
+                  Text(
+                    t('Daily Free', 'Gratis Harian'),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.amberAccent[400], // Warna emas untuk menarik perhatian
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // --- [BARU] GRID DAILY FREE TOMBOL ---
+                  _buildDailyFreeButtonsGrid(),
+
                   const SizedBox(height: 32),
                 ],
               ),
@@ -341,7 +363,7 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
   }
 // Penutup Blok //
 
-// No ke-4 - WIDGET BUILDER UNTUK GRID MENU //
+// No ke-4 - WIDGET BUILDER UNTUK GRID MENU             //
 // Membangun Grid Proyek Baru dan Grid Histori dengan Ikon Miniatur //
 
   // --- 1. Grid Image Utama (Baris Atas - Buat Proyek) ---
@@ -354,10 +376,7 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
       {'img': 't2videoplus.png', 'title': 'TEXT TO VIDEOPLUS', 'action': () => _navigateTo(T2videoPlusScreen())},
       {'img': 'vstorinema.png', 'title': 'AUTO NARA CINEMA', 'action': () => _navigateTo(InputScriptStorinemaScreen())},
       {'img': 'vstorimotion.png', 'title': 'AUTO NARA MOTION', 'action': () => _navigateTo(InputScriptScreen())},
-      
-      // [UPDATE] Mengubah AUTO CINEMA menjadi AUTO NARACINEMA-PLUS & Menghubungkan Navigasi
       {'img': 'vcinema.png', 'title': 'AUTO NARACINEMA-PLUS', 'action': () => _navigateTo(const InputScriptNaracinemaPlusScreen())},
-      
       {'img': 'vmovie.png', 'title': 'AUTO MOVIE', 'action': () => _navigateTo(InputScriptVeoScreen())},
     ];
 
@@ -385,7 +404,7 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
     );
   }
 
-  // --- 2. Grid Histori (Baris Bawah - Riwayat Proyek) ---
+  // --- 2. Grid Histori (Baris Tengah - Riwayat Proyek) ---
   Widget _buildHistoryButtonsGrid() {
     final List<Map<String, dynamic>> historyItems = [
       {'img': 'narrative.png', 'title': 'Narrative', 'action': null},
@@ -395,10 +414,7 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
       {'img': 't2videoplus.png', 'title': 'T2Video+', 'action': () => _navigateTo(HistoryT2videoPlusScreen())},
       {'img': 'vstorinema.png', 'title': 'VStorinema', 'action': () => _navigateTo(HistoryStorinemaScreen())},
       {'img': 'vstorimotion.png', 'title': 'VStorimotion', 'action': () => _navigateTo(HistoryMotionScreen())},
-      
-      // [UPDATE] Menghubungkan Histori Naracinema-Plus
       {'img': 'vcinema.png', 'title': 'VNaracinema+', 'action': () => _navigateTo(const HistoryNaracinemaPlusScreen())},
-      
       {'img': 'vmovie.png', 'title': 'VMovie', 'action': () => _navigateTo(HistoryFootageScreen())},
     ];
 
@@ -424,7 +440,39 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
     );
   }
 
-  // --- Komponen Satuan: Tombol Gambar Utama (Create) ---
+  // --- 3. [BARU] Grid Daily Free (Baris Bawah) ---
+  Widget _buildDailyFreeButtonsGrid() {
+    final List<Map<String, dynamic>> freeItems = [
+      {'img': 'freet2image.png', 'title': 'FREE T2IMAGE', 'action': () => _navigateTo(const FreeT2ImageScreen())}, // [UPDATE] Aset gambar
+      {'img': 'freet2speech.png', 'title': 'FREE T2SPEECH', 'action': () => _navigateTo(const FreeT2SpeechScreen())}, // [BARU] Fitur suara
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 20.0, 
+        mainAxisSpacing: 32.0,  
+        childAspectRatio: 0.90, 
+      ),
+      itemCount: freeItems.length,
+      itemBuilder: (context, index) {
+        final item = freeItems[index];
+        final bool isActive = item['action'] != null; 
+        
+        // Menggunakan UI tombol Create yang lebih menonjol agar menarik
+        return _buildImageButton(
+          imagePath: 'assets/tombol-dashboard/${item['img']}',
+          title: item['title'] as String,
+          onTap: isActive ? item['action'] as VoidCallback : _showComingSoon,
+          isActive: isActive, 
+        );
+      },
+    );
+  }
+
+  // --- Komponen Satuan: Tombol Gambar Utama (Create & Free) ---
   Widget _buildImageButton({
     required String imagePath, 
     required String title, 
@@ -542,5 +590,5 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
       ),
     );
   }
- }
+}
 // Penutup Blok //

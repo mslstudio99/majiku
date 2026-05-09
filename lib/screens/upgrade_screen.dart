@@ -502,9 +502,10 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
           final topupStandard = config.getPackage('topup_standard');
           final topupPro = config.getPackage('topup_pro');
 
-          int basicAmount = basic?.amount ?? 95000;
-          int stdAmount = standard?.amount ?? 279000;
-          int proAmount = pro?.amount ?? 2700000;
+          // PERBAIKAN: Fallback amount disesuaikan mutlak dengan Firestore terbaru
+          int basicAmount = basic?.amount ?? 55000;
+          int stdAmount = standard?.amount ?? 194000;
+          int proAmount = pro?.amount ?? 475000;
 
           int basicTopup = topupBasic?.amount ?? 95000;
           int stdTopup = topupStandard?.amount ?? 93000;
@@ -570,7 +571,8 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                   title: 'Basic',
                   subtitle: t('Essential features for beginners', 'Fitur esensial untuk pemula'),
                   dbAmount: basicAmount, 
-                  initialTokens: '${numberFormat.format(basic?.tokens ?? 10000)} TM',
+                  // PERBAIKAN: Fallback tokens disesuaikan
+                  initialTokens: '${numberFormat.format(basic?.tokens ?? 5000)} TM',
                   topUpPrice: fmt(basicTopup), 
                   icon: Icons.rocket_launch_outlined,
                   primaryColor: const Color(0xFFB0BEC5), 
@@ -592,7 +594,8 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                   title: 'Standard',
                   subtitle: t('Perfect balance for active creators', 'Keseimbangan sempurna kreator aktif'),
                   dbAmount: stdAmount, 
-                  initialTokens: '${numberFormat.format(standard?.tokens ?? 30000)} TM',
+                  // PERBAIKAN: Fallback tokens disesuaikan
+                  initialTokens: '${numberFormat.format(standard?.tokens ?? 20000)} TM',
                   topUpPrice: fmt(stdTopup),
                   icon: Icons.bolt_rounded,
                   primaryColor: const Color(0xFF00E5FF), 
@@ -615,7 +618,8 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                   title: 'Professional',
                   subtitle: t('Ultimate power for professionals', 'Kekuatan penuh untuk profesional'),
                   dbAmount: proAmount, 
-                  initialTokens: '${numberFormat.format(pro?.tokens ?? 300000)} TM',
+                  // PERBAIKAN: Fallback tokens disesuaikan
+                  initialTokens: '${numberFormat.format(pro?.tokens ?? 50000)} TM',
                   topUpPrice: fmt(proTopup),
                   icon: Icons.diamond_outlined,
                   primaryColor: const Color(0xFFFFD700), 
