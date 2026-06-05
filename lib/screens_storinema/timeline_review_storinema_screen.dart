@@ -444,7 +444,6 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
 
 //No ke-5.........................................................//
 // BUILD UI, WIDGETS & GATEKEEPER LOGIC                           //
-  
   Widget _buildVideoViewer(String? mediaUrl, {Key? key}) {
     if (mediaUrl == null || mediaUrl.isEmpty) {
       return Tooltip(
@@ -470,7 +469,6 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
     }
   }
 
-  // [PERBAIKAN ANTI-REGRESI]: Menambahkan parameter isWaitingForUrl
   Widget _buildRenderingOverlay(int secondsRemaining, bool hasValidStartTime, bool isWaitingForUrl) {
     return Positioned.fill(
       child: AbsorbPointer(
@@ -488,7 +486,6 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
                 children: [
                   const CircularProgressIndicator(color: Colors.blueAccent), 
                   const SizedBox(height: 16),
-                  // [PERBAIKAN]: Teks dinamis agar user tidak bingung saat fase akhir
                   Text(isWaitingForUrl ? "Menyiapkan Link Download..." : "Rendering Final Video...", style: const TextStyle(fontSize: 16, color: Colors.white)),
                   const SizedBox(height: 10),
                   Text("Auto Cancel in: ${_formatDuration(secondsRemaining)}", style: const TextStyle(fontSize: 14, color: Colors.white70)),
@@ -585,7 +582,6 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
           data: (project) {
             if (project == null) return const Center(child: Text("Error: Proyek gagal dimuat.", style: TextStyle(color: Colors.red)));
 
-            // --- [PERBAIKAN ANTI-NYANGKUT] ---
             if (_isTriggeringRender && (
                 project.status == 'RENDERING' || 
                 project.status == 'RENDER_START' || 
@@ -596,7 +592,6 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
                 if (mounted) setState(() => _isTriggeringRender = false); 
               });
             }
-            // ---------------------------------
             
             final bool isRenderSuccess = project.status == 'RENDER_COMPLETED' && project.finalVideoUrl != null && project.finalVideoUrl!.isNotEmpty;
             final bool isRenderComplete = isRenderSuccess;
@@ -613,7 +608,6 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
               canRender = false;
             }
             
-            // --- [PERBAIKAN KENDALA TOMBOL TELAT MUNCUL] ---
             final bool isWaitingForUrl = project.status == 'RENDER_COMPLETED' && 
                                          (project.finalVideoUrl == null || project.finalVideoUrl!.isEmpty);
 
@@ -621,10 +615,9 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
               project.status == 'RENDER_READY' || 
               project.status == 'RENDER_START' || 
               project.status == 'RENDERING' || 
-              isWaitingForUrl || // Mencegah loading hilang sebelum URL masuk
+              isWaitingForUrl || 
               _isTriggeringRender
             );
-            // -----------------------------------------------
 
             bool hasValidStartTime = false;
             int secondsRemainingForOverlay = _renderTimeoutDuration;
@@ -772,9 +765,32 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
                           }
 
                           if (scenes.isEmpty) return const Center(child: Text("Generating scenes..."));
+
+                          // --- [SUNTIKAN BANNER ORANYE PINTAR] ---
+                          final bool hasErrorScenes = scenes.any((s) => s.status != null && s.status!.startsWith('ERROR'));
+                          final bool showWarningBanner = (project.status == 'ASSETS_NEED_REFINEMENT' || hasErrorScenes) && !_isTriggeringRender && !isProjectRendering;
                           
                           return Column(
                             children: [
+                              if (showWarningBanner)
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  color: Colors.orange.shade800, // Warna Oranye Sesuai Permintaan
+                                  child: const Row(
+                                    children: [
+                                      Icon(Icons.warning_amber_rounded, color: Colors.white, size: 28),
+                                      SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          "Beberapa scene gagal diproses. Silakan tekan tombol Regenerate (Oranye) pada scene yang bermasalah di bawah ini.",
+                                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              // ----------------------------------------
                               Expanded(
                                 child: ListView.builder(
                                   itemCount: scenes.length,
@@ -835,7 +851,24 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
                                               ),
                                               Visibility(
                                                 visible: showRegenerateButton,
-                                                child: IconButton(icon: Icon(Icons.refresh, color: canRegenerate ? Colors.blueAccent : Colors.grey[400]), onPressed: !canRegenerate ? null : () { _stopSequencePlayback(); _showRegenerateDialog(scene); }),
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    color: canRegenerate ? Colors.orange.withOpacity(0.2) : Colors.transparent,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: IconButton(
+                                                    tooltip: 'Regenerate Video AI',
+                                                    icon: Icon(
+                                                      Icons.refresh, 
+                                                      color: canRegenerate ? Colors.deepOrange : Colors.grey[400], 
+                                                      size: 26, 
+                                                    ), 
+                                                    onPressed: !canRegenerate ? null : () { 
+                                                      _stopSequencePlayback(); 
+                                                      _showRegenerateDialog(scene); 
+                                                    }
+                                                  ),
+                                                ),
                                               ),
                                               const SizedBox(width: 8),
                                               IconButton(icon: const Icon(Icons.flag_outlined, color: Colors.redAccent, size: 20), onPressed: () => _showSceneReportDialog(scene, cardVideoUrl)),

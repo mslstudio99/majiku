@@ -411,6 +411,9 @@ class FirestoreService {
     required String language,
     required String voice,
     required bool showSubtitles, 
+    // --- [TAMBAHAN TERBARU] Parameter Toggle Overlay ---
+    required bool useAssetOverlayEffects,
+    // ---------------------------------------------------
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -419,14 +422,18 @@ class FirestoreService {
     }
 
     try {
+      // Menyuntikkan nilai showSubtitles dan useAssetOverlayEffects ke dalam state bawaan
       final defaultVisualSettings = VisualSettings.defaultSettingsWithTitle(title)
-          .copyWith(showSubtitles: showSubtitles);
+          .copyWith(
+            showSubtitles: showSubtitles,
+            useAssetOverlayEffects: useAssetOverlayEffects,
+          );
       
       final double aspectRatioValue = _calculateAspectRatioFromString(aspectRatio);
       
       final visualSettingsMap = defaultVisualSettings.toJson(aspectRatioValue);
 
-      debugPrint("addProject: Creating new project with title: $title");
+      debugPrint("addProject: Creating new project with title: $title (Overlay: $useAssetOverlayEffects)");
       final docRef = await _db.collection('projects').add({
         'userId': user.uid,
         'title': title.isNotEmpty ? title : "Untitled Project",

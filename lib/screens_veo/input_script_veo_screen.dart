@@ -57,7 +57,7 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
   final _formKey = GlobalKey<FormState>();
 
   String _selectedStyle = 'Realistic';
-  String _selectedAspectRatio = '16:9';
+  String _selectedAspectRatio = '19:6';
   
   // [DATA BARU] Menggantikan Bahasa dengan Resolusi, Default 720p
   String _selectedResolution = '720p'; 

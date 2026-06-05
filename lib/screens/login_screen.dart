@@ -168,15 +168,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                     // Validasi keren diletakkan di sini
                     setState(() {
+                      // Reset state error sebelum validasi baru
+                      _emailErrorMsg = null;
+                      _passwordErrorMsg = null;
+
                       if (email.isEmpty) {
                         _emailErrorMsg = t('Enter active email!', 'Isi email aktif!');
+                      } else {
+                        // [MODIFIKASI KRITIS]: Filter Whitelist Domain Global untuk mencegah scam
+                        final allowedDomains = ['@gmail.com', '@outlook.com', '@hotmail.com', '@icloud.com', '@yahoo.com'];
+                        final lowerEmail = email.toLowerCase();
+                        final isValidDomain = allowedDomains.any((domain) => lowerEmail.endsWith(domain));
+
+                        if (!isValidDomain) {
+                          _emailErrorMsg = t(
+                            'Only Gmail, Outlook, iCloud, & Yahoo allowed!', 
+                            'Hanya Gmail, Outlook, iCloud, & Yahoo diizinkan!'
+                          );
+                        }
                       }
+
                       if (pass.isEmpty) {
                         _passwordErrorMsg = t('Enter password!', 'Isi kata sandi!');
                       }
                     });
 
-                    if (email.isNotEmpty && pass.isNotEmpty) {
+                    // [ANTI-REGRESI]: Eksekusi pendaftaran hanya jika tidak ada pesan error sama sekali
+                    if (_emailErrorMsg == null && _passwordErrorMsg == null) {
                       ref.read(authViewModelProvider.notifier).createUserWithEmail(email, pass);
                     }
                   },
@@ -217,7 +235,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Color(0xFFFFD700), width: 2.5),
+              borderSide: const BorderSide(color: Color(0xFFFFD700), width: 2.5),
             ),
           ),
         ),

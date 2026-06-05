@@ -834,7 +834,24 @@ class _TimelineReviewNaracinemaPlusScreenState extends ConsumerState<TimelineRev
                                               ),
                                               Visibility(
                                                 visible: showRegenerateButton,
-                                                child: IconButton(icon: Icon(Icons.refresh, color: canRegenerate ? Colors.blueAccent : Colors.grey[400]), onPressed: !canRegenerate ? null : () { _stopSequencePlayback(); _showRegenerateDialog(scene); }),
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    color: canRegenerate ? Colors.orange.withOpacity(0.2) : Colors.transparent,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: IconButton(
+                                                    tooltip: 'Regenerate Video AI',
+                                                    icon: Icon(
+                                                      Icons.refresh, 
+                                                      color: canRegenerate ? Colors.deepOrange : Colors.grey[400], 
+                                                      size: 26, 
+                                                    ), 
+                                                    onPressed: !canRegenerate ? null : () { 
+                                                      _stopSequencePlayback(); 
+                                                      _showRegenerateDialog(scene); 
+                                                    }
+                                                  ),
+                                                ),
                                               ),
                                               const SizedBox(width: 8),
                                               IconButton(icon: const Icon(Icons.flag_outlined, color: Colors.redAccent, size: 20), onPressed: () => _showSceneReportDialog(scene, cardVideoUrl)),

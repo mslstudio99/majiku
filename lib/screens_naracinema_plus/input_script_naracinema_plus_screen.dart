@@ -41,7 +41,7 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
   final _formKey = GlobalKey<FormState>();
   
   String _selectedStyle = 'Realistic';
-  String _selectedAspectRatio = '9:16';
+  String _selectedAspectRatio = '16:9';
   
   String _selectedLanguage = 'Indonesian'; 
   static const String _defaultIndonesianVoice = 'id-ID-Chirp3-HD-Achernar';
@@ -52,7 +52,7 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
   String _selectedResolution = '720p'; // [VEO 3.1] Default diubah ke 720p
 
   // [PERBAIKAN FITUR BARU]: Opsi Level Biaya (Low / Standard)
-  String _selectedCostLevel = 'Standard';
+  String _selectedCostLevel = 'Low';
 
   // ==========================================
   // OPSI SUARA (LENGKAP)
@@ -636,7 +636,7 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
                         TextFormField(
                           controller: _scriptController,
                           maxLines: 10,
-                          maxLength: 15000,
+                          maxLength: 18000,
                           decoration: InputDecoration(
                             labelText: t('Paste or send your narration here..', 'Paste atau kirim narasimu kesini'),
                             hintText: t('Exp: In the heart of Sherwood Forest lived a legend known as Robin Hood. He was more than just an outlaw; he was a symbol of resistance against tyranny. Alongside his loyal band of Merry Men, Robin carried out a timeless mission of justice: robbing from the corrupt rich to give back to the oppressed poor....', 'Contoh: Di kedalaman Hutan Sherwood, hiduplah seorang legenda bernama Robin Hood. Ia bukan sekadar pencuri, melainkan simbol perlawanan terhadap tirani. Bersama kelompok setianya, Merry Men, Robin menjalankan misi keadilan yang tak lekang oleh waktu: merampas harta dari kaum kaya yang korup untuk dibagikan kepada rakyat miskin yang tertindas....'),
@@ -645,7 +645,7 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
                             if (value == null || value.trim().isEmpty) {
                               return t('Please enter a Narration for your video.', 'Mohon isi naskah narasi.');
                             }
-                            if (value.length > 15000) {
+                            if (value.length > 18000) {
                               return t('Narration cannot exceed 15,000 characters.', 'Naskah maksimal 15.000 karakter.');
                             }
                             return null;

@@ -77,7 +77,10 @@ int _getStageIndexFromStatus(String? status) {
     }
   }
 
+  // [PERBAIKAN ANTI-REGRESI UI]: Menambahkan ASSETS_NEED_REFINEMENT agar animasi Stepper 
+  // langsung melompat ke garis finish 100% sebelum pindah layar, sehingga user tidak merasa nyangkut.
   if (status == "ASSETS_COMPLETE" || 
+      status == "ASSETS_NEED_REFINEMENT" || 
       status == "CREATE_RENDER_PACKET" || 
       status == "RENDER_READY" || 
       status == "RENDER_START" || 
@@ -87,7 +90,7 @@ int _getStageIndexFromStatus(String? status) {
   }
 
   if (status.startsWith("ERROR_")) {
-    return -2; // Indikator khusus untuk trigger redirect pada error
+    return -2; // Indikator khusus untuk trigger redirect pada error fatal
   }
   
   return 0; 
@@ -166,18 +169,21 @@ class _ProjectLoadingStorinemaScreenState extends ConsumerState<ProjectLoadingSt
         final String? currentStatus = project.status;
         final int currentStageIndex = _getStageIndexFromStatus(currentStatus);
 
-        // LOGIKA AUTO-REDIRECT 1: Aset Lengkap atau sedang proses render lanjutan
+        // [PERBAIKAN LOGIKA] LOGIKA AUTO-REDIRECT 1: Aset Lengkap atau Butuh Regenerasi Manual
         final bool isReadyToProceed = currentStatus == "ASSETS_COMPLETE" || 
+                                      currentStatus == "ASSETS_NEED_REFINEMENT" || // [SUNTIKAN PENGAMAN BARU]
                                       currentStatus == "CREATE_RENDER_PACKET" || 
                                       currentStatus == "RENDER_READY" || 
                                       currentStatus == "RENDER_START" || 
                                       currentStatus == "RENDERING" || 
                                       currentStatus == "RENDER_COMPLETED";
 
-        // LOGIKA AUTO-REDIRECT 2: Terjadi Error (Directly to Timeline Review)
-        final bool isErrorDetected = currentStatus?.startsWith("ERROR_") ?? false;
+        // [PERBAIKAN LOGIKA] LOGIKA AUTO-REDIRECT 2: Terjadi Error Fatal Proyek (Misal: Ekstraksi LLM Gagal total)
+        // Kita tidak lagi menggunakan startsWith("ERROR_") agar tidak bocor saat proses video Bytedance.
+        final bool isFatalError = currentStatus == "ERROR_SCENE" || 
+                                  currentStatus == "ERROR_TRIGGER";
 
-        if (isReadyToProceed || isErrorDetected) {
+        if (isReadyToProceed || isFatalError) {
           _triggerAutoRedirect();
         }
 

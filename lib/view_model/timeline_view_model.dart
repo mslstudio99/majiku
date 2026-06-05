@@ -339,8 +339,14 @@ Future<void> prepareAndSaveRenderPacket(WidgetRef ref, String projectId) async {
     
     final double aspectRatioValue = _calculateAspectRatioFromString(project.aspectRatio);
 
+    // [PERBAIKAN ERROR]: Kita ambil flag dari visualSettings, BUKAN dari project.
+    final bool enableOverlay = visualSettings.useAssetOverlayEffects; 
+
     final Map<String, dynamic> renderPacket = {
-      'styleSettings': visualSettings.toJson(aspectRatioValue),
+      'styleSettings': {
+          ...visualSettings.toJson(aspectRatioValue),
+          'useAssetOverlayEffects': enableOverlay, 
+      },
       'timingData': {
         'scenes': processedTimeline.toJson()['scenes'],
         'introDuration': processedTimeline.introDuration,
@@ -361,6 +367,7 @@ Future<void> prepareAndSaveRenderPacket(WidgetRef ref, String projectId) async {
   }
 }
 
+// [PERBAIKAN ERROR]: Fungsi ini dikembalikan agar tidak Error: Method not found
 double _calculateAspectRatioFromString(String? ratioString) {
   if (ratioString == null || ratioString.isEmpty) return 16 / 9;
   final parts = ratioString.split(':');

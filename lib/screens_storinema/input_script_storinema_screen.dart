@@ -40,7 +40,7 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
   final _formKey = GlobalKey<FormState>();
   
   String _selectedStyle = 'Realistic';
-  String _selectedAspectRatio = '9:16';
+  String _selectedAspectRatio = '16:9';
   
   String _selectedLanguage = 'Indonesian'; 
   static const String _defaultIndonesianVoice = 'id-ID-Chirp3-HD-Achernar';

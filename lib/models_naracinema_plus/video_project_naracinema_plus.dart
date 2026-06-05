@@ -17,7 +17,9 @@ class VideoProjectNaracinemaPlus {
   final String imageStyle;
   final String aspectRatio;
   final String language;
-  final String? resolution; // [VE0 3.1] Menampung resolusi 720p / 1080p
+  final String? resolution; 
+  final String? voice;     // [PERBAIKAN]: Menambah properti voice
+  final String? costLevel; // [PERBAIKAN]: Menambah properti costLevel
   final List<Map<String, dynamic>> identifiedCharacters;
   final String? status;
   final Timestamp createdAt;
@@ -36,6 +38,8 @@ class VideoProjectNaracinemaPlus {
     required this.aspectRatio,
     required this.language,
     this.resolution,
+    this.voice,     // [PERBAIKAN]
+    this.costLevel, // [PERBAIKAN]
     required this.identifiedCharacters,
     this.status,
     required this.createdAt,
@@ -78,10 +82,12 @@ class VideoProjectNaracinemaPlus {
       userId: data['userId'] as String? ?? '',
       title: data['title'] as String? ?? 'Untitled Naracinema Plus Project',
       rawScript: data['rawScript'] as String? ?? '',
-      imageStyle: data['imageStyle'] as String? ?? 'naracinema_plus_default', // Konsisten huruf kecil
+      imageStyle: data['imageStyle'] as String? ?? 'naracinema_plus_default', 
       aspectRatio: data['aspectRatio'] as String? ?? '16:9',
       language: data['language'] as String? ?? 'Indonesian',
-      resolution: data['resolution'] as String?, // Menyimpan pilihan resolusi Veo
+      resolution: data['resolution'] as String?, 
+      voice: data['voice'] as String?,         // [PERBAIKAN]
+      costLevel: data['costLevel'] as String?, // [PERBAIKAN]
       identifiedCharacters: (data['identifiedCharacters'] is List)
           ? List<Map<String, dynamic>>.from(
               (data['identifiedCharacters'] as List).map((item) =>
@@ -108,6 +114,8 @@ class VideoProjectNaracinemaPlus {
       'aspectRatio': aspectRatio,
       'language': language,
       if (resolution != null) 'resolution': resolution,
+      if (voice != null) 'voice': voice,         // [PERBAIKAN]
+      if (costLevel != null) 'costLevel': costLevel, // [PERBAIKAN]
       'identifiedCharacters': identifiedCharacters,
       if (status != null) 'status': status,
       'updatedAt': FieldValue.serverTimestamp(),
@@ -130,6 +138,8 @@ class VideoProjectNaracinemaPlus {
     String? aspectRatio,
     String? language,
     String? resolution,
+    String? voice,     // [PERBAIKAN]
+    String? costLevel, // [PERBAIKAN]
     List<Map<String, dynamic>>? identifiedCharacters,
     String? status,
     Timestamp? createdAt,
@@ -150,6 +160,8 @@ class VideoProjectNaracinemaPlus {
       aspectRatio: aspectRatio ?? this.aspectRatio,
       language: language ?? this.language,
       resolution: resolution ?? this.resolution,
+      voice: voice ?? this.voice,             // [PERBAIKAN]
+      costLevel: costLevel ?? this.costLevel, // [PERBAIKAN]
       identifiedCharacters: identifiedCharacters ?? this.identifiedCharacters,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
@@ -176,6 +188,8 @@ class VideoProjectNaracinemaPlus {
         other.aspectRatio == aspectRatio &&
         other.language == language &&
         other.resolution == resolution &&
+        other.voice == voice &&         // [PERBAIKAN]
+        other.costLevel == costLevel && // [PERBAIKAN]
         listEquals(other.identifiedCharacters, identifiedCharacters) &&
         other.status == status &&
         other.createdAt == createdAt &&
@@ -199,6 +213,8 @@ class VideoProjectNaracinemaPlus {
         aspectRatio.hashCode ^
         language.hashCode ^
         (resolution?.hashCode ?? 0) ^
+        (voice?.hashCode ?? 0) ^         // [PERBAIKAN]
+        (costLevel?.hashCode ?? 0) ^     // [PERBAIKAN]
         listHash(identifiedCharacters).hashCode ^
         status.hashCode ^
         createdAt.hashCode ^

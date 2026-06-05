@@ -1,3 +1,10 @@
+//................................................................//
+// NAMA FILE: VISUAL_SETTINGS_PROVIDER.DART                       //
+// PATH: LIB/PROVIDERS/VISUAL_SETTINGS_PROVIDER.DART              //
+//................................................................//
+
+//No ke-1.........................................................//
+// IMPORT DEPENDENSI & KONSTANTA FFMPEG                           //
 import 'dart:async';
 import 'dart:math'; // <-- KATEGORI_ARSITEKTUR_INTRO_MUSIK: Diperlukan untuk Random()
 import 'package:flutter/material.dart';
@@ -147,14 +154,10 @@ const List<String> kRandomSceneMotionNames = [
 // --- KATEGORI_MODIFIKASI: Hapus "Option 3" (NO_URUT_03) ---
 // Urutan Default untuk "Option 3" DIHAPUS
 // --- AKHIR MODIFIKASI ---
+//................................................................//
 
-// =======================================================================
-// === ENUM & HELPER KONVERSI ===
-// =======================================================================
-// =======================================================================
-// === ENUM & HELPER KONVERSI ===
-// =======================================================================
-
+//No ke-2.........................................................//
+// ENUM & HELPER KONVERSI                                         //
 enum TextEffect { fadeInOut, slideUp, zoomIn, drop }
 
 String textEffectToString(TextEffect effect) {
@@ -208,11 +211,10 @@ double _baseSizeFromLegacyEnum(String? value) {
   // --- AKHIR MODIFIKASI ---
 }
 // --- AKHIR PERBAIKAN ---
+//................................................................//
 
-// =======================================================================
-// === CLASS TextOverlaySettings ===
-// =======================================================================
-
+//No ke-3.........................................................//
+// CLASS TEXT OVERLAY SETTINGS                                    //
 @immutable
 class TextOverlaySettings {
   final String text;
@@ -370,11 +372,10 @@ class TextOverlaySettings {
     );
   }
 }
+//................................................................//
 
-// =======================================================================
-// === CLASS VisualSettings ===
-// =======================================================================
-
+//No ke-4.........................................................//
+// CLASS VISUAL SETTINGS (MODEL UTAMA)                            //
 @immutable
 class VisualSettings {
   final TextOverlaySettings titleSettings;
@@ -394,9 +395,14 @@ class VisualSettings {
   final double transitionDuration;
   final String introMotionType;
   final String sceneMotionBehavior;
+  
   // --- KATEGORI_ARSITEKTUR_INTRO_MUSIK (NO_URUT_01) ---
-  final String introMusicUrl; // <-- TAMBAHKAN PROPERTI INI
+  final String introMusicUrl; 
   // --- AKHIR PERUBAHAN ---
+
+  // --- KATEGORI_FITUR_BARU (OVERLAY_EFFECTS) ---
+  final bool useAssetOverlayEffects;
+  // --- AKHIR TAMBAHAN ---
 
   const VisualSettings({
     required this.titleSettings,
@@ -415,8 +421,11 @@ class VisualSettings {
     required this.introMotionType,
     required this.sceneMotionBehavior,
     // --- KATEGORI_ARSITEKTUR_INTRO_MUSIK (NO_URUT_02) ---
-    required this.introMusicUrl, // <-- TAMBAHKAN KE KONSTRUKTOR
+    required this.introMusicUrl, 
     // --- AKHIR PERUBAHAN ---
+    // --- KATEGORI_FITUR_BARU (OVERLAY_EFFECTS) ---
+    required this.useAssetOverlayEffects,
+    // --- AKHIR TAMBAHAN ---
   });
 
   VisualSettings copyWith({
@@ -436,8 +445,11 @@ class VisualSettings {
     String? introMotionType,
     String? sceneMotionBehavior,
     // --- KATEGORI_ARSITEKTUR_INTRO_MUSIK (NO_URUT_03) ---
-    String? introMusicUrl, // <-- TAMBAHKAN KE copyWith
+    String? introMusicUrl, 
     // --- AKHIR PERUBAHAN ---
+    // --- KATEGORI_FITUR_BARU (OVERLAY_EFFECTS) ---
+    bool? useAssetOverlayEffects,
+    // --- AKHIR TAMBAHAN ---
   }) {
     return VisualSettings(
       titleSettings: titleSettings ?? this.titleSettings,
@@ -459,8 +471,11 @@ class VisualSettings {
       introMotionType: introMotionType ?? this.introMotionType,
       sceneMotionBehavior: sceneMotionBehavior ?? this.sceneMotionBehavior,
       // --- KATEGORI_ARSITEKTUR_INTRO_MUSIK (NO_URUT_04) ---
-      introMusicUrl: introMusicUrl ?? this.introMusicUrl, // <-- TAMBAHKAN LOGIKA copyWith
+      introMusicUrl: introMusicUrl ?? this.introMusicUrl, 
       // --- AKHIR PERUBAHAN ---
+      // --- KATEGORI_FITUR_BARU (OVERLAY_EFFECTS) ---
+      useAssetOverlayEffects: useAssetOverlayEffects ?? this.useAssetOverlayEffects,
+      // --- AKHIR TAMBAHAN ---
     );
   }
 
@@ -518,6 +533,9 @@ class VisualSettings {
       // --- KATEGORI_ARSITEKTUR_INTRO_MUSIK (NO_URUT_05) ---
       introMusicUrl: defaultIntroMusicUrl, // <-- Gunakan URL acak yang baru
       // --- AKHIR PERUBAHAN ---
+      // --- KATEGORI_FITUR_BARU (OVERLAY_EFFECTS) ---
+      useAssetOverlayEffects: false, // Default false untuk optimasi render
+      // --- AKHIR TAMBAHAN ---
     );
     // --- AKHIR MODIFIKASI ---
     // --- AKHIR PERBAIKAN ---
@@ -633,6 +651,9 @@ class VisualSettings {
       // --- KATEGORI_ARSITEKTUR_INTRO_MUSIK (NO_URUT_06) ---
       'introMusicUrl': introMusicUrl, // <-- SIMPAN URL KE JSON
       // --- AKHIR PERUBAHAN ---
+      // --- KATEGORI_FITUR_BARU (OVERLAY_EFFECTS) ---
+      'useAssetOverlayEffects': useAssetOverlayEffects,
+      // --- AKHIR TAMBAHAN ---
     };
   }
 
@@ -750,14 +771,17 @@ class VisualSettings {
       // --- KATEGORI_ARSITEKTUR_INTRO_MUSIK (NO_URUT_08) ---
       introMusicUrl: loadedIntroMusicUrl, // <-- Gunakan URL yang dimuat
       // --- AKHIR PERUBAHAN ---
+      
+      // --- KATEGORI_FITUR_BARU (OVERLAY_EFFECTS) ---
+      useAssetOverlayEffects: json['useAssetOverlayEffects'] as bool? ?? false,
+      // --- AKHIR TAMBAHAN ---
     );
   }
 }
+//................................................................//
 
-// =======================================================================
-// === HELPER ASPEK RASIO ===
-// =======================================================================
-
+//No ke-5.........................................................//
+// HELPER ASPEK RASIO & STATE NOTIFIER / PROVIDER                 //
 double _calculateAspectRatio(String? ratioString) {
   if (ratioString == null || ratioString.isEmpty) {
     return 16 / 9;
@@ -772,10 +796,6 @@ double _calculateAspectRatio(String? ratioString) {
   }
   return 16 / 9;
 }
-
-// =======================================================================
-// === STATE NOTIFIER & PROVIDER ===
-// =======================================================================
 
 // --- KATEGORI_ARSITEKTUR: Refaktor Notifier (Perbaikan Bug "Mental") ---
 class VisualSettingsNotifier extends StateNotifier<VisualSettings> {
@@ -965,10 +985,14 @@ class VisualSettingsNotifier extends StateNotifier<VisualSettings> {
       state = state.copyWith(sceneMotionBehavior: behavior);
       
   // --- KATEGORI_ARSITEKTUR_INTRO_MUSIK (NO_URUT_09) ---
-  // <-- TAMBAHKAN FUNGSI UPDATE BARU UNTUK MUSIK ---
   void updateIntroMusicUrl(String url) =>
       state = state.copyWith(introMusicUrl: url);
   // --- AKHIR PERUBAHAN ---
+
+  // --- KATEGORI_FITUR_BARU (OVERLAY_EFFECTS) ---
+  void updateUseAssetOverlayEffects(bool use) =>
+      state = state.copyWith(useAssetOverlayEffects: use);
+  // --- AKHIR TAMBAHAN ---
 
   // --- Fungsi Save ke Firestore ---
 Future<void> saveSettingsToFirestore() async {
@@ -1133,3 +1157,4 @@ final visualSettingsProvider =
   },
 );
 // --- AKHIR REFAKTOR ---
+//................................................................//

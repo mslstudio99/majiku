@@ -23,6 +23,7 @@ Tujuan:
 - [FIX UX] Menstandarkan ukuran font dropdown bahasa agar konsisten.
 - [NEW FEATURE] Pop up animasi peringatan token habis bergaya modern (Hijau/Putih).
 - [ANTI-REGRESI] Menjaga seluruh fungsi token, voice, dan database.
+- [NEW FEATURE] Toggle penggunaan Asset Overlay Effects untuk optimasi render.
 */
 //................................................................//
 
@@ -58,6 +59,10 @@ class _InputScriptScreenState extends ConsumerState<InputScriptScreen> {
   // --- KATEGORI_UX_OTOMATIS (NO_URUT_01): Variabel State Subtitle ---
   bool _showSubtitles = false; // Default nyala (bisa Anda ubah ke false jika mau)
   // --- AKHIR TAMBAHAN ---
+
+  // --- [FITUR BARU] STATE UNTUK ASSET OVERLAY EFFECTS ---
+  bool _useAssetOverlayEffects = false; // Default mati untuk render lebih cepat
+  // --------------------------------------------------------
 
   // ==========================================
   // OPSI SUARA (LENGKAP)
@@ -519,9 +524,10 @@ class _InputScriptScreenState extends ConsumerState<InputScriptScreen> {
           aspectRatio: _selectedAspectRatio,
           language: _selectedLanguage,
           voice: _selectedVoice,
-          // --- KATEGORI_UX_OTOMATIS (NO_URUT_02): Kirim Nilai Toggle ---
           showSubtitles: _showSubtitles,
-          // --- AKHIR TAMBAHAN ---
+          // --- [TAMBAHAN TERBARU] Kirim Nilai Overlay ---
+          useAssetOverlayEffects: _useAssetOverlayEffects, 
+          // ----------------------------------------------
         );
 
         if (mounted) {
@@ -825,9 +831,7 @@ class _InputScriptScreenState extends ConsumerState<InputScriptScreen> {
                         ),
                         const SizedBox(height: 32),
                         
-                        // --- KATEGORI_UX_OTOMATIS (NO_URUT_03): UI Toggle Subtitle ---
-                        // [DINONAKTIFKAN SEMENTARA ATAS PERMINTAAN KOMANDAN]
-                        /*
+                        // --- [FITUR BARU] UI TOGGLE ASSET OVERLAY EFFECTS ---
                         Container(
                           decoration: BoxDecoration(
                             color: Colors.black12,
@@ -836,25 +840,24 @@ class _InputScriptScreenState extends ConsumerState<InputScriptScreen> {
                           ),
                           child: SwitchListTile(
                             title: Text(
-                              t('Show Subtitles', 'Tampilkan Subtitle'),
+                              t('Use Visual Overlay Effects', 'Gunakan Efek Visual Overlay'),
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                             ),
                             subtitle: Text(
-                              t('Auto-generate subtitles for your video', 'Buat subtitle otomatis pada video'),
+                              t('Adds light leaks, film grain, etc. Turn off for faster rendering.', 'Efek tambahan (Light leaks, grain). Matikan untuk render lebih cepat.'),
                               style: const TextStyle(fontSize: 12, color: Colors.grey),
                             ),
-                            value: _showSubtitles,
+                            value: _useAssetOverlayEffects,
                             activeColor: Colors.blue,
                             onChanged: (bool value) {
                               setState(() {
-                                _showSubtitles = value;
+                                _useAssetOverlayEffects = value;
                               });
                             },
                           ),
                         ),
                         const SizedBox(height: 32),
-                        */
-                        // --- AKHIR BLOK DINONAKTIFKAN ---
+                        // --- AKHIR TAMBAHAN ---
 
                         ElevatedButton.icon(
                           onPressed: canSubmit ? _submitData : null,
