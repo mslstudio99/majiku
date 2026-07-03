@@ -38,6 +38,7 @@ class InputScriptNaracinemaPlusScreen extends ConsumerStatefulWidget {
 class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNaracinemaPlusScreen> {
   final _scriptController = TextEditingController();
   final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController(); // [SUNTIKAN BARU] Kontroler Deskripsi Overlay
   final _formKey = GlobalKey<FormState>();
   
   String _selectedStyle = 'Realistic';
@@ -425,7 +426,6 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
     }
   }
 //----------------------------------------------------------------//
-
 // No ke-3: INIT, DISPOSE, & LOGIC CALCULATOR (SUBMIT)            //
 //----------------------------------------------------------------//
   @override
@@ -438,6 +438,9 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
       _scriptController.text = widget.initialScript;
     }
 
+    // [SUNTIKAN BARU]: Mengisi teks default overlay deskripsi
+    _descriptionController.text = "Created @ majiku.net\nAuto Video Content & Film Maker";
+
     _scriptController.addListener(() {
       setState(() {});
     });
@@ -447,6 +450,7 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
   void dispose() {
     _scriptController.dispose();
     _titleController.dispose();
+    _descriptionController.dispose(); // [SUNTIKAN BARU]: Pelepasan Kontroler untuk mencegah memory leak
     super.dispose();
   }
 
@@ -469,8 +473,6 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
       final isIndo = ref.read(appLanguageProvider).languageCode == 'id';
       
       try {
-        // PERHATIAN: Pastikan metode 'addProject' di firestore_naracinema_plus_service.dart
-        // telah diperbarui untuk menerima argumen named 'costLevel'.
         final String? newProjectId = await firestoreService.addProject(
           title: _titleController.text,
           rawScript: _scriptController.text,
@@ -480,7 +482,8 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
           voice: _selectedVoice,
           showSubtitles: _showSubtitles,
           resolution: _selectedResolution, 
-          costLevel: _selectedCostLevel, // <== Menambahkan level biaya
+          costLevel: _selectedCostLevel, 
+          description: _descriptionController.text.trim(), // [SUNTIKAN BARU]: Pengiriman deskripsi ke Firestore
         );
 
         if (mounted) {
@@ -614,6 +617,7 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        // [KOMPONEN EKSISTING]: Judul Proyek
                         TextFormField(
                           controller: _titleController,
                           maxLength: 40,
@@ -633,6 +637,24 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
                         ),
                         const SizedBox(height: 24),
 
+                        // [SUNTIKAN BARU]: Form Input Deskripsi Overlay
+                        TextFormField(
+                          controller: _descriptionController,
+                          maxLength: 80,
+                          maxLines: 2,
+                          decoration: InputDecoration(
+                            labelText: t('Project Description Overlay', 'Deskripsi Overlay Proyek'),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return t('Please enter a description.', 'Mohon isi deskripsi.');
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 24),
+
+                        // [KOMPONEN EKSISTING]: Naskah Narasi
                         TextFormField(
                           controller: _scriptController,
                           maxLines: 10,
@@ -646,7 +668,7 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
                               return t('Please enter a Narration for your video.', 'Mohon isi naskah narasi.');
                             }
                             if (value.length > 18000) {
-                              return t('Narration cannot exceed 15,000 characters.', 'Naskah maksimal 15.000 karakter.');
+                              return t('Narration cannot exceed 18,000 characters.', 'Naskah maksimal 18.000 karakter.');
                             }
                             return null;
                           },

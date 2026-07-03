@@ -227,7 +227,7 @@ class _VisualSettingNaracinemaPlusScreenState extends ConsumerState<VisualSettin
                     onStartTimeChanged: settingsNotifier.updateDescriptionStartTime,
                     onDurationChanged: settingsNotifier.updateDescriptionDuration,
                     onBlockWidthFactorChanged: settingsNotifier.updateDescriptionBlockWidthFactor,
-                    textMaxLength: 50,
+                    textMaxLength: 80, // [SUNTIKAN BARU] Diselaraskan menjadi 80 karakter agar sinkron dengan form input
                     textCapitalization: TextCapitalization.none, 
                     textInputFormatters: null,
                   ),

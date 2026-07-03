@@ -257,7 +257,8 @@ class FirestoreNaracinemaPlusService {
     required String voice,         
     required bool showSubtitles,   
     required String resolution,    
-    required String costLevel,     // [PERBAIKAN FITUR BARU]: Menangkap Cost Level
+    required String costLevel,     
+    required String description, 
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -266,23 +267,23 @@ class FirestoreNaracinemaPlusService {
     }
 
     try {
-      // [PERBAIKAN MUTLAK]: Buat referensi dokumen di awal untuk mendapatkan projectId
-      // sebelum menyusun visualSettingsMap agar menghindari error kompilasi.
       final docRef = _db.collection('projects_naracinema_plus').doc();
       final String projectId = docRef.id;
 
-      final defaultVisualSettings = VisualSettingsNaracinemaPlus.defaultSettingsWithTitle(title);
+      // [PERBAIKAN MUTLAK]: Deklarasikan finalTitle agar tidak kosong saat dilempar ke visual settings
+      final String finalTitle = title.isNotEmpty ? title : "Untitled Naracinema Plus Project";
+      
+      final defaultVisualSettings = VisualSettingsNaracinemaPlus.defaultSettingsWithTitle(finalTitle, description);
       final double aspectRatioValue = _calculateAspectRatioFromString(aspectRatio);
       
-      // Sekarang variabel projectId sudah tersedia secara legal
-      final visualSettingsMap = defaultVisualSettings.toJson(aspectRatioValue, projectId);
+      // [PERBAIKAN MUTLAK]: Melempar parameter 'resolution' (bukan projectId) agar ukuran font akurat
+      final visualSettingsMap = defaultVisualSettings.toJson(aspectRatioValue, resolution);
 
-      debugPrint("addProject (NARACINEMA PLUS): Creating new project for user ${user.uid} with title: $title");
+      debugPrint("addProject (NARACINEMA PLUS): Creating new project for user ${user.uid} with title: $finalTitle");
       
-      // Gunakan .set() karena docRef sudah dibuat di awal
       await docRef.set({
         'userId': user.uid,
-        'title': title.isNotEmpty ? title : "Untitled Naracinema Plus Project",
+        'title': finalTitle,
         'rawScript': rawScript,
         'imageStyle': imageStyle,
         'aspectRatio': aspectRatio,
@@ -290,16 +291,21 @@ class FirestoreNaracinemaPlusService {
         'voice': voice,                 
         'showSubtitles': showSubtitles, 
         'resolution': resolution,       
-        'costLevel': costLevel,         // [PERBAIKAN FITUR BARU]: Save Cost Level ke DB
+        'costLevel': costLevel,         
+        'description': description, 
         
         'status': 'PROCESSING_SCENE', 
         
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-
         'expireAt': Timestamp.fromDate(DateTime.now().add(const Duration(hours: 24))),
 
-        'visualSettings': visualSettingsMap,
+        'visualSettings': visualSettingsMap, // Fallback untuk Flutter UI
+        // [SUNTIKAN MUTLAK]: Langsung inisialisasi renderPacket untuk memuaskan Backend Engine!
+        'renderPacket': {
+          'styleSettings': visualSettingsMap,
+        },
+        
         'thumbnailImageUrl': null,
         'finalVideoUrl': null,
         'errorDetail': null,
@@ -329,5 +335,5 @@ class FirestoreNaracinemaPlusService {
     debugPrint("Invalid aspectRatio string '$ratioString' in FirestoreNaracinemaPlusService, falling back to 16/9.");
     return 16 / 9;
   }
-} // <-- PENUTUP CLASS YANG BENAR (Blok 2, 3, dan 4 berada di dalam Class)
+} // <-- PENUTUP CLASS YANG BENAR
 //----------------------------------------------------------------//

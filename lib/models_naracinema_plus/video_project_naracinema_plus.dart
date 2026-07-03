@@ -20,6 +20,7 @@ class VideoProjectNaracinemaPlus {
   final String? resolution; 
   final String? voice;     // [PERBAIKAN]: Menambah properti voice
   final String? costLevel; // [PERBAIKAN]: Menambah properti costLevel
+  final String? description; // [SUNTIKAN BARU] Menampung data deskripsi overlay dari root dokumen
   final List<Map<String, dynamic>> identifiedCharacters;
   final String? status;
   final Timestamp createdAt;
@@ -40,6 +41,7 @@ class VideoProjectNaracinemaPlus {
     this.resolution,
     this.voice,     // [PERBAIKAN]
     this.costLevel, // [PERBAIKAN]
+    this.description, // [SUNTIKAN BARU]
     required this.identifiedCharacters,
     this.status,
     required this.createdAt,
@@ -88,6 +90,7 @@ class VideoProjectNaracinemaPlus {
       resolution: data['resolution'] as String?, 
       voice: data['voice'] as String?,         // [PERBAIKAN]
       costLevel: data['costLevel'] as String?, // [PERBAIKAN]
+      description: data['description'] as String?, // [SUNTIKAN BARU] Membaca data deskripsi overlay dari Firestore
       identifiedCharacters: (data['identifiedCharacters'] is List)
           ? List<Map<String, dynamic>>.from(
               (data['identifiedCharacters'] as List).map((item) =>
@@ -116,6 +119,7 @@ class VideoProjectNaracinemaPlus {
       if (resolution != null) 'resolution': resolution,
       if (voice != null) 'voice': voice,         // [PERBAIKAN]
       if (costLevel != null) 'costLevel': costLevel, // [PERBAIKAN]
+      if (description != null) 'description': description, // [SUNTIKAN BARU] Menyimpan deskripsi overlay ke root db
       'identifiedCharacters': identifiedCharacters,
       if (status != null) 'status': status,
       'updatedAt': FieldValue.serverTimestamp(),
@@ -140,6 +144,7 @@ class VideoProjectNaracinemaPlus {
     String? resolution,
     String? voice,     // [PERBAIKAN]
     String? costLevel, // [PERBAIKAN]
+    String? description, // [SUNTIKAN BARU]
     List<Map<String, dynamic>>? identifiedCharacters,
     String? status,
     Timestamp? createdAt,
@@ -162,6 +167,7 @@ class VideoProjectNaracinemaPlus {
       resolution: resolution ?? this.resolution,
       voice: voice ?? this.voice,             // [PERBAIKAN]
       costLevel: costLevel ?? this.costLevel, // [PERBAIKAN]
+      description: description ?? this.description, // [SUNTIKAN BARU]
       identifiedCharacters: identifiedCharacters ?? this.identifiedCharacters,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
@@ -190,6 +196,7 @@ class VideoProjectNaracinemaPlus {
         other.resolution == resolution &&
         other.voice == voice &&         // [PERBAIKAN]
         other.costLevel == costLevel && // [PERBAIKAN]
+        other.description == description && // [SUNTIKAN BARU]
         listEquals(other.identifiedCharacters, identifiedCharacters) &&
         other.status == status &&
         other.createdAt == createdAt &&
@@ -215,6 +222,7 @@ class VideoProjectNaracinemaPlus {
         (resolution?.hashCode ?? 0) ^
         (voice?.hashCode ?? 0) ^         // [PERBAIKAN]
         (costLevel?.hashCode ?? 0) ^     // [PERBAIKAN]
+        (description?.hashCode ?? 0) ^   // [SUNTIKAN BARU]
         listHash(identifiedCharacters).hashCode ^
         status.hashCode ^
         createdAt.hashCode ^

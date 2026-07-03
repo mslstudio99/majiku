@@ -1,7 +1,3 @@
-//PROVIDERS_STORINEMA//
-//VISUAL_SETTINGS_STORINEMA_PROVIDER.DART//
-//PENGATURAN VISUAL DAN STATE PROVIDER UNTUK STORINEMA (PURE VIDEO)//
-
 //................................................................//
 // NAMA FILE: VISUAL_SETTINGS_STORINEMA_PROVIDER.DART             //
 // PATH: LIB/PROVIDERS_STORINEMA/VISUAL_SETTINGS_STORINEMA_PROVIDER.DART //
@@ -267,7 +263,7 @@ class VisualSettingsStorinema {
     );
   }
 
-  static VisualSettingsStorinema defaultSettingsWithTitle(String projectTitle) {
+  static VisualSettingsStorinema defaultSettingsWithTitle(String projectTitle, [String projectDescription = ""]) {
     final trackNumber = Random().nextInt(20) + 1; 
     final defaultIntroMusicUrl =
         'https://firebasestorage.googleapis.com/v0/b/majiku-5b07e.firebasestorage.app/o/assets%2Fmusic%2Fintro_music%20$trackNumber.mp3?alt=media';
@@ -279,21 +275,21 @@ class VisualSettingsStorinema {
         baseFontSize: 55.0, 
         color: Colors.white,
         startTime: 3.0,
-        duration: 7.0,
+        duration: 7.0, // Muncul dari detik ke-3 s.d 10
         textBlockWidthFactor: 0.9,
         maxLines: 3,
-        verticalAlignment: -0.8, 
+        verticalAlignment: -0.85, // Posisi atas layar
       ),
       descriptionSettings: TextOverlayStorinemaSettings(
-        text: "",
+        text: projectDescription.isNotEmpty ? projectDescription : "", 
         effect: TextEffect.fadeInOut,
         baseFontSize: 40.0, 
         color: Colors.white,
-        startTime: 11.0,
-        duration: 5.0,
+        startTime: 3.0, // Mulai detik ke-3
+        duration: 7.0, // Berakhir detik ke-10
         textBlockWidthFactor: 0.9,
         maxLines: 3,
-        verticalAlignment: -0.7, 
+        verticalAlignment: 0.0, // [DIUBAH SINKRON]: Tepat di tengah-tengah layar secara vertikal
       ),
       showSubtitles: false,
       subtitleBaseFontSize: 50.0, 
@@ -337,7 +333,7 @@ class VisualSettingsStorinema {
 
   factory VisualSettingsStorinema.fromJson(Map<String, dynamic>? json) {
     if (json == null) {
-      return VisualSettingsStorinema.defaultSettingsWithTitle("");
+      return VisualSettingsStorinema.defaultSettingsWithTitle("", "");
     }
 
     final subtitleMap = json['subtitles'] as Map<String, dynamic>?;
@@ -428,6 +424,7 @@ class VisualSettingsStorinemaNotifier extends StateNotifier<VisualSettingsStorin
         debugPrint("[$projectId] Notifier received first project data. Initializing state...");
         
         final projectTitle = (projectData as dynamic).title ?? "";
+        final projectDescription = (projectData as dynamic).description ?? ""; // [SUNTIKAN BARU] Membaca data deskripsi root dokumen
         Map<String, dynamic>? settingsMap;
         final data = projectData as dynamic;
 
@@ -445,13 +442,19 @@ class VisualSettingsStorinemaNotifier extends StateNotifier<VisualSettingsStorin
 
         if (settingsMap != null) {
           try {
-            final parsedSettings = VisualSettingsStorinema.fromJson(settingsMap);
+            var parsedSettings = VisualSettingsStorinema.fromJson(settingsMap);
+            // [SUNTIKAN BARU] Sinkronisasi otomatis jika teks deskripsi visual kosong, tapi deskripsi root proyek ada
+            if (parsedSettings.descriptionSettings.text.isEmpty && projectDescription.isNotEmpty) {
+              parsedSettings = parsedSettings.copyWith(
+                descriptionSettings: parsedSettings.descriptionSettings.copyWith(text: projectDescription)
+              );
+            }
             state = parsedSettings;
           } catch (e) {
-            state = VisualSettingsStorinema.defaultSettingsWithTitle(projectTitle);
+            state = VisualSettingsStorinema.defaultSettingsWithTitle(projectTitle, projectDescription);
           }
         } else {
-          state = VisualSettingsStorinema.defaultSettingsWithTitle(projectTitle);
+          state = VisualSettingsStorinema.defaultSettingsWithTitle(projectTitle, projectDescription);
         }
 
         _isInitialized = true; 
@@ -459,7 +462,7 @@ class VisualSettingsStorinemaNotifier extends StateNotifier<VisualSettingsStorin
     },
     onError: (e) {
       if (!_isInitialized) {
-        state = VisualSettingsStorinema.defaultSettingsWithTitle(""); 
+        state = VisualSettingsStorinema.defaultSettingsWithTitle("", ""); 
         _isInitialized = true; 
       }
     });
@@ -554,6 +557,7 @@ class VisualSettingsStorinemaNotifier extends StateNotifier<VisualSettingsStorin
 
       Map<String, dynamic>? settingsMap;
       final currentTitle = data?['title'] as String? ?? "";
+      final currentDescription = data?['description'] as String? ?? ""; // [SUNTIKAN BARU] Membaca data deskripsi root dokumen
 
       if (data != null &&
           data.containsKey('renderPacket') &&
@@ -568,10 +572,16 @@ class VisualSettingsStorinemaNotifier extends StateNotifier<VisualSettingsStorin
       }
 
       if (settingsMap != null) {
-        final loadedSettings = VisualSettingsStorinema.fromJson(settingsMap);
+        var loadedSettings = VisualSettingsStorinema.fromJson(settingsMap);
+        // [SUNTIKAN BARU] Sinkronisasi otomatis jika deskripsi visual kosong
+        if (loadedSettings.descriptionSettings.text.isEmpty && currentDescription.isNotEmpty) {
+          loadedSettings = loadedSettings.copyWith(
+            descriptionSettings: loadedSettings.descriptionSettings.copyWith(text: currentDescription),
+          );
+        }
         state = loadedSettings;
       } else {
-        state = VisualSettingsStorinema.defaultSettingsWithTitle(currentTitle);
+        state = VisualSettingsStorinema.defaultSettingsWithTitle(currentTitle, currentDescription);
       }
     } catch (e) {
       debugPrint('❌ Error loading visual settings for project $projectId: $e');
@@ -581,7 +591,8 @@ class VisualSettingsStorinemaNotifier extends StateNotifier<VisualSettingsStorin
   void resetToDefaults() {
     final projectData = _ref.read(projectStorinemaStreamProvider(projectId)).asData?.value;
     final String currentTitle = (projectData as dynamic)?.title ?? "";
-    state = VisualSettingsStorinema.defaultSettingsWithTitle(currentTitle);
+    final String currentDescription = (projectData as dynamic)?.description ?? ""; // [SUNTIKAN BARU] Sinkronisasi saat reset
+    state = VisualSettingsStorinema.defaultSettingsWithTitle(currentTitle, currentDescription);
   }
 }
 //................................................................//
@@ -594,7 +605,7 @@ final visualSettingsStorinemaProvider =
     final firestoreService = ref.watch(firestoreStorinemaServiceProvider);
 
     return VisualSettingsStorinemaNotifier(
-      VisualSettingsStorinema.defaultSettingsWithTitle(""), 
+      VisualSettingsStorinema.defaultSettingsWithTitle("", ""), // [SUNTIKAN BARU] Initial state kosong
       projectId,
       firestoreService,
       ref

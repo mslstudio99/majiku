@@ -1,10 +1,21 @@
+//................................................................//
+// NAMA FILE: VIDEO_PROJECT.DART                                  //
+// PATH: LIB/MODELS/VIDEO_PROJECT.DART                            //
+//................................................................//
+
+//No ke-1.........................................................//
+// IMPORT DEPENDENSI & SETUP MODEL                                //
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collection/collection.dart'; // Import for DeepCollectionEquality
+//................................................................//
 
+//No ke-2.........................................................//
+// SETUP KELAS VIDEO_PROJECT UTAMA                                //
 class VideoProject {
   final String id;
   final String userId;
   final String title;
+  final String description; // <-- [KATEGORI_PERBAIKAN: Tambahkan deskripsi kustom]
   final String rawScript;
   final String imageStyle;
   final String aspectRatio;
@@ -30,6 +41,7 @@ class VideoProject {
     required this.id,
     required this.userId,
     required this.title,
+    required this.description, // <-- [KATEGORI_PERBAIKAN: Konstruktor deskripsi]
     required this.rawScript,
     required this.imageStyle,
     required this.aspectRatio,
@@ -49,8 +61,10 @@ class VideoProject {
     this.renderStartedAt, // Parameter opsional
     // --- AKHIR FITUR ---
   });
+//........//
 
-  // Factory constructor
+//No ke-3.........................................................//
+// FACTORY CONSTRUCTOR FROM FIRESTORE                             //
   factory VideoProject.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
@@ -76,11 +90,12 @@ class VideoProject {
     }
     // --- AKHIR FITUR ---
 
-
     return VideoProject(
       id: doc.id,
       userId: data['userId'] as String? ?? '',
       title: data['title'] as String? ?? 'Untitled Project',
+      // --- [KATEGORI_PERBAIKAN: Baca deskripsi dari Firestore] ---
+      description: data['description'] as String? ?? "Created @ majiku.net\nAuto Video Content & Film Maker",
       rawScript: data['rawScript'] as String? ?? '',
       imageStyle: data['imageStyle'] as String? ?? 'Realistic',
       aspectRatio: data['aspectRatio'] as String? ?? '16:9',
@@ -110,12 +125,15 @@ class VideoProject {
       // --- AKHIR FITUR ---
     );
   }
+//........//
 
-  // Method to convert to map
+//No ke-4.........................................................//
+// METHOD TOFIRESTORE                                             //
   Map<String, dynamic> toFirestore() {
     return {
       'userId': userId,
       'title': title,
+      'description': description, // --- [KATEGORI_PERBAIKAN: Simpan deskripsi] ---
       'rawScript': rawScript,
       'imageStyle': imageStyle,
       'aspectRatio': aspectRatio,
@@ -133,17 +151,17 @@ class VideoProject {
       // --- Tambahkan visualSettings ke map jika tidak null ---
       if (visualSettings != null) 'visualSettings': visualSettings,
       // --- KATEGORI_FITUR_TIMEOUT NO_URUT_05: Tambahkan ke toFirestore ---
-      // (Meskipun biasanya kita tidak mengirim ini DARI klien, 
-      // ini untuk kelengkapan model jika diperlukan)
       if (renderStartedAt != null) 'renderStartedAt': renderStartedAt,
       // --- AKHIR FITUR ---
     };
   }
+//........//
 
-  // copyWith method
+//No ke-5.........................................................//
+// COPYWITH METHOD                                                //
   VideoProject copyWith({
-    String? id, String? userId, String? title, String? rawScript,
-    String? imageStyle, String? aspectRatio, String? language, String? voice,
+    String? id, String? userId, String? title, String? description, // <-- [KATEGORI_PERBAIKAN: Parameter copyWith]
+    String? rawScript, String? imageStyle, String? aspectRatio, String? language, String? voice,
     List<Map<String, dynamic>>? identifiedCharacters, String? status,
     Timestamp? createdAt, Timestamp? updatedAt, String? thumbnailImageUrl,
     String? errorDetail, String? thumbnailPrompt, String? finalVideoUrl,
@@ -159,6 +177,7 @@ class VideoProject {
       id: id ?? this.id,
       userId: userId ?? this.userId,
       title: title ?? this.title,
+      description: description ?? this.description, // <-- [KATEGORI_PERBAIKAN: Clone deskripsi]
       rawScript: rawScript ?? this.rawScript,
       imageStyle: imageStyle ?? this.imageStyle,
       aspectRatio: aspectRatio ?? this.aspectRatio,
@@ -179,8 +198,10 @@ class VideoProject {
       // --- AKHIR FITUR ---
     );
   }
+//........//
 
-  // operator == and hashCode
+//No ke-6.........................................................//
+// OPERATORS OVERRIDE & HASHCODE                                  //
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
@@ -192,6 +213,7 @@ class VideoProject {
         other.id == id &&
         other.userId == userId &&
         other.title == title &&
+        other.description == description && // <-- [KATEGORI_PERBAIKAN: Pembanding deskripsi]
         other.rawScript == rawScript &&
         other.imageStyle == imageStyle &&
         other.aspectRatio == aspectRatio &&
@@ -205,7 +227,7 @@ class VideoProject {
         other.errorDetail == errorDetail &&
         other.thumbnailPrompt == thumbnailPrompt &&
         other.finalVideoUrl == finalVideoUrl &&
-        mapEquals(other.visualSettings, visualSettings) && // Bandingkom map
+        mapEquals(other.visualSettings, visualSettings) && // Bandingkan map
         // --- KATEGORI_FITUR_TIMEOUT NO_URUT_08: Bandingkan di operator== ---
         other.renderStartedAt == renderStartedAt; // Bandingkan timestamp
         // --- AKHIR FITUR ---
@@ -217,9 +239,9 @@ class VideoProject {
     final listHash = const DeepCollectionEquality().hash;
     final mapHash = const DeepCollectionEquality().hash;
 
-    return id.hashCode ^ userId.hashCode ^ title.hashCode ^ rawScript.hashCode ^
-        imageStyle.hashCode ^ aspectRatio.hashCode ^ language.hashCode ^ voice.hashCode ^
-        listHash(identifiedCharacters).hashCode ^ // Hash list
+    return id.hashCode ^ userId.hashCode ^ title.hashCode ^ description.hashCode ^ // <-- [KATEGORI_PERBAIKAN: Hash deskripsi]
+        rawScript.hashCode ^ imageStyle.hashCode ^ aspectRatio.hashCode ^ language.hashCode ^ voice.hashCode ^
+        listHash(identifiedCharacters).hashCode ^
         status.hashCode ^ createdAt.hashCode ^ updatedAt.hashCode ^
         thumbnailImageUrl.hashCode ^ errorDetail.hashCode ^ thumbnailPrompt.hashCode ^
         finalVideoUrl.hashCode ^
@@ -229,3 +251,4 @@ class VideoProject {
         // --- AKHIR FITUR ---
   }
 }
+//........//

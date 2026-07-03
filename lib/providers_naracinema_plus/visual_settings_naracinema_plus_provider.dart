@@ -4,7 +4,7 @@
 // DESKRIPSI: PENGATURAN VISUAL & STATE PROVIDER NARACINEMA PLUS  //
 //================================================================//
 
-// No ke-1: IMPORTS & DEPENDENCIES                                //
+// No ke-1: IMPOR DEPENDENSI & SETUP AWAL                        //
 //----------------------------------------------------------------//
 import 'dart:async';
 import 'dart:math'; 
@@ -272,7 +272,8 @@ class VisualSettingsNaracinemaPlus {
     );
   }
 
-  static VisualSettingsNaracinemaPlus defaultSettingsWithTitle(String projectTitle) {
+  // [PERBAIKAN SINKRONISASI]: Menambahkan opsional projectDescription
+  static VisualSettingsNaracinemaPlus defaultSettingsWithTitle(String projectTitle, [String projectDescription = ""]) {
     final trackNumber = Random().nextInt(20) + 1; 
     final defaultIntroMusicUrl =
         'https://firebasestorage.googleapis.com/v0/b/majiku-5b07e.firebasestorage.app/o/assets%2Fmusic%2Fintro_music%20$trackNumber.mp3?alt=media';
@@ -284,21 +285,21 @@ class VisualSettingsNaracinemaPlus {
         baseFontSize: 55.0, 
         color: Colors.white,
         startTime: 3.0,
-        duration: 7.0,
+        duration: 7.0, // Detik ke-3 s.d. 10
         textBlockWidthFactor: 0.9,
         maxLines: 3,
-        verticalAlignment: -0.8, 
+        verticalAlignment: -0.85, // Digeser lebih naik demi jarak aman
       ),
       descriptionSettings: TextOverlayNaracinemaPlusSettings(
-        text: "",
+        text: projectDescription.isNotEmpty ? projectDescription : "", // [SUNTIKAN BARU] Memetakan deskripsi overlay root
         effect: TextEffect.fadeInOut,
         baseFontSize: 40.0, 
         color: Colors.white,
-        startTime: 11.0,
-        duration: 5.0,
+        startTime: 3.0, // [DIUBAH SINKRON]: Detik ke-3 barengan judul
+        duration: 7.0, // [DIUBAH SINKRON]: Durasi 7 detik bersamaan
         textBlockWidthFactor: 0.9,
         maxLines: 3,
-        verticalAlignment: -0.7, 
+        verticalAlignment: 0.0, // [DIUBAH SINKRON]: Tepat di pusat tengah layar secara vertikal
       ),
       showSubtitles: false,
       subtitleBaseFontSize: 50.0, 
@@ -351,7 +352,7 @@ class VisualSettingsNaracinemaPlus {
 
   factory VisualSettingsNaracinemaPlus.fromJson(Map<String, dynamic>? json) {
     if (json == null) {
-      return VisualSettingsNaracinemaPlus.defaultSettingsWithTitle("");
+      return VisualSettingsNaracinemaPlus.defaultSettingsWithTitle("", "");
     }
 
     final subtitleMap = json['subtitles'] as Map<String, dynamic>?;
@@ -442,6 +443,7 @@ class VisualSettingsNaracinemaPlusNotifier extends StateNotifier<VisualSettingsN
         debugPrint("[$projectId] Notifier received first project data. Initializing state...");
         
         final projectTitle = (projectData as dynamic)?.title ?? "";
+        final projectDescription = (projectData as dynamic)?.description ?? ""; // [SUNTIKAN BARU] Membaca data deskripsi root dokumen
         Map<String, dynamic>? settingsMap;
         final data = projectData as dynamic;
 
@@ -459,13 +461,19 @@ class VisualSettingsNaracinemaPlusNotifier extends StateNotifier<VisualSettingsN
 
         if (settingsMap != null) {
           try {
-            final parsedSettings = VisualSettingsNaracinemaPlus.fromJson(settingsMap);
+            var parsedSettings = VisualSettingsNaracinemaPlus.fromJson(settingsMap);
+            // [SUNTIKAN BARU] Sinkronisasi otomatis jika teks deskripsi visual kosong, tapi deskripsi root proyek ada
+            if (parsedSettings.descriptionSettings.text.isEmpty && projectDescription.isNotEmpty) {
+              parsedSettings = parsedSettings.copyWith(
+                descriptionSettings: parsedSettings.descriptionSettings.copyWith(text: projectDescription)
+              );
+            }
             state = parsedSettings;
           } catch (e) {
-            state = VisualSettingsNaracinemaPlus.defaultSettingsWithTitle(projectTitle);
+            state = VisualSettingsNaracinemaPlus.defaultSettingsWithTitle(projectTitle, projectDescription);
           }
         } else {
-          state = VisualSettingsNaracinemaPlus.defaultSettingsWithTitle(projectTitle);
+          state = VisualSettingsNaracinemaPlus.defaultSettingsWithTitle(projectTitle, projectDescription);
         }
 
         _isInitialized = true; 
@@ -473,7 +481,7 @@ class VisualSettingsNaracinemaPlusNotifier extends StateNotifier<VisualSettingsN
     },
     onError: (e) {
       if (!_isInitialized) {
-        state = VisualSettingsNaracinemaPlus.defaultSettingsWithTitle(""); 
+        state = VisualSettingsNaracinemaPlus.defaultSettingsWithTitle("", ""); 
         _isInitialized = true; 
       }
     });
@@ -572,6 +580,7 @@ class VisualSettingsNaracinemaPlusNotifier extends StateNotifier<VisualSettingsN
 
       Map<String, dynamic>? settingsMap;
       final currentTitle = data?['title'] as String? ?? "";
+      final currentDescription = data?['description'] as String? ?? ""; // [SUNTIKAN BARU] Membaca data deskripsi root dokumen
 
       if (data != null &&
           data.containsKey('renderPacket') &&
@@ -586,10 +595,16 @@ class VisualSettingsNaracinemaPlusNotifier extends StateNotifier<VisualSettingsN
       }
 
       if (settingsMap != null) {
-        final loadedSettings = VisualSettingsNaracinemaPlus.fromJson(settingsMap);
+        var loadedSettings = VisualSettingsNaracinemaPlus.fromJson(settingsMap);
+        // [SUNTIKAN BARU] Sinkronisasi otomatis jika deskripsi visual kosong
+        if (loadedSettings.descriptionSettings.text.isEmpty && currentDescription.isNotEmpty) {
+          loadedSettings = loadedSettings.copyWith(
+            descriptionSettings: loadedSettings.descriptionSettings.copyWith(text: currentDescription),
+          );
+        }
         state = loadedSettings;
       } else {
-        state = VisualSettingsNaracinemaPlus.defaultSettingsWithTitle(currentTitle);
+        state = VisualSettingsNaracinemaPlus.defaultSettingsWithTitle(currentTitle, currentDescription);
       }
     } catch (e) {
       debugPrint('❌ Error loading visual settings for project $projectId: $e');
@@ -599,7 +614,8 @@ class VisualSettingsNaracinemaPlusNotifier extends StateNotifier<VisualSettingsN
   void resetToDefaults() {
     final projectData = _ref.read(projectNaracinemaPlusStreamProvider(projectId)).asData?.value;
     final String currentTitle = (projectData as dynamic)?.title ?? "";
-    state = VisualSettingsNaracinemaPlus.defaultSettingsWithTitle(currentTitle);
+    final String currentDescription = (projectData as dynamic)?.description ?? ""; // [SUNTIKAN BARU] Sinkronisasi saat reset
+    state = VisualSettingsNaracinemaPlus.defaultSettingsWithTitle(currentTitle, currentDescription);
   }
 }
 //----------------------------------------------------------------//
@@ -612,7 +628,7 @@ final visualSettingsNaracinemaPlusProvider =
     final firestoreService = ref.watch(firestoreNaracinemaPlusServiceProvider);
 
     return VisualSettingsNaracinemaPlusNotifier(
-      VisualSettingsNaracinemaPlus.defaultSettingsWithTitle(""), 
+      VisualSettingsNaracinemaPlus.defaultSettingsWithTitle("", ""), // [SUNTIKAN BARU] Initial state kosong
       projectId,
       firestoreService,
       ref

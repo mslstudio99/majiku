@@ -1,22 +1,23 @@
-// KATEGORI_PENYESUAIAN_TEMA NO_URUT_02
-// NAMA FILE: lib/screens/visual_setting_screen.dart
-// TUJUAN: Menyesuaikan file agar mematuhi AppTheme "Dark Modern"
-// dengan menghapus gaya hardcode yang bertentangan.
+//================================================================//
+// NAMA FILE: VISUAL_SETTING_SCREEN.DART                          //
+// PATH/DIREKTORI: lib/screens/visual_setting_screen.dart         //
+// FUNGSI UTAMA: EDITOR PENGATURAN VISUAL OVERLAY & TRANSISI VIDEO//
+//================================================================//
 
+//No ke-1.........................................................//
+// IMPORT DEPENDENSI & LAYAR UTAMA (STATEFUL WIDGET)              //
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 // Import model dan provider
-import '../providers/visual_settings_provider.dart'; // Pastikan path ini benar
+import '../providers/visual_settings_provider.dart';
 
-// --- KATEGORI_REFAKTOR_UI NO_URUT_01: Konversi ke StatefulWidget ---
-class VisualSettingScreen extends ConsumerStatefulWidget { // <-- Diubah
+class VisualSettingScreen extends ConsumerStatefulWidget {
   final String projectId;
   const VisualSettingScreen({super.key, required this.projectId});
 
-  // --- Opsi tetap di sini (static const) ---
   static const Map<String, String> _transitionOptions = {
     'Fade': 'fade',
     'Wipe Left': 'wipeleft',
@@ -39,24 +40,21 @@ class VisualSettingScreen extends ConsumerStatefulWidget { // <-- Diubah
     'Zoom In Bottom': 'zoom_in_bottom',
   };
 
-  // --- KATEGORI_MODIFIKASI: Hapus "Option 3" (NO_URUT_01) ---
   static const Map<String, String> _sceneMotionBehaviorOptions = {
     'Default (Sequence)': 'default',
     'Random': 'random',
-    // 'Option 3 (Linear 100%)': 'option_3', // <-- MODIFIKASI DIHAPUS
-    // 'None': 'none', // Opsional
   };
-  // --- AKHIR MODIFIKASI ---
 
   @override
   ConsumerState<VisualSettingScreen> createState() => _VisualSettingScreenState();
 }
-// --- KATEGORI_PERBAIKAN_UI: Refaktor Controller ---
+//................................................................//
+
+//No ke-2.........................................................//
+// INSTANSI STATE, INISIALISASI, SINKRONISASI & DESTRUKSI         //
 class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
   int _openPanelIndex = 0; // State untuk Accordion
 
-  // --- KUNCI PERBAIKAN: Definisikan SEMUA controller di sini ---
-  // (Controller ini akan dibuat 1x di initState)
   late TextEditingController _titleTextController;
   late TextEditingController _titleStartTimeController;
   late TextEditingController _titleDurationController;
@@ -67,15 +65,12 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
 
   late TextEditingController _transitionDurationController;
 
-  // --- INISIALISASI CONTROLLER ---
   @override
   void initState() {
     super.initState();
-    // Baca state AWAL (menggunakan ref.read) untuk mengisi controller
     final initialSettings =
         ref.read(visualSettingsProvider(widget.projectId));
 
-    // Inisialisasi controller Judul
     _titleTextController =
         TextEditingController(text: initialSettings.titleSettings.text);
     _titleStartTimeController = TextEditingController(
@@ -83,7 +78,6 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
     _titleDurationController = TextEditingController(
         text: initialSettings.titleSettings.duration.toStringAsFixed(1));
 
-    // Inisialisasi controller Deskripsi
     _descTextController =
         TextEditingController(text: initialSettings.descriptionSettings.text);
     _descStartTimeController = TextEditingController(
@@ -91,34 +85,27 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
     _descDurationController = TextEditingController(
         text: initialSettings.descriptionSettings.duration.toStringAsFixed(1));
 
-    // Inisialisasi controller Transisi
     _transitionDurationController = TextEditingController(
         text: initialSettings.transitionDuration.toStringAsFixed(1));
   }
 
-  // --- SINKRONISASI CONTROLLER ---
-  // (Jika data berubah dari luar, update controller tanpa kehilangan fokus)
   @override
   void didUpdateWidget(covariant VisualSettingScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Cek apakah projectId berubah (seharusnya tidak, tapi ini praktik baik)
     if (oldWidget.projectId != widget.projectId) {
       _syncControllers();
     }
   }
 
-  // Panggil ini saat data eksternal (misal 'Reset') mengubah state
   void _syncControllers() {
     final settings = ref.read(visualSettingsProvider(widget.projectId));
 
-    // Judul
     _tryUpdateController(_titleTextController, settings.titleSettings.text);
     _tryUpdateController(_titleStartTimeController,
         settings.titleSettings.startTime.toStringAsFixed(1));
     _tryUpdateController(_titleDurationController,
         settings.titleSettings.duration.toStringAsFixed(1));
 
-    // Deskripsi
     _tryUpdateController(
         _descTextController, settings.descriptionSettings.text);
     _tryUpdateController(_descStartTimeController,
@@ -126,16 +113,13 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
     _tryUpdateController(_descDurationController,
         settings.descriptionSettings.duration.toStringAsFixed(1));
 
-    // Transisi
     _tryUpdateController(_transitionDurationController,
         settings.transitionDuration.toStringAsFixed(1));
   }
 
-  // Helper untuk update controller dengan aman
   void _tryUpdateController(TextEditingController controller, String newValue) {
     if (controller.text != newValue) {
       controller.text = newValue;
-      // Pindahkan kursor ke akhir
       try {
         controller.selection =
             TextSelection.fromPosition(TextPosition(offset: newValue.length));
@@ -145,7 +129,6 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
     }
   }
 
-  // --- HAPUS CONTROLLER SAAT KELUAR ---
   @override
   void dispose() {
     _titleTextController.dispose();
@@ -157,19 +140,18 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
     _transitionDurationController.dispose();
     super.dispose();
   }
+//................................................................//
 
-  // --- METHOD BUILD UTAMA ---
+//No ke-3.........................................................//
+// MERAKIT UI UTAMA & DAFTAR AKORDION (EXPANSION PANEL LIST)       //
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(visualSettingsProvider(widget.projectId));
     final settingsNotifier =
         ref.read(visualSettingsProvider(widget.projectId).notifier);
 
-    // --- KUNCI PERBAIKAN: Hapus inisialisasi controller dari sini ---
-    // (Kita hanya memastikan sinkronisasi jika state di-reset)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      // Jika state provider tidak cocok dengan controller (misal: setelah reset)
       if (_transitionDurationController.text !=
           settings.transitionDuration.toStringAsFixed(1)) {
         _syncControllers();
@@ -177,11 +159,7 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
     });
 
     return Scaffold(
-      // KATEGORI_PENYESUAIAN_TEMA: Latar belakang Scaffold
-      // kini akan diwarisi dari AppTheme (scaffoldBackgroundColor / Hitam)
       appBar: AppBar(
-        // KATEGORI_PENYESUAIAN_TEMA: AppBar
-        // kini akan diwarisi dari AppTheme (appBarTheme / appBarBg)
         title: const Text('Visual Settings'),
         actions: [
           IconButton(
@@ -191,17 +169,11 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
               _showResetDialog(context, settingsNotifier);
             },
           ),
-          // --- BLOK SAVE (Sudah Diperbaiki) ---
           IconButton(
             icon: const Icon(Icons.save),
             tooltip: 'Save Settings',
             onPressed: () async {
-              // --- KATEGORI_PERBAIKAN_BUG (Perbaikan Bug 1: Data-Loss on Save) ---
-              // Paksa semua text field untuk melepaskan fokus.
-              // Ini memicu 'onEditingComplete' atau 'onTapOutside'
-              // sehingga state Riverpod di-update SEBELUM kita menyimpan.
               FocusScope.of(context).unfocus();
-              // --- AKHIR PERBAIKAN ---
 
               final scaffold = ScaffoldMessenger.of(context);
               scaffold.showSnackBar(
@@ -217,11 +189,7 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
                 scaffold.showSnackBar(
                   SnackBar(
                     content: const Text('✅ Settings saved successfully!'),
-                    // --- KATEGORI_PENYESUAIAN_TEMA (2) ---
-                    // Menggunakan warna Aksen (Emas) dari tema
                     backgroundColor: Theme.of(context).colorScheme.secondary,
-                    // backgroundColor: Colors.green,
-                    // --- AKHIR PENYESUAIAN_TEMA ---
                     duration: const Duration(seconds: 2),
                   ),
                 );
@@ -231,11 +199,7 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
                 scaffold.showSnackBar(
                   SnackBar(
                     content: Text('❌ Failed to save settings: $e'),
-                    // --- KATEGORI_PENYESUAIAN_TEMA (1) ---
-                    // Menggunakan warna Error (MerahAksen) dari tema
                     backgroundColor: Theme.of(context).colorScheme.error,
-                    // backgroundColor: Colors.red,
-                    // --- AKHIR PENYESUAIAN_TEMA ---
                     duration: const Duration(seconds: 3),
                   ),
                 );
@@ -243,25 +207,21 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
               }
             },
           ),
-          // --- AKHIR BLOK SAVE ---
         ],
       ),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(8.0),
           child: ExpansionPanelList.radio(
-            // KATEGORI_PENYESUAIAN_TEMA: ExpansionPanel
-            // kini akan diwarisi dari AppTheme (cardTheme / cardBg)
             initialOpenPanelValue: _openPanelIndex,
             animationDuration: const Duration(milliseconds: 300),
-            elevation: 1, // Sesuai AppTheme (meskipun cardTheme elevation 4)
+            elevation: 1,
             expansionCallback: (int index, bool isExpanded) {
               setState(() {
                 _openPanelIndex = _openPanelIndex == index ? -1 : index;
               });
             },
             children: [
-              // --- Panel 1: Title Settings ---
               ExpansionPanelRadio(
                 value: 0,
                 headerBuilder: (BuildContext context, bool isExpanded) {
@@ -276,11 +236,9 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
                   child: _buildSettingsSection(
                     context,
                     settings.titleSettings,
-                    // --- KUNCI PERBAIKAN: Berikan controller dari state ---
                     textController: _titleTextController,
                     startTimeController: _titleStartTimeController,
                     durationController: _titleDurationController,
-                    // ---
                     onTextChanged: settingsNotifier.updateTitleText,
                     onEffectChanged: settingsNotifier.updateTitleEffect,
                     onBaseFontSizeChanged:
@@ -290,16 +248,13 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
                     onDurationChanged: settingsNotifier.updateTitleDuration,
                     onBlockWidthFactorChanged:
                         settingsNotifier.updateTitleBlockWidthFactor,
-                    // --- KATEGORI_FITUR_VALIDASI NO_URUT_03: Terapkan aturan Title ---
                     textMaxLength: 40,
                     textCapitalization: TextCapitalization.characters,
                     textInputFormatters: null,
-                    // --- AKHIR FITUR ---
                   ),
                 ),
               ),
 
-              // --- Panel 2: Description Settings ---
               ExpansionPanelRadio(
                 value: 1,
                 headerBuilder: (BuildContext context, bool isExpanded) {
@@ -314,11 +269,9 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
                   child: _buildSettingsSection(
                     context,
                     settings.descriptionSettings,
-                    // --- KUNCI PERBAIKAN: Berikan controller dari state ---
                     textController: _descTextController,
                     startTimeController: _descStartTimeController,
                     durationController: _descDurationController,
-                    // ---
                     onTextChanged: settingsNotifier.updateDescriptionText,
                     onEffectChanged: settingsNotifier.updateDescriptionEffect,
                     onBaseFontSizeChanged:
@@ -330,16 +283,14 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
                         settingsNotifier.updateDescriptionDuration,
                     onBlockWidthFactorChanged:
                         settingsNotifier.updateDescriptionBlockWidthFactor,
-                    // --- KATEGORI_FITUR_VALIDASI NO_URUT_04: Terapkan aturan Description ---
-                    textMaxLength: 50,
-                    textCapitalization: TextCapitalization.none, // Sesuai 'huruf bebas'
+                    // --- SINKRONISASI BATAS: Teks maksimal disesuaikan ke 80 karakter ---
+                    textMaxLength: 80,
+                    textCapitalization: TextCapitalization.none,
                     textInputFormatters: null,
-                    // --- AKHIR FITUR ---
                   ),
                 ),
               ),
 
-              // --- Panel 3: Subtitle Settings ---
               ExpansionPanelRadio(
                 value: 2,
                 headerBuilder: (BuildContext context, bool isExpanded) {
@@ -354,8 +305,6 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
                   child: Column(
                     children: [
                       SwitchListTile(
-                        // KATEGORI_PENYESUAIAN_TEMA: Switch
-                        // kini akan diwarisi dari AppTheme (colorScheme.primary)
                         title: const Text('Show Subtitles'),
                         subtitle: const Text(
                             'Display text from each segment as subtitles.'),
@@ -367,8 +316,6 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
                         contentPadding: EdgeInsets.zero,
                       ),
                       const SizedBox(height: 16),
-                      // Helper ini (buildNumericInput) sudah OK,
-                      // karena controllernya bersifat sementara (onEditingComplete)
                       _buildNumericInput(
                         context: context,
                         label: 'Subtitle Base Size',
@@ -388,7 +335,6 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
                 ),
               ),
 
-              // --- Panel 4: Transition & Motion Setting ---
               ExpansionPanelRadio(
                 value: 3,
                 headerBuilder: (BuildContext context, bool isExpanded) {
@@ -410,11 +356,8 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
                         children: [
                           Expanded(
                             child: DropdownButtonFormField<String>(
-                              // KATEGORI_PENYESUAIAN_TEMA: Dropdown/Input
-                              // kini akan diwarisi dari AppTheme (inputDecorationTheme)
                               decoration: const InputDecoration(
                                 labelText: 'Transition Type',
-                                // border: OutlineInputBorder(), // Diwarisi dari tema
                               ),
                               value: settings.transitionType,
                               items: VisualSettingScreen
@@ -435,12 +378,9 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
                           const SizedBox(width: 16),
                           Expanded(
                             child: TextField(
-                              // --- KUNCI PERBAIKAN: Gunakan controller dari state ---
                               controller: _transitionDurationController,
-                              // ---
                               decoration: const InputDecoration(
                                 labelText: 'Duration (sec)',
-                                // border: OutlineInputBorder(), // Diwarisi dari tema
                                 suffixText: 's',
                               ),
                               keyboardType:
@@ -465,7 +405,6 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
                       DropdownButtonFormField<String>(
                         decoration: const InputDecoration(
                           labelText: 'Intro Motion Type',
-                          // border: OutlineInputBorder(), // Diwarisi dari tema
                           hintText: 'Select motion for the first image',
                         ),
                         value: settings.introMotionType,
@@ -486,7 +425,6 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
                       DropdownButtonFormField<String>(
                         decoration: const InputDecoration(
                           labelText: 'Scene Motion Behavior',
-                          // border: OutlineInputBorder(), // Diwarisi dari tema
                           hintText: 'Select how motion is applied to scenes',
                         ),
                         value: (settings.sceneMotionBehavior.isNotEmpty)
@@ -512,12 +450,7 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
                       const SizedBox(height: 8),
                       Text(
                         'Current Motion Mode: ${settings.sceneMotionBehavior.isNotEmpty ? settings.sceneMotionBehavior.toUpperCase() : 'DEFAULT'}',
-                        // --- KATEGORI_PENYESUAIAN_TEMA (3) ---
-                        // Menggunakan bodySmall (textSecondary/Abu-abu) dari tema
                         style: Theme.of(context).textTheme.bodySmall,
-                        // style:
-                        //     const TextStyle(fontSize: 12, color: Colors.grey),
-                        // --- AKHIR PENYESUAIAN_TEMA ---
                       ),
                     ],
                   ),
@@ -529,17 +462,16 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
       ),
     );
   }
+//................................................................//
 
-  // --- KUNCI PERBAIKAN: Helper _buildSettingsSection dimodifikasi ---
-  // (Sekarang menerima controller, tidak lagi membuat sendiri)
+//No ke-4.........................................................//
+// METODE PEMBANTU BAGIAN PENGATURAN (SECTION BUILDERS) & DIALOG  //
   Widget _buildSettingsSection(
     BuildContext context,
     TextOverlaySettings currentSettings, {
-    // Controller dari State
     required TextEditingController textController,
     required TextEditingController startTimeController,
     required TextEditingController durationController,
-    // Callback Notifier
     required ValueChanged<String> onTextChanged,
     required ValueChanged<TextEffect> onEffectChanged,
     required ValueChanged<double> onBaseFontSizeChanged,
@@ -547,38 +479,29 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
     required ValueChanged<double> onStartTimeChanged,
     required ValueChanged<double> onDurationChanged,
     required ValueChanged<double> onBlockWidthFactorChanged,
-    // --- KATEGORI_FITUR_VALIDASI NO_URUT_01: Tambah parameter validasi ---
     required int textMaxLength,
     required TextCapitalization textCapitalization,
     List<TextInputFormatter>? textInputFormatters,
-    // --- AKHIR FITUR ---
   }) {
-    // HAPUS: Logika addPostFrameCallback (sudah ditangani di initState/didUpdateWidget)
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // --- KATEGORI_FITUR_VALIDASI NO_URUT_02: Terapkan validasi ke TextField ---
         TextField(
-          controller: textController, // <-- Gunakan controller dari state
+          controller: textController,
           decoration: const InputDecoration(
             labelText: 'Text',
-            // border: OutlineInputBorder(), // Diwarisi dari tema
           ),
-          onChanged: onTextChanged, // <-- Ini aman sekarang
+          onChanged: onTextChanged,
           maxLines: 3,
-          // Terapkan properti baru
           maxLength: textMaxLength,
           textCapitalization: textCapitalization,
           inputFormatters: textInputFormatters,
           maxLengthEnforcement: MaxLengthEnforcement.enforced,
         ),
-        // --- AKHIR FITUR ---
         const SizedBox(height: 16),
         DropdownButtonFormField<TextEffect>(
           decoration: const InputDecoration(
               labelText: 'Effect', 
-              // border: OutlineInputBorder() // Diwarisi dari tema
           ),
           value: currentSettings.effect,
           items: TextEffect.values
@@ -619,10 +542,7 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
                     height: 50,
                     decoration: BoxDecoration(
                       color: currentSettings.color,
-                      // KATEGORI_PENYESUAIAN_TEMA: Gunakan textSecondary
-                      // untuk border agar terlihat di mode gelap
                       border: Border.all(color: Theme.of(context).textTheme.bodySmall!.color!),
-                      // border: Border.all(color: Colors.grey.shade400),
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
@@ -643,11 +563,9 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
           children: [
             Expanded(
               child: TextField(
-                controller:
-                    startTimeController, // <-- Gunakan controller dari state
+                controller: startTimeController,
                 decoration: const InputDecoration(
                     labelText: 'Start Time (sec)',
-                    // border: OutlineInputBorder(), // Diwarisi dari tema
                     suffixText: 's'),
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
@@ -663,11 +581,9 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
             const SizedBox(width: 16),
             Expanded(
               child: TextField(
-                controller:
-                    durationController, // <-- Gunakan controller dari state
+                controller: durationController,
                 decoration: const InputDecoration(
                     labelText: 'Duration (sec)',
-                    // border: OutlineInputBorder(), // Diwarisi dari tema
                     suffixText: 's'),
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
@@ -687,9 +603,6 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
     );
   }
 
-  // --- HELPER _buildNumericInput (Tidak Berubah) ---
-  // (Controller di sini aman karena dibuat ulang saat build,
-  // tapi hanya di-submit saat 'onEditingComplete' atau 'onTapOutside')
   Widget _buildNumericInput({
     required BuildContext context,
     required String label,
@@ -714,7 +627,6 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
       controller: controller,
       decoration: InputDecoration(
         labelText: label,
-        // border: const OutlineInputBorder(), // Diwarisi dari tema
         suffixText: 'pt',
         prefixIcon: const Icon(Icons.format_size),
       ),
@@ -743,7 +655,6 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
     );
   }
 
-  // --- HELPER _buildFactorInput (Tidak Berubah) ---
   Widget _buildFactorInput({
     required BuildContext context,
     required String label,
@@ -768,7 +679,6 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
       controller: controller,
       decoration: InputDecoration(
         labelText: label,
-        // border: const OutlineInputBorder(), // Diwarisi dari tema
         suffixText: '% (e.g., 0.85)',
         prefixIcon: const Icon(Icons.width_normal),
       ),
@@ -797,7 +707,6 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
     );
   }
 
-  // --- DIALOG PEMILIH WARNA (Tidak Berubah) ---
   void _showColorPicker(
       BuildContext context, Color currentColor, ValueChanged<Color> onColorChanged) {
     showDialog(
@@ -805,8 +714,6 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
       builder: (context) {
         Color pickerColor = currentColor;
         return AlertDialog(
-          // KATEGORI_PENYESUAIAN_TEMA: AlertDialog
-          // kini akan diwarisi dari AppTheme (cardBg)
           title: const Text('Pick a color'),
           content: SingleChildScrollView(
             child: ColorPicker(
@@ -816,8 +723,6 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
           ),
           actions: <Widget>[
             TextButton(
-              // KATEGORI_PENYESUAIAN_TEMA: Tombol
-              // kini akan diwarisi dari AppTheme (colorScheme.primary)
               child: const Text('Cancel'),
               onPressed: () => Navigator.of(context).pop(),
             ),
@@ -834,7 +739,6 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
     );
   }
 
-  // --- DIALOG RESET (Tidak Berubah, tapi sekarang aman) ---
   void _showResetDialog(
       BuildContext context, VisualSettingsNotifier notifier) {
     showDialog(
@@ -850,24 +754,14 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
               onPressed: () => Navigator.of(context).pop(),
             ),
             TextButton(
-              // --- KATEGORI_PENYESUAIAN_TEMA (4) ---
-              // Menggunakan warna Error (MerahAksen) dari tema
               child: Text('RESET', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-              // child: const Text('RESET', style: TextStyle(color: Colors.red)),
-              // --- AKHIR PENYESUAIAN_TEMA ---
               onPressed: () {
-                // Panggil method reset dari notifier
                 notifier.resetToDefaults();
-                // Sinkronisasi controller akan ditangani oleh 'addPostFrameCallback' di 'build'
                 Navigator.of(context).pop();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: const Text('Settings have been reset to default.'),
-                    // --- KATEGORI_PENYESUAIAN_TEMA (5) ---
-                    // Menggunakan warna Primary (Ungu) dari tema
                     backgroundColor: Theme.of(context).colorScheme.primary,
-                    // backgroundColor: Colors.blueAccent,
-                    // --- AKHIR PENYESUAIAN_TEMA ---
                   ),
                 );
               },
@@ -877,4 +771,5 @@ class _VisualSettingScreenState extends ConsumerState<VisualSettingScreen> {
       },
     );
   }
-} // --- AKHIR BLOK REFAKTOR (Pagar Penutup yang Benar) ---
+}
+//................................................................//

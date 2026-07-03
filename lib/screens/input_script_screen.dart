@@ -27,6 +27,12 @@ Tujuan:
 */
 //................................................................//
 
+//================================================================//
+// NAMA FILE: INPUT_SCRIPT_SCREEN.DART                            //
+// PATH/DIREKTORI: lib/screens/input_script_screen.dart           //
+// FUNGSI UTAMA: INPUT NARASI, JUDUL, DESKRIPSI & ESTIMASI TOKEN  //
+//================================================================//
+
 //No ke-2.........................................................//
 // SETUP STATE DAN MAPS OPSI SUARA (VOICES)                       //
 class InputScriptScreen extends ConsumerStatefulWidget {
@@ -46,6 +52,9 @@ class InputScriptScreen extends ConsumerStatefulWidget {
 class _InputScriptScreenState extends ConsumerState<InputScriptScreen> {
   final _scriptController = TextEditingController();
   final _titleController = TextEditingController();
+  // --- [TAMBAHAN TERBARU] Controller Deskripsi ---
+  final _descriptionController = TextEditingController();
+  // -----------------------------------------------
   final _formKey = GlobalKey<FormState>();
   
   String _selectedStyle = 'Realistic';
@@ -448,6 +457,9 @@ class _InputScriptScreenState extends ConsumerState<InputScriptScreen> {
     if (widget.initialScript.isNotEmpty) {
       _scriptController.text = widget.initialScript;
     }
+    // --- [TAMBAHAN TERBARU] Inisialisasi Deskripsi Default ---
+    _descriptionController.text = "Created @ majiku.net\nAuto Video Content & Film Maker";
+    // ---------------------------------------------------------
 
     _scriptController.addListener(() {
       setState(() {});
@@ -458,6 +470,9 @@ class _InputScriptScreenState extends ConsumerState<InputScriptScreen> {
   void dispose() {
     _scriptController.dispose();
     _titleController.dispose();
+    // --- [TAMBAHAN TERBARU] Dispose Controller Deskripsi ---
+    _descriptionController.dispose();
+    // -------------------------------------------------------
     super.dispose();
   }
 
@@ -525,9 +540,10 @@ class _InputScriptScreenState extends ConsumerState<InputScriptScreen> {
           language: _selectedLanguage,
           voice: _selectedVoice,
           showSubtitles: _showSubtitles,
-          // --- [TAMBAHAN TERBARU] Kirim Nilai Overlay ---
           useAssetOverlayEffects: _useAssetOverlayEffects, 
-          // ----------------------------------------------
+          // --- [TAMBAHAN TERBARU] Kirim Nilai Deskripsi ---
+          description: _descriptionController.text.trim(),
+          // ------------------------------------------------
         );
 
         if (mounted) {
@@ -702,6 +718,31 @@ class _InputScriptScreenState extends ConsumerState<InputScriptScreen> {
                           },
                         ),
                         const SizedBox(height: 24),
+
+                        // --- [TAMBAHAN TERBARU] INPUT FIELD DESKRIPSI ---
+                        TextFormField(
+                          controller: _descriptionController,
+                          maxLength: 80,
+                          maxLines: 2,
+                          decoration: InputDecoration(
+                            labelText: t('Project Description Overlay', 'Deskripsi Overlay Proyek'),
+                            hintText: t(
+                              'e.g., "Created using Majiku\nAuto Video Content & Film Maker"',
+                              'Cth: "Created using Majiku\nAuto Video Content & Film Maker"'
+                            ),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return t('Please enter a description.', 'Mohon isi deskripsi.');
+                            }
+                            if (value.length > 80) {
+                              return t('Description cannot exceed 80 characters.', 'Deskripsi maksimal 80 karakter.');
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 24),
+                        // -------------------------------------------------
 
                         TextFormField(
                           controller: _scriptController,

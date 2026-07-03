@@ -41,21 +41,23 @@ final List<_LoadingStage> _loadingStages = [
     },
   ),
   _LoadingStage(
-    title: "Tahap 2: Visual Imagination",
-    description: "Processing the visual scene plan.",
+    title: "Tahap 2: Audio Generation",
+    description: "Processing the audio scene plan.",
     icon: Icons.spellcheck_outlined,
     technicalStatuses: {
       "PROCESSING_REFINEMENT",
+	  "AUDIO_GENERATION",
     },
   ),
   _LoadingStage(
-    title: "Tahap 3: Generating Video",
-    description: "Starting the video generation process.",
+    title: "Tahap 3: Visual Generation",
+    description: "Starting the visual generation process.",
     icon: Icons.movie_creation_outlined,
     technicalStatuses: {
       "VIDEO_GENERATION",
       "QUEUED_FOR_VIDEO",
       "WAITING_AUDIO",
+	  "COMPLETING_ASSETS",
     },
   ),
   _LoadingStage(
@@ -63,7 +65,7 @@ final List<_LoadingStage> _loadingStages = [
     description: "Collect and verify all completed video assets.",
     icon: Icons.inventory_2_outlined,
     technicalStatuses: {
-      "COMPLETING_ASSETS",
+      "ASSETS_COMPLETE",
     },
   ),
 ];

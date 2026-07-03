@@ -17,8 +17,11 @@ class VideoProjectStorinema {
   final String imageStyle;
   final String aspectRatio;
   final String language;
-  final String? resolution; // [TAMBAHAN BARU] Menampung data resolusi dari UI
+  final String? resolution; 
+  final String? visualQuality; 
+  final String? description; // [SUNTIKAN BARU] Menampung data deskripsi overlay dari root dokumen
   final List<Map<String, dynamic>> identifiedCharacters;
+  final Map<String, dynamic>? characterImages; 
   final String? status;
   final Timestamp createdAt;
   final Timestamp updatedAt;
@@ -35,8 +38,11 @@ class VideoProjectStorinema {
     required this.imageStyle,
     required this.aspectRatio,
     required this.language,
-    this.resolution, // [TAMBAHAN BARU]
+    this.resolution, 
+    this.visualQuality, 
+    this.description, // [SUNTIKAN BARU]
     required this.identifiedCharacters,
+    this.characterImages, 
     this.status,
     required this.createdAt,
     required this.updatedAt,
@@ -81,12 +87,17 @@ class VideoProjectStorinema {
       imageStyle: data['imageStyle'] as String? ?? 'Storinema-Default',
       aspectRatio: data['aspectRatio'] as String? ?? '16:9',
       language: data['language'] as String? ?? 'Indonesian',
-      resolution: data['resolution'] as String?, // [TAMBAHAN BARU] Baca resolusi
+      resolution: data['resolution'] as String?, 
+      visualQuality: data['visualQuality'] as String?, 
+      description: data['description'] as String?, // [SUNTIKAN BARU] Membaca data deskripsi overlay
       identifiedCharacters: (data['identifiedCharacters'] is List)
           ? List<Map<String, dynamic>>.from(
               (data['identifiedCharacters'] as List).map((item) =>
                   item is Map ? Map<String, dynamic>.from(item) : {}))
           : [],
+      characterImages: data['characterImages'] is Map
+          ? Map<String, dynamic>.from(data['characterImages'])
+          : null, 
       status: data['status'] as String?,
       createdAt: _getTimestamp(data['createdAt']),
       updatedAt: _getTimestamp(data['updatedAt']),
@@ -107,8 +118,11 @@ class VideoProjectStorinema {
       'imageStyle': imageStyle,
       'aspectRatio': aspectRatio,
       'language': language,
-      if (resolution != null) 'resolution': resolution, // [TAMBAHAN BARU] Tulis resolusi
+      if (resolution != null) 'resolution': resolution, 
+      if (visualQuality != null) 'visualQuality': visualQuality, 
+      if (description != null) 'description': description, // [SUNTIKAN BARU] Menyimpan data deskripsi overlay ke root db
       'identifiedCharacters': identifiedCharacters,
+      if (characterImages != null) 'characterImages': characterImages, 
       if (status != null) 'status': status,
       'updatedAt': FieldValue.serverTimestamp(),
       if (errorDetail != null) 'errorDetail': errorDetail,
@@ -129,8 +143,12 @@ class VideoProjectStorinema {
     String? imageStyle,
     String? aspectRatio,
     String? language,
-    String? resolution, // [TAMBAHAN BARU]
+    String? resolution, 
+    String? visualQuality, 
+    String? description, // [SUNTIKAN BARU]
     List<Map<String, dynamic>>? identifiedCharacters,
+    Map<String, dynamic>? characterImages, 
+    bool clearCharacterImages = false, 
     String? status,
     Timestamp? createdAt,
     Timestamp? updatedAt,
@@ -149,8 +167,11 @@ class VideoProjectStorinema {
       imageStyle: imageStyle ?? this.imageStyle,
       aspectRatio: aspectRatio ?? this.aspectRatio,
       language: language ?? this.language,
-      resolution: resolution ?? this.resolution, // [TAMBAHAN BARU]
+      resolution: resolution ?? this.resolution, 
+      visualQuality: visualQuality ?? this.visualQuality, 
+      description: description ?? this.description, // [SUNTIKAN BARU]
       identifiedCharacters: identifiedCharacters ?? this.identifiedCharacters,
+      characterImages: clearCharacterImages ? null : (characterImages ?? this.characterImages), 
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -175,8 +196,11 @@ class VideoProjectStorinema {
         other.imageStyle == imageStyle &&
         other.aspectRatio == aspectRatio &&
         other.language == language &&
-        other.resolution == resolution && // [TAMBAHAN BARU]
+        other.resolution == resolution && 
+        other.visualQuality == visualQuality && 
+        other.description == description && // [SUNTIKAN BARU]
         listEquals(other.identifiedCharacters, identifiedCharacters) &&
+        mapEquals(other.characterImages, characterImages) && 
         other.status == status &&
         other.createdAt == createdAt &&
         other.updatedAt == updatedAt &&
@@ -198,8 +222,11 @@ class VideoProjectStorinema {
         imageStyle.hashCode ^
         aspectRatio.hashCode ^
         language.hashCode ^
-        (resolution?.hashCode ?? 0) ^ // [TAMBAHAN BARU]
+        (resolution?.hashCode ?? 0) ^ 
+        (visualQuality?.hashCode ?? 0) ^ 
+        (description?.hashCode ?? 0) ^ // [SUNTIKAN BARU]
         listHash(identifiedCharacters).hashCode ^
+        mapHash(characterImages).hashCode ^ 
         status.hashCode ^
         createdAt.hashCode ^
         updatedAt.hashCode ^

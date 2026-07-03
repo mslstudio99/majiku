@@ -374,6 +374,11 @@ class TextOverlaySettings {
 }
 //................................................................//
 
+//================================================================//
+// NAMA FILE: VISUAL_SETTINGS_PROVIDER.DART                       //
+// PATH: LIB/PROVIDERS/VISUAL_SETTINGS_PROVIDER.DART              //
+//================================================================//
+
 //No ke-4.........................................................//
 // CLASS VISUAL SETTINGS (MODEL UTAMA)                            //
 @immutable
@@ -480,7 +485,11 @@ class VisualSettings {
   }
 
   /// Mengembalikan pengaturan default baru dengan judul proyek yang diberikan.
-  static VisualSettings defaultSettingsWithTitle(String projectTitle) {
+  // --- [PERBAIKAN SINKRONISASI]: Mendukung parameter deskripsi dinamis opsional ---
+  static VisualSettings defaultSettingsWithTitle(
+    String projectTitle, {
+    String projectDescription = "Created @ majiku.net\nAuto Video Content & Film Maker",
+  }) {
     // --- KATEGORI_ARSITEKTUR_INTRO_MUSIK (NO_URUT_05) ---
     // Logika acak untuk memilih 1 dari 20 lagu
     final trackNumber = Random().nextInt(20) + 1; // Menghasilkan 1-20
@@ -504,15 +513,18 @@ class VisualSettings {
         verticalAlignment: -0.8, // 10% dari atas
       ),
       descriptionSettings: TextOverlaySettings(
-        text: "",
+        // --- [TAMBAHAN TERBARU]: Teks deskripsi dinamis ---
+        text: projectDescription,
         effect: TextEffect.fadeInOut,
         baseFontSize: 40.0, // <-- [TARGET 2] DIUBAH
         color: Colors.white,
-        startTime: 11.0,
-        duration: 5.0,
+        // --- [TAMBAHAN TERBARU]: Berbarengan dengan judul (3.0 s/d 10.0) ---
+        startTime: 3.0,
+        duration: 7.0,
         textBlockWidthFactor: 0.9,
         maxLines: 3,
-        verticalAlignment: -0.7, // 15% dari atas
+        // --- [TAMBAHAN TERBARU]: Tepat di tengah layar di bawah judul ---
+        verticalAlignment: 0.0, 
       ),
       // Subtitle
       showSubtitles: false,
@@ -570,7 +582,7 @@ class VisualSettings {
         }).toList(),
       };
     }
-    // --- KATEGORI_MODIFIKASI: Hapus "Option 3" (NO_URUT_04) ---
+    // --- KATEGORI_MODIFIKASI: Hapus "Option 3" (NO_URUT_05) ---
     // Blok "if (sceneMotionBehavior == 'option_3')" DIHAPUS
     // --- AKHIR MODIFIKASI ---
     return {
@@ -780,6 +792,11 @@ class VisualSettings {
 }
 //................................................................//
 
+//================================================================//
+// NAMA FILE: VISUAL_SETTINGS_PROVIDER.DART                       //
+// PATH: LIB/PROVIDERS/VISUAL_SETTINGS_PROVIDER.DART              //
+//================================================================//
+
 //No ke-5.........................................................//
 // HELPER ASPEK RASIO & STATE NOTIFIER / PROVIDER                 //
 double _calculateAspectRatio(String? ratioString) {
@@ -832,6 +849,16 @@ class VisualSettingsNotifier extends StateNotifier<VisualSettings> {
         debugPrint("[$projectId] Notifier received first project data. Initializing state...");
         
         final projectTitle = (projectData as dynamic).title ?? "";
+        
+        // --- [SOP KEAMANAN TINGKAT TINGGI]: Membaca deskripsi secara aman untuk fallback ---
+        String projectDescription = "Created @ majiku.net\nAuto Video Content & Film Maker";
+        try {
+          projectDescription = (projectData as dynamic).description ?? "Created @ majiku.net\nAuto Video Content & Film Maker";
+        } catch (_) {
+          // Tetap menggunakan fallback aman jika properti description tidak ada di model VideoProject
+        }
+        // ---------------------------------------------------------------------------------
+
         Map<String, dynamic>? settingsMap;
         final data = projectData as dynamic;
 
@@ -870,13 +897,13 @@ class VisualSettingsNotifier extends StateNotifier<VisualSettings> {
           } catch (e) {
             debugPrint(
                 '[$projectId] Error parsing settings map, using default with title. Error: $e');
-            state = VisualSettings.defaultSettingsWithTitle(projectTitle);
+            state = VisualSettings.defaultSettingsWithTitle(projectTitle, projectDescription: projectDescription);
           }
         } else {
           // Tidak ada setting tersimpan, gunakan default (dengan judul proyek)
           debugPrint(
               '[$projectId] visualSettings/renderPacket field missing, using default with title.');
-          state = VisualSettings.defaultSettingsWithTitle(projectTitle);
+          state = VisualSettings.defaultSettingsWithTitle(projectTitle, projectDescription: projectDescription);
         }
 
         _isInitialized = true; // Tandai sebagai sudah diinisialisasi
@@ -886,7 +913,7 @@ class VisualSettingsNotifier extends StateNotifier<VisualSettings> {
       // Tangani jika stream error saat load
       if (!_isInitialized) {
         debugPrint('[$projectId] Error loading project stream ($e), using default settings.');
-        state = VisualSettings.defaultSettingsWithTitle(""); // Error state
+        state = VisualSettings.defaultSettingsWithTitle("", projectDescription: "Created @ majiku.net\nAuto Video Content & Film Maker"); // Error state
         _isInitialized = true; // Tetap tandai agar tidak mencoba lagi
       }
     });
@@ -1073,6 +1100,9 @@ Future<void> saveSettingsToFirestore() async {
 
       Map<String, dynamic>? settingsMap;
       final currentTitle = data?['title'] as String? ?? "";
+      
+      // --- [SOP KEAMANAN TINGKAT TINGGI]: Membaca deskripsi secara aman untuk load ---
+      final currentDescription = data?['description'] as String? ?? "Created @ majiku.net\nAuto Video Content & Film Maker";
 
       if (data != null &&
           data.containsKey('renderPacket') &&
@@ -1113,7 +1143,7 @@ Future<void> saveSettingsToFirestore() async {
 
         debugPrint('✅ Visual settings loaded and state updated for project $projectId');
       } else {
-        state = VisualSettings.defaultSettingsWithTitle(currentTitle);
+        state = VisualSettings.defaultSettingsWithTitle(currentTitle, projectDescription: currentDescription);
         debugPrint(
             '⚙️ No valid visualSettings or renderPacket map found for $projectId, state reset to default.');
       }
@@ -1130,8 +1160,14 @@ Future<void> saveSettingsToFirestore() async {
         _ref.read(projectStreamProvider(projectId)).asData?.value;
     // --- AKHIR PERBAIKAN ---
     final String currentTitle = (projectData as dynamic)?.title ?? "";
+    
+    // --- [SOP KEAMANAN TINGKAT TINGGI]: Membaca deskripsi secara aman untuk reset ---
+    String currentDescription = "Created @ majiku.net\nAuto Video Content & Film Maker";
+    try {
+      currentDescription = (projectData as dynamic).description ?? "Created @ majiku.net\nAuto Video Content & Film Maker";
+    } catch (_) {}
 
-    state = VisualSettings.defaultSettingsWithTitle(currentTitle);
+    state = VisualSettings.defaultSettingsWithTitle(currentTitle, projectDescription: currentDescription);
 
     debugPrint('Visual settings for project $projectId reset to default.');
   }

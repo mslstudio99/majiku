@@ -37,6 +37,7 @@ class InputScriptStorinemaScreen extends ConsumerStatefulWidget {
 class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinemaScreen> {
   final _scriptController = TextEditingController();
   final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController(); // [SUNTIKAN BARU] Kontroler Deskripsi Overlay
   final _formKey = GlobalKey<FormState>();
   
   String _selectedStyle = 'Realistic';
@@ -49,6 +50,7 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
   
   bool _showSubtitles = false; 
   String _selectedResolution = '480p'; 
+  String _selectedVisualQuality = 'Standard'; // Kualitas Visual
 
   // ==========================================
   // OPSI SUARA (LENGKAP)
@@ -434,6 +436,9 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
       _scriptController.text = widget.initialScript;
     }
 
+    // Mengisi teks default overlay deskripsi
+    _descriptionController.text = "Created @ majiku.net\nAuto Video Content & Film Maker";
+
     _scriptController.addListener(() {
       setState(() {});
     });
@@ -443,19 +448,14 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
   void dispose() {
     _scriptController.dispose();
     _titleController.dispose();
+    _descriptionController.dispose(); // [SUNTIKAN BARU] Pelepasan Kontroler
     super.dispose();
   }
 
-  // [PERBAIKAN ANTI-REGRESI] Fungsi Penghitung Segmen (200 Karakter = 1 Segmen)
-  // Sinkronisasi dengan logika backend: Asumsi 1 kalimat = 100 karakter, 2 kalimat = 200 karakter
   int _calculateEstimatedScenes(String text) {
-    // Bersihkan spasi kosong di awal dan akhir agar perhitungan presisi
     final String cleanText = text.trim();
     if (cleanText.isEmpty) return 0;
 
-    // Menghitung total karakter riil dan membaginya dengan 200.
-    // Menggunakan ceil() (pembulatan ke atas) agar sisa karakter (misal 201 karakter)
-    // dihitung sebagai segmen berikutnya demi keamanan tagihan token.
     return (cleanText.length / 200).ceil();
   }
 
@@ -476,6 +476,8 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
           voice: _selectedVoice,
           showSubtitles: _showSubtitles,
           resolution: _selectedResolution, 
+          visualQuality: _selectedVisualQuality,
+          description: _descriptionController.text.trim(), // [SUNTIKAN BARU] Pengiriman deskripsi ter-trim ke Firestore
         );
 
         if (mounted) {
@@ -516,7 +518,6 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
 //================================================================//
   @override
   Widget build(BuildContext context) {
-    // KUNCI: Menggunakan appLanguageProvider agar sinkron dengan pengaturan Global
     final currentLocale = ref.watch(appLanguageProvider);
     final isIndo = currentLocale.languageCode == 'id';
     String t(String en, String id) => isIndo ? id : en;
@@ -526,7 +527,6 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
     final userAsync = ref.watch(firestoreUserProvider);
     final configAsync = ref.watch(appConfigProvider);
 
-    // [PERBAIKAN] Menggunakan fungsi hitung pintar berbasis tanda baca + kapital
     final int estimatedScenes = _calculateEstimatedScenes(_scriptController.text);
     
     int currentBalance = 0;
@@ -540,7 +540,6 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
     });
 
     configAsync.whenData((config) {
-      // [PERBAIKAN] Menentukan cost per segmen berdasarkan resolusi yang dipilih
       if (_selectedResolution == '480p') {
         costPerScene = config.costs.storinemaCosts.res480;
       } else if (_selectedResolution == '720p') {
@@ -548,8 +547,13 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
       } else if (_selectedResolution == '1080p') {
         costPerScene = config.costs.storinemaCosts.res1080;
       } else {
-        costPerScene = 400; // Fallback aman
+        costPerScene = 400;
       }
+
+      if (_selectedVisualQuality == 'High') {
+        costPerScene += 120;
+      }
+
       configReady = true;
     });
 
@@ -614,6 +618,7 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        // Row 1: Judul Proyek
                         TextFormField(
                           controller: _titleController,
                           maxLength: 40,
@@ -633,6 +638,24 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
                         ),
                         const SizedBox(height: 24),
 
+                        // Row 2: Deskripsi Overlay Proyek (Diletakkan di bawah Judul Proyek)
+                        TextFormField(
+                          controller: _descriptionController,
+                          maxLength: 80,
+                          maxLines: 2,
+                          decoration: InputDecoration(
+                            labelText: t('Project Description Overlay', 'Deskripsi Overlay Proyek'),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return t('Please enter a description.', 'Mohon isi deskripsi.');
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Row 3: Naskah Narasi (Script)
                         TextFormField(
                           controller: _scriptController,
                           maxLines: 10,
@@ -784,43 +807,26 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
                               ),
                             ),
                             
-                            // --- BLOK SUBTITLE DINONAKTIFKAN SEMENTARA ---
-                            /*
                             const SizedBox(width: 16),
+                            
                             Expanded(
-                              child: Container(
-                                height: 58, 
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                decoration: BoxDecoration(
-                                  color: Colors.black12,
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: Colors.white24, width: 1),
+                              child: DropdownButtonFormField<String>(
+                                value: _selectedVisualQuality,
+                                isExpanded: true,
+                                decoration: InputDecoration(
+                                  labelText: t('Visual Quality', 'Kualitas Visual'),
                                 ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        t('Subtitles', 'Subtitle'),
-                                        style: const TextStyle(fontSize: 14),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    Switch(
-                                      value: _showSubtitles,
-                                      activeColor: Colors.blue,
-                                      onChanged: (bool value) {
-                                        setState(() {
-                                          _showSubtitles = value;
-                                        });
-                                      },
-                                    ),
-                                  ],
-                                ),
+                                items: [
+                                  DropdownMenuItem(value: 'Standard', child: Text(t('Standard (Good)', 'Standar (Bagus)'))),
+                                  DropdownMenuItem(value: 'High', child: Text(t('High (Precision)', 'Tinggi (Presisi)'))),
+                                ],
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() => _selectedVisualQuality = value);
+                                  }
+                                },
                               ),
                             ),
-                            */
-                            // --- AKHIR BLOK DINONAKTIFKAN ---
                           ],
                         ),
                         const SizedBox(height: 32),
@@ -920,5 +926,5 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
       ),
     );
   }
-}
+    }
 //----------------------------------------------------------------//

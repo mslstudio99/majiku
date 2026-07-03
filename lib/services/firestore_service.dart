@@ -411,9 +411,10 @@ class FirestoreService {
     required String language,
     required String voice,
     required bool showSubtitles, 
-    // --- [TAMBAHAN TERBARU] Parameter Toggle Overlay ---
     required bool useAssetOverlayEffects,
-    // ---------------------------------------------------
+    // --- [TAMBAHAN TERBARU] Parameter Opsional Deskripsi (Dengan Default Baru) ---
+    String description = "Created @ majiku.net\nAuto Video Content & Film Maker",
+    // -------------------------------------------------------
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -422,12 +423,16 @@ class FirestoreService {
     }
 
     try {
-      // Menyuntikkan nilai showSubtitles dan useAssetOverlayEffects ke dalam state bawaan
-      final defaultVisualSettings = VisualSettings.defaultSettingsWithTitle(title)
+      // --- [PERBAIKAN KUNCI]: Menyuntikkan 'description' ke VisualSettings ---
+      final defaultVisualSettings = VisualSettings.defaultSettingsWithTitle(
+            title, 
+            projectDescription: description // <-- INI YANG MEMBAWA TEKS KE RENDERER
+          )
           .copyWith(
             showSubtitles: showSubtitles,
             useAssetOverlayEffects: useAssetOverlayEffects,
           );
+      // ----------------------------------------------------------------------
       
       final double aspectRatioValue = _calculateAspectRatioFromString(aspectRatio);
       
@@ -437,6 +442,9 @@ class FirestoreService {
       final docRef = await _db.collection('projects').add({
         'userId': user.uid,
         'title': title.isNotEmpty ? title : "Untitled Project",
+        // --- [TAMBAHAN TERBARU] Menyimpan Field Deskripsi Baru & Fallback Baru ---
+        'description': description.isNotEmpty ? description : "Created @ majiku.net\nAuto Video Content & Film Maker",
+        // ---------------------------------------------------------
         'rawScript': rawScript,
         'imageStyle': imageStyle,
         'aspectRatio': aspectRatio,
@@ -471,5 +479,5 @@ class FirestoreService {
     debugPrint("Invalid aspectRatio '$ratioString', falling back to 16/9.");
     return 16 / 9;
   }
-} 
+}
 //..................................................//

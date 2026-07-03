@@ -990,6 +990,7 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
         actions: [
           TextButton(child: const Text('Cancel'), onPressed: () => Navigator.pop(ctx)),
           TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.deepOrange), // [PERBAIKAN]: Mengubah warna teks tombol aksi menjadi Oranye agar jelas & senada
             child: const Text('Regenerate (Pruned)'), 
             onPressed: () async {
               Navigator.pop(ctx);

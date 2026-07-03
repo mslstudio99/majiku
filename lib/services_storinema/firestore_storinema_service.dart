@@ -256,7 +256,9 @@ class FirestoreStorinemaService {
     required String language,
     required String voice,         
     required bool showSubtitles,   
-    required String resolution,    // [TAMBAHAN BARU] Menangkap Resolusi
+    required String resolution,    
+    required String visualQuality, 
+    required String description, // [SUNTIKAN BARU] Menerima data deskripsi overlay dari UI
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -280,7 +282,9 @@ class FirestoreStorinemaService {
         'language': language, 
         'voice': voice,                 
         'showSubtitles': showSubtitles, 
-        'resolution': resolution,       // [TAMBAHAN BARU] Save Resolusi ke DB
+        'resolution': resolution,       
+        'visualQuality': visualQuality, 
+        'description': description, // [SUNTIKAN BARU] Menyimpan deskripsi overlay ke Firestore
         
         'status': 'PROCESSING_SCENE', 
         
