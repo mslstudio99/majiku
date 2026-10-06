@@ -8,7 +8,7 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// [FIX 1] LOAD KEYSTORE (Dengan Import yang Benar)
+// [LOAD KEYSTORE PROPERTIES DENGAN SAFE GUARD]
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
@@ -21,13 +21,14 @@ android {
     ndkVersion = "27.0.12077973"
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        // [PERBAIKAN COMPATIBILITY]: Upgrade ke Java 17 Sesuai Standar AGP 8+ & Google Play Billing v8/v9
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        // [FIX 2] Update Syntax JVM Target
-        jvmTarget = "1.8" 
+        // [PERBAIKAN JVM TARGET]: Disesuaikan dengan Java 17
+        jvmTarget = "17" 
     }
 
     defaultConfig {
@@ -38,24 +39,29 @@ android {
         versionName = flutter.versionName
     }
 
-    // [FIX 3] Konfigurasi Signing (Tanpa Cast yang bikin error)
     signingConfigs {
         create("release") {
-            keyAlias = keystoreProperties["keyAlias"].toString()
-            keyPassword = keystoreProperties["keyPassword"].toString()
-            storeFile = keystoreProperties["storeFile"]?.let { file(it.toString()) }
-            storePassword = keystoreProperties["storePassword"].toString()
+            if (keystorePropertiesFile.exists()) {
+                keyAlias = keystoreProperties["keyAlias"]?.toString()
+                keyPassword = keystoreProperties["keyPassword"]?.toString()
+                storeFile = keystoreProperties["storeFile"]?.let { file(it.toString()) }
+                storePassword = keystoreProperties["storePassword"]?.toString()
+            }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
+            }
             
-            // Optimasi
+            // Optimasi R8 Code Shrinking
             isMinifyEnabled = true 
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }

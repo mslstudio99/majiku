@@ -10,6 +10,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
 
+// [IMPORT SERVICE LOGGING USER CENTER]
+import '../services/firestore_service.dart';
+
 import '../screens/input_script_screen.dart'; // VMotion
 import '../screens_veo/input_script_veo_screen.dart'; // VFootage
 import '../screens_storinema/input_script_storinema_screen.dart'; // Storinema
@@ -33,17 +36,40 @@ import '../models/app_config.dart';
 //................................................................//
 
 //No ke-2.........................................................//
-//MAIN CLASS DECLARATION                                          //
-class GeneratorKisahIslamiScreen extends ConsumerWidget {
+//MAIN CLASS & STATE DECLARATION (STATEFUL CONVERSION)             //
+class GeneratorKisahIslamiScreen extends ConsumerStatefulWidget {
   const GeneratorKisahIslamiScreen({super.key});
 
+  @override
+  ConsumerState<GeneratorKisahIslamiScreen> createState() =>
+      _GeneratorKisahIslamiScreenState();
+}
+
+class _GeneratorKisahIslamiScreenState
+    extends ConsumerState<GeneratorKisahIslamiScreen> {
   final int _maxPromptLength = 200;
+
+  @override
+  void initState() {
+    super.initState();
+    // --- [LOG AKTIVITAS: KUNJUNGAN AUTO NARRATIVE -> KISAH ISLAMI] ---
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'auto_narrative',
+          subFeatureKey: 'kisah_islami',
+          eventType: 'visit',
+        );
+      }
+    });
+    // -----------------------------------------------------------------
+  }
 //................................................................//
 
 //No ke-3.........................................................//
 //MAIN BUILD METHOD & SCAFFOLD                                    //
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final state = ref.watch(generatorKisahIslamiViewModelProvider);
     final viewModel = ref.read(generatorKisahIslamiViewModelProvider.notifier);
     final AsyncValue<AppUser> userState = ref.watch(firestoreUserProvider);
@@ -65,6 +91,16 @@ class GeneratorKisahIslamiScreen extends ConsumerWidget {
           ),
         );
       }
+
+      // --- [LOG AKTIVITAS: KONVERSI SUKSES GENERATE KISAH ISLAMI] ---
+      if (previous?.isLoading == true && !next.isLoading && next.generatedStory.isNotEmpty) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'auto_narrative',
+          subFeatureKey: 'kisah_islami',
+          eventType: 'conversion',
+        );
+      }
+      // --------------------------------------------------------------
     });
 
     return Scaffold(

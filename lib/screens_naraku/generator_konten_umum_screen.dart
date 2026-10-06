@@ -10,6 +10,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
 
+// [IMPORT SERVICE LOGGING USER CENTER]
+import '../services/firestore_service.dart';
+
 // [IMPORT NAVIGASI KE 4 APLIKASI UTAMA]
 import '../screens/input_script_screen.dart'; // VMotion
 import '../screens_veo/input_script_veo_screen.dart'; // VFootage
@@ -36,16 +39,40 @@ import '../models/app_config.dart';
 //................................................................//
 
 //No ke-2.........................................................//
-// MAIN CLASS DEFINITION                                          //
-class GeneratorKontenUmumScreen extends ConsumerWidget {
+// MAIN CLASS & STATE DECLARATION (STATEFUL CONVERSION)            //
+class GeneratorKontenUmumScreen extends ConsumerStatefulWidget {
   const GeneratorKontenUmumScreen({super.key});
+
+  @override
+  ConsumerState<GeneratorKontenUmumScreen> createState() =>
+      _GeneratorKontenUmumScreenState();
+}
+
+class _GeneratorKontenUmumScreenState
+    extends ConsumerState<GeneratorKontenUmumScreen> {
   final int _maxPromptLength = 200;
+
+  @override
+  void initState() {
+    super.initState();
+    // --- [LOG AKTIVITAS: KUNJUNGAN AUTO NARRATIVE -> KONTEN UMUM] ---
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'auto_narrative',
+          subFeatureKey: 'konten_umum',
+          eventType: 'visit',
+        );
+      }
+    });
+    // ----------------------------------------------------------------
+  }
 //................................................................//
 
 //No ke-3.........................................................//
 // MAIN BUILD METHOD & SCAFFOLD                                   //
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final state = ref.watch(generatorKontenUmumViewModelProvider);
     final viewModel = ref.read(generatorKontenUmumViewModelProvider.notifier);
     
@@ -68,6 +95,16 @@ class GeneratorKontenUmumScreen extends ConsumerWidget {
           ),
         );
       }
+
+      // --- [LOG AKTIVITAS: KONVERSI SUKSES GENERATE KONTEN UMUM] ---
+      if (previous?.isLoading == true && !next.isLoading && next.generatedStory.isNotEmpty) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'auto_narrative',
+          subFeatureKey: 'konten_umum',
+          eventType: 'conversion',
+        );
+      }
+      // -------------------------------------------------------------
     });
 
     return Scaffold(

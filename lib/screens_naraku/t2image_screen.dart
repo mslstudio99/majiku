@@ -8,7 +8,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:url_launcher/url_launcher.dart'; // [BARU] Untuk delegasi download ke OS
+import 'package:url_launcher/url_launcher.dart'; // Untuk delegasi download ke OS
+
+// [IMPORT SERVICE LOGGING USER CENTER]
+import '../services/firestore_service.dart';
 
 import '../view_model_naraku/t2image_view_model.dart';
 import '../providers/user_provider.dart';
@@ -33,8 +36,18 @@ class _T2ImageScreenState extends ConsumerState<T2ImageScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final viewModel = ref.read(t2ImageViewModelProvider.notifier);
-      viewModel.promptController.addListener(() => setState(() {}));
+      if (mounted) {
+        final viewModel = ref.read(t2ImageViewModelProvider.notifier);
+        viewModel.promptController.addListener(() => setState(() {}));
+
+        // --- [LOG AKTIVITAS: KUNJUNGAN OTHER TOOLS -> T2IMAGE] ---
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'other_tools',
+          subFeatureKey: 't2image',
+          eventType: 'visit',
+        );
+        // ---------------------------------------------------------
+      }
     });
   }
 
@@ -149,6 +162,16 @@ class _T2ImageScreenState extends ConsumerState<T2ImageScreen> {
           ),
         );
       }
+
+      // --- [LOG AKTIVITAS: KONVERSI SUKSES GENERATE T2IMAGE] ---
+      if (previous?.isLoading == true && !next.isLoading && next.generatedImageData != null) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'other_tools',
+          subFeatureKey: 't2image',
+          eventType: 'conversion',
+        );
+      }
+      // ---------------------------------------------------------
     });
 
     final int textLength = viewModel.promptController.text.trim().length;

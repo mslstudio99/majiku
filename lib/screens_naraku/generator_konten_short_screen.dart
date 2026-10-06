@@ -11,6 +11,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
 
+// [IMPORT SERVICE LOGGING USER CENTER]
+import '../services/firestore_service.dart';
+
 // [IMPORT NAVIGASI KE 4 APLIKASI UTAMA]
 import '../screens/input_script_screen.dart'; // VMotion
 import '../screens_veo/input_script_veo_screen.dart'; // VFootage
@@ -57,7 +60,17 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _showTutorialPopup();
+      if (mounted) {
+        _showTutorialPopup();
+
+        // --- [LOG AKTIVITAS: KUNJUNGAN AUTO NARRATIVE -> KONTEN SHORT] ---
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'auto_narrative',
+          subFeatureKey: 'konten_short',
+          eventType: 'visit',
+        );
+        // ------------------------------------------------------------------
+      }
     });
   }
 
@@ -156,6 +169,16 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
           ),
         );
       }
+
+      // --- [LOG AKTIVITAS: KONVERSI SUKSES GENERATE KONTEN SHORT] ---
+      if (previous?.isLoading == true && !next.isLoading && next.generatedNarrative.isNotEmpty) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'auto_narrative',
+          subFeatureKey: 'konten_short',
+          eventType: 'conversion',
+        );
+      }
+      // --------------------------------------------------------------
     });
 
     return Scaffold(

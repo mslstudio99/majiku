@@ -1,26 +1,29 @@
-// [RILIS BERSIH - PAYMENT HYBRID SERVICE FINAL v3.1]
-// KATEGORI_BUG_FIX NO_URUT_01
-// Perbaikan: 
-// 1. [FIX] Membuka import 'package:flutter/foundation.dart' agar 'debugPrint' terbaca.
-// 2. Logika Fetch & IAP tetap sama dengan v3.
+//====================================================================================================//
+// NAMA FILE: PAYMENT_HYBRID_SERVICE.DART                                                             //
+// DIREKTORI: lib/services/payment_hybrid_service.dart                                                //
+//====================================================================================================//
 
+//No ke-1: IMPOR & PROVIDER GLOBAL....................................................................//
+//Sub-judul: Memuat dependensi IAP, Cloud Functions, URL Launcher, dan Platform utils................//
 import 'dart:async';
 import 'dart:io';
-
-// [FIX] Hapus 'show kIsWeb' agar debugPrint dan utility lain bisa dipakai
 import 'package:flutter/foundation.dart'; 
-
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+//Akhir Blok 1........................................................................................//
 
+//No ke-2: KELAS UTAMA & INISIALISASI SINGLETON........................................................//
+//Sub-judul: Service Singleton, Stream Subscription, dan Product Cache................................//
 class PaymentHybridService {
   // Singleton instance
   static final PaymentHybridService _instance = PaymentHybridService._internal();
   factory PaymentHybridService() => _instance;
   
   final InAppPurchase _iap = InAppPurchase.instance;
-  late StreamSubscription<List<PurchaseDetails>> _subscription;
+  
+  // [PERBAIKAN BUG]: Mengubah dari 'late' menjadi Nullable untuk mencegah LateInitializationError di iOS/Web
+  StreamSubscription<List<PurchaseDetails>>? _subscription;
   
   // Cache harga Google agar UI tidak loading berulang kali
   final Map<String, ProductDetails> _productCache = {};
@@ -33,10 +36,9 @@ class PaymentHybridService {
       _subscription = purchaseUpdated.listen(
         _listenToPurchaseUpdated,
         onDone: () {
-          _subscription.cancel();
+          _subscription?.cancel();
         },
         onError: (error) {
-          // Sekarang debugPrint sudah dikenali
           debugPrint("[IAP Error] Stream error: $error");
         },
       );
@@ -44,8 +46,10 @@ class PaymentHybridService {
   }
 
   bool get isAndroidIAP => !kIsWeb && Platform.isAndroid;
+//Akhir Blok 2........................................................................................//
 
-  // --- 1. FITUR BARU: FETCH HARGA ASLI (SOLUSI KEBIJAKAN GOOGLE) ---
+//No ke-3: FETCH PRODUCT DETAILS & CACHING............................................................//
+//Sub-judul: Mengambil harga asli produk langsung dari Google Play Store..............................//
   
   /// Mengambil detail produk (Harga, Deskripsi) langsung dari Google Play.
   /// Wajib dipanggil saat Screen dimuat (initState).
@@ -77,8 +81,6 @@ class PaymentHybridService {
       // Simpan hasil ke Cache Memory
       for (var product in response.productDetails) {
         _productCache[product.id] = product;
-        // Debugging: Pastikan harga yang diambil benar
-        // debugPrint("[IAP] Fetched: ${product.id} -> ${product.price}");
       }
     } catch (e) {
       debugPrint("[IAP Error] Exception saat fetch produk: $e");
@@ -86,14 +88,11 @@ class PaymentHybridService {
   }
 
   /// Mengambil harga terformat (misal: "Rp 129.000,00") dari Cache.
-  /// Jika belum ada, return null (Screen harus handle loading state).
   String? getPriceFromCache(String productId) {
     return _productCache[productId]?.price;
   }
 
   /// Helper: Generate list SKU untuk Top-Up beserta variasinya
-  /// Input: baseId='topup_basic', quantities=[1, 3, 5] 
-  /// Output: {'topup_basic', 'topup_basic_x3', 'topup_basic_x5'}
   Set<String> generateVariantIds(String baseId, List<int> quantities) {
     final Set<String> ids = {}; 
     for (var qty in quantities) {
@@ -105,9 +104,12 @@ class PaymentHybridService {
     }
     return ids;
   }
+//Akhir Blok 3........................................................................................//
 
-  // --- 2. JALUR PEMBAYARAN: DUITKU (WEB) ---
+//No ke-4: EKSEKUSI PEMBAYARAN (DUITKU & GOOGLE PLAY).................................................//
+//Sub-judul: Alur pemicu transaksi Web (Duitku) dan Android dengan standar IAP terbaru................//
   
+  // --- JALUR PEMBAYARAN: DUITKU (WEB) ---
   Future<void> payWithDuitku({
     required String packageId,
     required String paymentMethod,
@@ -133,14 +135,13 @@ class PaymentHybridService {
     }
   }
 
-  // --- 3. JALUR PEMBAYARAN: GOOGLE PLAY (ANDROID) ---
-  
+  // --- JALUR PEMBAYARAN: GOOGLE PLAY (ANDROID) ---
   Future<void> payWithGooglePlay({
     required String productId, 
   }) async {
     if (!isAndroidIAP) return;
 
-    // Cek Cache dulu.
+    // Cek Cache dulu
     ProductDetails? product = _productCache[productId];
 
     if (product == null) {
@@ -153,28 +154,33 @@ class PaymentHybridService {
       _productCache[productId] = product; // Update cache
     }
 
+    // [PERBAIKAN]: Mengamankan inisialisasi PurchaseParam untuk kompatibilitas Billing v8/v9
     final PurchaseParam purchaseParam = PurchaseParam(productDetails: product);
     
     // Logika Langganan vs Beli Putus (Consumable)
     if (productId.contains("monthly")) {
-      // Subscription (Non-Consumable)
+      // Subscription (Non-Consumable). Play Billing API terbaru mengharuskan handling BasePlan jika ada,
+      // namun Plugin in_app_purchase akan otomatis menangani pemetaan ini menggunakan productDetails dasar.
       await _iap.buyNonConsumable(purchaseParam: purchaseParam);
     } else {
       // Top-Up & Varian _x (Consumable)
       await _iap.buyConsumable(purchaseParam: purchaseParam);
     }
   }
+//Akhir Blok 4........................................................................................//
 
-  // --- 4. LISTENER HASIL PEMBAYARAN ---
+//No ke-5: LISTENER TRANSAKSI & VERIFIKASI BACKEND...................................................//
+//Sub-judul: Menangani stream update pembelian, verifikasi Cloud Function, dan penyelesaian transaksi.//
   
   Future<void> _listenToPurchaseUpdated(List<PurchaseDetails> purchaseDetailsList) async {
     for (final PurchaseDetails purchaseDetails in purchaseDetailsList) {
       
       if (purchaseDetails.status == PurchaseStatus.pending) {
         // Transaksi sedang diproses...
+        debugPrint("[IAP] Transaksi ${purchaseDetails.productID} sedang pending...");
       } else {
         if (purchaseDetails.status == PurchaseStatus.error) {
-          debugPrint("[IAP] Error: ${purchaseDetails.error}");
+          debugPrint("[IAP] Error Transaksi: ${purchaseDetails.error?.message} (Code: ${purchaseDetails.error?.code})");
         } else if (purchaseDetails.status == PurchaseStatus.purchased ||
                    purchaseDetails.status == PurchaseStatus.restored) {
           
@@ -188,7 +194,7 @@ class PaymentHybridService {
           }
         }
 
-        // [WAJIB] Selesaikan Transaksi
+        // [WAJIB] Selesaikan Transaksi (Acknowledge / Consume ke Google Play v8/v9)
         if (purchaseDetails.pendingCompletePurchase) {
           await _iap.completePurchase(purchaseDetails);
         }
@@ -196,8 +202,6 @@ class PaymentHybridService {
     }
   }
 
-  // --- 5. VERIFIKASI KE CLOUD FUNCTIONS ---
-  
   Future<bool> _verifyPurchase(PurchaseDetails purchaseDetails) async {
     try {
       final functions = FirebaseFunctions.instanceFor(region: "asia-southeast2");
@@ -215,8 +219,9 @@ class PaymentHybridService {
     }
   }
   
-  // Cleanup
+  // Cleanup Resources
   void dispose() {
-    _subscription.cancel();
+    _subscription?.cancel();
   }
 }
+//Akhir Blok 5........................................................................................//

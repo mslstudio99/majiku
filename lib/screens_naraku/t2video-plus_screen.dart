@@ -10,6 +10,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'package:video_player/video_player.dart'; 
 
+// [IMPORT SERVICE LOGGING USER CENTER]
+import '../services/firestore_service.dart';
+
 // [IMPORT NAVIGASI MASTER]
 import '../screens/project_dashboard_screen.dart';
 
@@ -27,7 +30,7 @@ class T2videoPlusScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<T2videoPlusScreen> createState() => _T2videoPlusScreenState();
 }
-// Penutup Blok //
+//.......................................................//
 
 // No ke-2 - STATE & INITIALIZATION //
 //.......................................................//
@@ -39,8 +42,18 @@ class _T2videoPlusScreenState extends ConsumerState<T2videoPlusScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final viewModel = ref.read(t2videoPlusViewModelProvider.notifier);
-      viewModel.narrativeController.addListener(_onTextChanged);
+      if (mounted) {
+        final viewModel = ref.read(t2videoPlusViewModelProvider.notifier);
+        viewModel.narrativeController.addListener(_onTextChanged);
+
+        // --- [LOG AKTIVITAS: KUNJUNGAN OTHER TOOLS -> T2VIDEO_PLUS] ---
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'other_tools',
+          subFeatureKey: 't2video_plus',
+          eventType: 'visit',
+        );
+        // -------------------------------------------------------------
+      }
     });
   }
 
@@ -52,7 +65,7 @@ class _T2videoPlusScreenState extends ConsumerState<T2videoPlusScreen> {
   void dispose() {
     super.dispose();
   }
-// Penutup Blok //
+//.......................................................//
 
 // No ke-3 - LOGIC & REPORT FUNCTION //
 //.......................................................//
@@ -132,6 +145,7 @@ class _T2videoPlusScreenState extends ConsumerState<T2videoPlusScreen> {
 
 // No ke-4 - MAIN BUILDER & FORM UI //
 // KELAS RENDER UI UTAMA //
+//.......................................................//
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(t2videoPlusViewModelProvider);
@@ -151,6 +165,16 @@ class _T2videoPlusScreenState extends ConsumerState<T2videoPlusScreen> {
           ),
         );
       }
+
+      // --- [LOG AKTIVITAS: KONVERSI SUKSES GENERATE T2VIDEO_PLUS] ---
+      if (previous?.isLoading == true && !next.isLoading && next.generatedVideoUrl.isNotEmpty) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'other_tools',
+          subFeatureKey: 't2video_plus',
+          eventType: 'conversion',
+        );
+      }
+      // --------------------------------------------------------------
     });
 
     final int textLength = viewModel.narrativeController.text.trim().length;
@@ -166,8 +190,7 @@ class _T2videoPlusScreenState extends ConsumerState<T2videoPlusScreen> {
       userReady = true;
     });
 
-configAsync.whenData((config) {
-      // [PERBAIKAN KRITIS]: Menggunakan t2videoPlusCosts, bukan t2videoCosts biasa
+    configAsync.whenData((config) {
       final t2plus = config.costs.t2videoPlusCosts; 
       int costPerSecond = 0;
 
@@ -178,7 +201,6 @@ configAsync.whenData((config) {
       } else if (state.selectedResolution == '1080') {
         costPerSecond = state.isAudioEnabled ? t2plus.res1080WithAudio : t2plus.res1080NoAudio;
       } else {
-        // Fallback aman ke 480p Plus
         costPerSecond = t2plus.res480NoAudio; 
       }
 
@@ -478,7 +500,7 @@ configAsync.whenData((config) {
       ),
     );
   }
-// Penutup Blok //
+//.......................................................//
 
 // No ke-5 - MODERN OUTPUT KARTU & FIX CORS //
 //.......................................................//

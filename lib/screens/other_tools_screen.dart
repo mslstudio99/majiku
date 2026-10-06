@@ -1,10 +1,11 @@
-//......................................................//
-// LIB/SCREENS/OTHER_TOOLS_SCREEN.DART                  //
-// LAYAR OTHER TOOLS (FITUR SEKUNDER)                   //
-//......................................................//
+//================================================================//
+// LIB/SCREENS/OTHER_TOOLS_SCREEN.DART                            //
+// LAYAR OTHER TOOLS (FITUR SEKUNDER MAJIKU)                      //
+// GRID MENU GENERATOR NARAKU AI SUITE TERMASUK TEXT TO SPEECH    //
+//================================================================//
 
-// No ke-1 - IMPOR DEPENDENSI & LAYAR TERKAIT           //
-// Mengimpor library dan layar fitur yang dipindahkan //
+//No ke-1: IMPOR DEPENDENSI & LAYAR GENERATOR                     //
+//IMPORT WIDGET MATERIAL, THEME & DAFTAR LAYAR GENERATOR NARAKU   //
 import 'package:flutter/material.dart';
 
 // --- Impor Layar Generator Naraku ---
@@ -12,13 +13,15 @@ import '../screens_naraku/t2image_screen.dart';
 import '../screens_naraku/t2video_screen.dart';
 import '../screens_naraku/image2video_screen.dart';
 import '../screens_naraku/t2video-plus_screen.dart';
+import '../screens_naraku/t2speech_screen.dart'; // [BARU] Layar T2Speech Premium
 
 // --- Impor Tema ---
 import '../theme/app_theme.dart';
-// Penutup Blok //
+// END OF BLOK 1 //
+//================================================================//
 
-// No ke-2 - WIDGET OTHER TOOLS SCREEN                  //
-// Layar Stateless untuk menampung grid menu tambahan   //
+//No ke-2: WIDGET OTHER TOOLS SCREEN & LAYOUT DASAR               //
+//SCAFFOLD, GRADIENT BACKGROUND & SCROLL VIEW CONTAINER           //
 class OtherToolsScreen extends StatelessWidget {
   const OtherToolsScreen({super.key});
 
@@ -56,16 +59,18 @@ class OtherToolsScreen extends StatelessWidget {
       ),
     );
   }
-// Penutup Blok //
+// END OF BLOK 2 //
+//================================================================//
 
-// No ke-3 - BUILDER WIDGET & KOMPONEN GRID             //
-// Merender Layout Grid dan Tombol Identik              //
+//No ke-3: BUILDER WIDGET & KOMPONEN GRID TOMBOL                  //
+//GRID VIEW ITEMS MENU & TOMBOL DENGAN RENDER ASSET IDENTIK       //
   Widget _buildOtherToolsGrid(BuildContext context) {
     final List<Map<String, dynamic>> menuItems = [
       {'img': 't2image.png', 'title': 'TEXT TO IMAGE', 'action': () => _navigateTo(context, T2ImageScreen())},
       {'img': 't2video.png', 'title': 'TEXT TO VIDEO', 'action': () => _navigateTo(context, T2VideoScreen())},
       {'img': 'i2video.png', 'title': 'IMAGE TO VIDEO', 'action': () => _navigateTo(context, Image2VideoScreen())},
       {'img': 't2videoplus.png', 'title': 'TEXT TO VIDEOPLUS', 'action': () => _navigateTo(context, T2videoPlusScreen())},
+      {'img': 't2speech.png', 'title': 'TEXT TO SPEECH', 'action': () => _navigateTo(context, const T2SpeechScreen())},
     ];
 
     return GridView.builder(
@@ -92,11 +97,11 @@ class OtherToolsScreen extends StatelessWidget {
     );
   }
 
-  // Komponen identik dengan ProjectDashboardScreen
+  // Komponen identik dengan ProjectDashboardScreen dilengkapi fallback anti-error
   Widget _buildImageButton({
     required String imagePath, 
     required String title, 
-    required VoidCallback onTap,
+    required VoidCallback onTap, 
     required bool isActive, 
   }) {
     return Container(
@@ -130,7 +135,22 @@ class OtherToolsScreen extends StatelessWidget {
                   heightFactor: 0.85,
                   child: Opacity(
                     opacity: isActive ? 1.0 : 0.3, 
-                    child: Image.asset(imagePath, fit: BoxFit.contain),
+                    child: Image.asset(
+                      imagePath, 
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        // Fallback cerdas: jika t2speech.png belum ter-cache browser, tampilkan freet2speech.png atau icon
+                        return Image.asset(
+                          'assets/tombol-dashboard/freet2speech.png',
+                          fit: BoxFit.contain,
+                          errorBuilder: (ctx, err, st) => const Icon(
+                            Icons.record_voice_over_rounded,
+                            color: Colors.amber,
+                            size: 38,
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -153,5 +173,5 @@ class OtherToolsScreen extends StatelessWidget {
       ),
     );
   }
-}
-// Penutup Blok //
+ }
+// END OF BLOK 3 //

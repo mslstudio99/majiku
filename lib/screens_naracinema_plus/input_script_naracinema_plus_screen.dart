@@ -4,12 +4,13 @@
 // DESKRIPSI: LAYAR INPUT SCRIPT NARACINEMA PLUS (VEO 3.1 READY)  //
 //================================================================//
 
-// No ke-1: IMPORT DEPENDENSI & SETUP AWAL                        //
-//----------------------------------------------------------------//
+//No ke-1.........................................................//
+// IMPORT DEPENDENSI & SETUP AWAL                                 //
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services_naracinema_plus/firestore_naracinema_plus_service.dart';
+import '../services/firestore_service.dart'; // [BARU] Akses logging Firestore User Center
 import '../providers_naracinema_plus/firestore_naracinema_plus_provider.dart';
 import '../providers_naracinema_plus/visual_settings_naracinema_plus_provider.dart';
 import 'project_loading_naracinema_plus_screen.dart';
@@ -17,7 +18,7 @@ import 'project_loading_naracinema_plus_screen.dart';
 import '../providers/user_provider.dart';
 import '../providers/config_provider.dart'; 
 import '../theme/app_theme.dart';
-//----------------------------------------------------------------//
+//................................................................//
 
 // No ke-2: SETUP STATE DAN MAPS OPSI SUARA (VOICES)              //
 //----------------------------------------------------------------//
@@ -38,22 +39,29 @@ class InputScriptNaracinemaPlusScreen extends ConsumerStatefulWidget {
 class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNaracinemaPlusScreen> {
   final _scriptController = TextEditingController();
   final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController(); // [SUNTIKAN BARU] Kontroler Deskripsi Overlay
+  final _descriptionController = TextEditingController(); // Kontroler Deskripsi Overlay
   final _formKey = GlobalKey<FormState>();
   
   String _selectedStyle = 'Realistic';
-  String _selectedAspectRatio = '16:9';
+  String _selectedAspectRatio = '9:16';
   
-  String _selectedLanguage = 'Indonesian'; 
-  static const String _defaultIndonesianVoice = 'id-ID-Chirp3-HD-Achernar';
-  String _selectedVoice = _defaultIndonesianVoice;
+  // [PENYESUAIAN DEFAULT]: Bahasa default diubah ke English (US)
+  String _selectedLanguage = 'English (US)'; 
+  static const String _defaultEnglishVoice = 'en-US-Chirp3-HD-Alnilam';
+  String _selectedVoice = _defaultEnglishVoice;
   bool _isLoading = false;
   
   bool _showSubtitles = false; 
-  String _selectedResolution = '720p'; // [VEO 3.1] Default diubah ke 720p
+  String _selectedResolution = '720p'; // [VEO 3.1] Default 720p
 
-  // [PERBAIKAN FITUR BARU]: Opsi Level Biaya (Low / Standard)
-  String _selectedCostLevel = 'Low';
+  // [BARU]: State Tombol ON/OFF Project Title Overlay (Secara Default ON)
+  bool _showTitle = true;
+
+  // [BARU]: State Tombol ON/OFF Project Description Overlay (Secara Default OFF)
+  bool _showDescription = false;
+
+  // [PERBAIKAN FITUR]: Opsi Level Biaya (Good / High) - Default 'Good'
+  String _selectedCostLevel = 'Good';
 
   // ==========================================
   // OPSI SUARA (LENGKAP)
@@ -373,7 +381,7 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
   };
 
   final List<String> _languageList = [
-    'Indonesian', 'English (US)', 'English (UK)', 'English (Australia)',
+    'English (US)', 'Indonesian', 'English (UK)', 'English (Australia)',
     'English (India)', 'Arabic', 'Bengali (India)', 'Danish',
     'Dutch (Netherlands)', 'Dutch (Belgium)', 'Finnish', 'French (France)',
     'French (Canada)', 'German', 'Gujarati', 'Hindi', 'Italian', 'Japanese',
@@ -422,12 +430,13 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
       case 'Ukrainian': return _ukrainianVoiceOptions;
       case 'Urdu': return _urduIndiaVoiceOptions;
       case 'Vietnamese': return _vietnameseVoiceOptions;
-      default: return _indonesianVoiceOptions;
+      default: return _englishVoiceOptions;
     }
   }
 //----------------------------------------------------------------//
-// No ke-3: INIT, DISPOSE, & LOGIC CALCULATOR (SUBMIT)            //
-//----------------------------------------------------------------//
+
+//No ke-3.........................................................//
+// INIT, DISPOSE, & LOGIC CALCULATOR (SUBMIT)                     //
   @override
   void initState() {
     super.initState();
@@ -438,29 +447,39 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
       _scriptController.text = widget.initialScript;
     }
 
-    // [SUNTIKAN BARU]: Mengisi teks default overlay deskripsi
     _descriptionController.text = "Created @ majiku.net\nAuto Video Content & Film Maker";
 
     _scriptController.addListener(() {
       setState(() {});
     });
+
+    // --- [LOG AKTIVITAS FITUR: KUNJUNGAN HALAMAN (VISIT)] ---
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'auto_naracinema_plus',
+          eventType: 'visit',
+        );
+      }
+    });
+    // --------------------------------------------------------
   }
 
   @override
   void dispose() {
     _scriptController.dispose();
     _titleController.dispose();
-    _descriptionController.dispose(); // [SUNTIKAN BARU]: Pelepasan Kontroler untuk mencegah memory leak
+    _descriptionController.dispose();
     super.dispose();
   }
 
-  // [PERBAIKAN FITUR BARU]: Fungsi Kalkulator Segmen Berdasarkan Cost Level
+  // [PERBAIKAN ANTI-REGRESI]: Level Good dan High menganut aturan 1 kalimat per segmen
   int _calculateEstimatedScenes(String text) {
     final String cleanText = text.trim();
     if (cleanText.isEmpty) return 0;
 
-    // Jika Low, dibagi 200 (2 kalimat/segmen). Jika Standard, dibagi 100 (1 kalimat/segmen).
-    int divisor = _selectedCostLevel == 'Low' ? 200 : 100;
+    // Kedua level (Good & High) menggunakan 1 kalimat per segmen (~100 karakter)
+    const int divisor = 100;
     
     return (cleanText.length / divisor).ceil();
   }
@@ -472,9 +491,21 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
       final firestoreService = ref.read(firestoreNaracinemaPlusServiceProvider);
       final isIndo = ref.read(appLanguageProvider).languageCode == 'id';
       
+      // Jika toggle _showTitle bernilai false, gunakan input yang ada atau default judul proyek
+      final String effectiveTitle = _showTitle 
+          ? _titleController.text.trim() 
+          : (_titleController.text.trim().isNotEmpty 
+              ? _titleController.text.trim() 
+              : 'Naracinema Plus Video');
+
+      // Jika toggle _showDescription bernilai false, kirim deskripsi kosong ""
+      final String effectiveDescription = _showDescription 
+          ? _descriptionController.text.trim() 
+          : '';
+
       try {
         final String? newProjectId = await firestoreService.addProject(
-          title: _titleController.text,
+          title: effectiveTitle,
           rawScript: _scriptController.text,
           imageStyle: _selectedStyle,
           aspectRatio: _selectedAspectRatio,
@@ -482,12 +513,21 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
           voice: _selectedVoice,
           showSubtitles: _showSubtitles,
           resolution: _selectedResolution, 
-          costLevel: _selectedCostLevel, 
-          description: _descriptionController.text.trim(), // [SUNTIKAN BARU]: Pengiriman deskripsi ke Firestore
+          costLevel: _selectedCostLevel, // Menyimpan 'Good' atau 'High'
+          description: effectiveDescription,
+          showTitle: _showTitle, // [BARU] Meneruskan flag boolean ON/OFF Judul Overlay
+          showDescription: _showDescription, // Meneruskan flag boolean ON/OFF Deskripsi
         );
 
         if (mounted) {
           if (newProjectId != null && newProjectId.isNotEmpty) {
+            // --- [LOG AKTIVITAS FITUR: KONVERSI SUKSES (CONVERSION)] ---
+            ref.read(firestoreServiceProvider).logFeatureActivity(
+              featureKey: 'auto_naracinema_plus',
+              eventType: 'conversion',
+            );
+            // -----------------------------------------------------------
+
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (context) => ProjectLoadingNaracinemaPlusScreen(
@@ -518,9 +558,9 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
       }
     }
   }
-//----------------------------------------------------------------//
+//................................................................//
 
-// No ke-4: BUILD UI & FORM LAYOUT [DIPERBAIKI]                   //
+// No ke-4: BUILD UI & FORM LAYOUT                                //
 //----------------------------------------------------------------//
   @override
   Widget build(BuildContext context) {
@@ -546,12 +586,20 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
     });
 
     configAsync.whenData((config) {
-      if (_selectedResolution == '720p') {
-        costPerScene = config.costs.naracinemaPlusCosts.perSegment720p;
-      } else if (_selectedResolution == '1080p') {
-        costPerScene = config.costs.naracinemaPlusCosts.perSegment1080p;
+      // Dinamisasi harga tier High vs Good langsung dari Firestore Config
+      if (_selectedCostLevel == 'High') {
+        if (_selectedResolution == '1080p') {
+          costPerScene = config.costs.naracinemaPlusCosts.highPerSegment1080p;
+        } else {
+          costPerScene = config.costs.naracinemaPlusCosts.highPerSegment720p;
+        }
       } else {
-        costPerScene = config.costs.naracinemaPlusCosts.perSegment720p; 
+        // Default tier 'Good'
+        if (_selectedResolution == '1080p') {
+          costPerScene = config.costs.naracinemaPlusCosts.goodPerSegment1080p;
+        } else {
+          costPerScene = config.costs.naracinemaPlusCosts.goodPerSegment720p; 
+        }
       }
       configReady = true;
     });
@@ -617,51 +665,123 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // [KOMPONEN EKSISTING]: Judul Proyek
-                        TextFormField(
-                          controller: _titleController,
-                          maxLength: 40,
-                          decoration: InputDecoration(
-                            labelText: t('Project Title', 'Judul Proyek'),
-                            hintText: t('e.g., "My First Explainer Video"', 'Cth: "Video Penjelasanku"'),
+                        // --- [1. TOGGLE ON/OFF PROJECT TITLE OVERLAY (DI ATAS BOX JUDUL)] ---
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.04),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _showTitle ? Colors.blue.withOpacity(0.5) : Colors.white12,
+                            ),
                           ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return t('Please enter a project title.', 'Mohon isi judul proyek.');
-                            }
-                            if (value.length > 40) {
-                              return t('Title cannot exceed 40 characters.', 'Judul maksimal 40 karakter.');
-                            }
-                            return null;
-                          },
+                          child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              t('Project Title Overlay', 'Judul Overlay Proyek'),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                            subtitle: Text(
+                              _showTitle
+                                  ? t('Overlay title is ON (Default)', 'Judul overlay AKTIF (Default)')
+                                  : t('Overlay title is OFF', 'Judul overlay NONAKTIF'),
+                              style: TextStyle(
+                                color: _showTitle ? Colors.blueAccent : Colors.grey,
+                                fontSize: 12,
+                              ),
+                            ),
+                            value: _showTitle,
+                            activeColor: Colors.blueAccent,
+                            onChanged: (val) {
+                              setState(() => _showTitle = val);
+                            },
+                          ),
                         ),
+
+                        // Input judul hanya aktif dan wajib diisi jika toggle ON (Menghilang jika OFF)
+                        if (_showTitle) ...[
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _titleController,
+                            maxLength: 40,
+                            decoration: InputDecoration(
+                              labelText: t('Project Title', 'Judul Proyek'),
+                              hintText: t('e.g., "My First Explainer Video"', 'Cth: "Video Penjelasanku"'),
+                            ),
+                            validator: (value) {
+                              if (_showTitle && (value == null || value.trim().isEmpty)) {
+                                return t('Please enter a project title.', 'Mohon isi judul proyek.');
+                              }
+                              if (value != null && value.length > 40) {
+                                return t('Title cannot exceed 40 characters.', 'Judul maksimal 40 karakter.');
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
                         const SizedBox(height: 24),
 
-                        // [SUNTIKAN BARU]: Form Input Deskripsi Overlay
-                        TextFormField(
-                          controller: _descriptionController,
-                          maxLength: 80,
-                          maxLines: 2,
-                          decoration: InputDecoration(
-                            labelText: t('Project Description Overlay', 'Deskripsi Overlay Proyek'),
+                        // --- [2. TOGGLE ON/OFF PROJECT DESCRIPTION OVERLAY] ---
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.04),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _showDescription ? Colors.blue.withOpacity(0.5) : Colors.white12,
+                            ),
                           ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return t('Please enter a description.', 'Mohon isi deskripsi.');
-                            }
-                            return null;
-                          },
+                          child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              t('Project Description Overlay', 'Deskripsi Overlay Proyek'),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                            subtitle: Text(
+                              _showDescription
+                                  ? t('Overlay description is ON', 'Deskripsi overlay AKTIF')
+                                  : t('Overlay description is OFF (Default)', 'Deskripsi overlay NONAKTIF (Default)'),
+                              style: TextStyle(
+                                color: _showDescription ? Colors.blueAccent : Colors.grey,
+                                fontSize: 12,
+                              ),
+                            ),
+                            value: _showDescription,
+                            activeColor: Colors.blueAccent,
+                            onChanged: (val) {
+                              setState(() => _showDescription = val);
+                            },
+                          ),
                         ),
+
+                        // Input deskripsi hanya aktif dan wajib diisi jika toggle ON (Menghilang jika OFF)
+                        if (_showDescription) ...[
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _descriptionController,
+                            maxLength: 80,
+                            maxLines: 2,
+                            decoration: InputDecoration(
+                              labelText: t('Project Description Text', 'Teks Deskripsi Proyek'),
+                              hintText: t('e.g., Created @ majiku.net', 'Cth: Created @ majiku.net'),
+                            ),
+                            validator: (value) {
+                              if (_showDescription && (value == null || value.trim().isEmpty)) {
+                                return t('Please enter a description.', 'Mohon isi deskripsi.');
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
                         const SizedBox(height: 24),
 
-                        // [KOMPONEN EKSISTING]: Naskah Narasi
                         TextFormField(
                           controller: _scriptController,
                           maxLines: 10,
                           maxLength: 18000,
                           decoration: InputDecoration(
                             labelText: t('Paste or send your narration here..', 'Paste atau kirim narasimu kesini'),
-                            hintText: t('Exp: In the heart of Sherwood Forest lived a legend known as Robin Hood. He was more than just an outlaw; he was a symbol of resistance against tyranny. Alongside his loyal band of Merry Men, Robin carried out a timeless mission of justice: robbing from the corrupt rich to give back to the oppressed poor....', 'Contoh: Di kedalaman Hutan Sherwood, hiduplah seorang legenda bernama Robin Hood. Ia bukan sekadar pencuri, melainkan simbol perlawanan terhadap tirani. Bersama kelompok setianya, Merry Men, Robin menjalankan misi keadilan yang tak lekang oleh waktu: merampas harta dari kaum kaya yang korup untuk dibagikan kepada rakyat miskin yang tertindas....'),
+                            hintText: t('Exp: In the heart of Sherwood Forest...', 'Contoh: Di kedalaman Hutan Sherwood...'),
                           ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
@@ -805,17 +925,16 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
                               ),
                             ),
                             const SizedBox(width: 16),
-                            // [PERBAIKAN FITUR BARU]: Dropdown Cost Level (Low / Standard)
                             Expanded(
                               child: DropdownButtonFormField<String>(
                                 value: _selectedCostLevel,
                                 isExpanded: true,
                                 decoration: InputDecoration(
-                                  labelText: t('Cost Level', 'Tingkat Biaya'),
+                                  labelText: t('Cost Level', 'Kualitas Model AI'),
                                 ),
                                 items: [
-                                  DropdownMenuItem(value: 'Standard', child: Text(t('Standard', 'Standar'))),
-                                  DropdownMenuItem(value: 'Low', child: Text(t('Low', 'Rendah'))),
+                                  DropdownMenuItem(value: 'High', child: Text(t('High', 'Tinggi'))),
+                                  DropdownMenuItem(value: 'Good', child: Text(t('Good', 'Bagus'))),
                                 ],
                                 onChanged: (value) {
                                   if (value != null) {
@@ -896,6 +1015,7 @@ class _InputScriptNaracinemaPlusScreenState extends ConsumerState<InputScriptNar
                       ],
                     ),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         const Icon(Icons.info_outline_rounded, color: Colors.white, size: 24),
                         const SizedBox(width: 12),

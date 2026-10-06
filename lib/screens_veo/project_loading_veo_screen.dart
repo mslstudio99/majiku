@@ -7,58 +7,77 @@
 //Sub-judul: Deklarasi pustaka, provider, dan layar tujuan (Isolasi Veo)..............................//
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; 
 
 import '../models_veo/video_project_veo.dart';
 import '../view_model_veo/timeline_veo_view_model.dart'; 
 import 'timeline_review_veo_screen.dart';
+import 'character_upload_veo_screen.dart';
+import '../providers/config_provider.dart'; // [BILINGUAL]: Import provider bahasa
 //Akhir Blok 1........................................................................................//
 
 
 //No ke-2: LOADING STAGES MODEL & DATA................................................................//
-//Sub-judul: Mendefinisikan 4 tahapan loading untuk fase aset Veo.....................................//
+//Sub-judul: Mendefinisikan tahapan loading untuk fase aset Veo (TERMASUK GAMBAR).....................//
 class _LoadingStage {
-  final String title;
-  final String description;
+  final String titleEn;
+  final String titleId;
+  final String descriptionEn;
+  final String descriptionId;
   final IconData icon;
   final Set<String> technicalStatuses;
 
   const _LoadingStage({
-    required this.title,
-    required this.description,
+    required this.titleEn,
+    required this.titleId,
+    required this.descriptionEn,
+    required this.descriptionId,
     required this.icon,
     required this.technicalStatuses,
   });
 }
 
+// [BILINGUAL]: Data tahapan dipisahkan menjadi versi EN dan ID
 final List<_LoadingStage> _loadingStages = [
   _LoadingStage(
-    title: "Tahap 1: Script Analysis",
-    description: "Analyzing scripts and creating scenes.",
+    titleEn: "Stage 1: Script & Character Analysis",
+    titleId: "Tahap 1: Analisis Naskah & Karakter",
+    descriptionEn: "Analyzing scripts and extracting characters.",
+    descriptionId: "Menganalisis naskah dan mengekstrak karakter.",
     icon: Icons.auto_stories_outlined,
     technicalStatuses: {
       "PROCESSING_SCENE",
+      "WAITING_USER_IMAGE", 
+      "READY_FOR_IMAGE_GEN", 
+      "PROCESSING_IMAGES_IN_PROGRESS", 
       "PENDING_REFINEMENT", 
     },
   ),
   _LoadingStage(
-    title: "Tahap 2: Visual Imagination",
-    description: "Creating the visual scene plan.",
+    titleEn: "Stage 2: Visual Imagination",
+    titleId: "Tahap 2: Imajinasi Visual",
+    descriptionEn: "Creating the visual scene plan.",
+    descriptionId: "Membuat rencana adegan visual.",
     icon: Icons.spellcheck_outlined,
     technicalStatuses: {
       "PROCESSING_REFINEMENT",
     },
   ),
   _LoadingStage(
-    title: "Tahap 3: Generating Video",
-    description: "Starting the video generation process.",
+    titleEn: "Stage 3: Generating Video",
+    titleId: "Tahap 3: Pembuatan Video",
+    descriptionEn: "Starting the video generation process.",
+    descriptionId: "Memulai proses pembuatan video.",
     icon: Icons.movie_creation_outlined,
     technicalStatuses: {
       "VIDEO_GENERATION",
     },
   ),
   _LoadingStage(
-    title: "Tahap 4: Awaiting Final Assets",
-    description: "Collect and verify all completed video assets.",
+    titleEn: "Stage 4: Awaiting Final Assets",
+    titleId: "Tahap 4: Menunggu Aset Final",
+    descriptionEn: "Collect and verify all completed video assets.",
+    descriptionId: "Mengumpulkan dan memverifikasi semua aset video yang selesai.",
     icon: Icons.inventory_2_outlined,
     technicalStatuses: {
       "COMPLETING_ASSETS",
@@ -85,7 +104,7 @@ int _getStageIndexFromStatus(String? status) {
 
 
 //No ke-3: MAIN CLASS & STATE INITIALIZATION..........................................................//
-//Sub-judul: Deklarasi stateful widget dan pengunci navigasi ganda....................................//
+//Sub-judul: Deklarasi stateful widget dan pengunci navigasi independen...............................//
 class ProjectLoadingVeoScreen extends ConsumerStatefulWidget {
   final String projectId;
 
@@ -100,7 +119,15 @@ class ProjectLoadingVeoScreen extends ConsumerStatefulWidget {
 
 class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScreen> {
   bool _isMounted = false;
-  bool _hasNavigated = false;
+  
+  // [PERBAIKAN KUNCI]: Memisahkan flag dialog dan flag navigasi timeline agar tidak saling mengunci
+  bool _hasShownUploadDialog = false;
+  bool _hasNavigatedToTimeline = false;
+
+  // [BILINGUAL]: Helper penerjemah
+  String _t(bool isIndo, String en, String id) {
+    return isIndo ? id : en;
+  }
 
   @override
   void initState() {
@@ -115,24 +142,27 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
   }
 //Akhir Blok 3........................................................................................//
 
-
 //No ke-4: BUILD METHOD & GATEKEEPER ROUTING LOGIC....................................................//
 //Sub-judul: Memantau stream, mengeksekusi perpindahan layar saat aset selesai atau bermasalah........//
   @override
   Widget build(BuildContext context) {
     final projectAsync = ref.watch(projectVeoStreamProvider(widget.projectId));
+    
+    // [BILINGUAL]: Mendapatkan bahasa saat ini
+    final currentLocale = ref.watch(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
 
     return projectAsync.when(
-      loading: () => const Scaffold( 
+      loading: () => Scaffold( 
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
               Text(
-                "Memuat status proyek Veo...",
-                style: TextStyle(fontSize: 16),
+                _t(isIndo, "Loading Veo project status...", "Memuat status proyek Veo..."),
+                style: const TextStyle(fontSize: 16),
               ),
             ],
           ),
@@ -148,7 +178,7 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
                 const Icon(Icons.error_outline, color: Colors.red, size: 60),
                 const SizedBox(height: 16),
                 Text(
-                  "Gagal memuat proyek Veo", 
+                  _t(isIndo, "Failed to load Veo project", "Gagal memuat proyek Veo"), 
                   style: Theme.of(context).textTheme.headlineSmall,
                   textAlign: TextAlign.center,
                 ),
@@ -159,7 +189,7 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
                 const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text("Kembali"),
+                  child: Text(_t(isIndo, "Back", "Kembali")),
                 ),
               ],
             ),
@@ -170,11 +200,11 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
         if (project == null) {
           return Scaffold(
             appBar: AppBar(title: const Text("Error")),
-            body: const Center(
+            body: Center(
               child: Padding(
-                padding: EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(16.0),
                 child: Text(
-                  "Error: Project data stream (VEO) returned null.",
+                  _t(isIndo, "Error: Project data stream (VEO) returned null.", "Error: Data stream proyek (VEO) kosong."),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -185,13 +215,132 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
         final String? currentStatus = project.status;
         final int currentStageIndex = _getStageIndexFromStatus(currentStatus);
 
-        // --- SKENARIO 1: HAPPY PATH (SEMUA ASET SELESAI) ---
-        if ((currentStatus == "ASSETS_COMPLETE" || currentStatus == "RENDER_READY" || currentStatus == "RENDER_START" || currentStatus == "RENDERING" || currentStatus == "RENDER_COMPLETED") && !_hasNavigated) {
-          _hasNavigated = true; 
+        // --- [SKENARIO 0: JEDA WAITING_USER_IMAGE] ---
+        if (currentStatus == "WAITING_USER_IMAGE" && !_hasShownUploadDialog) {
+          _hasShownUploadDialog = true; 
           
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (_isMounted) {
-              debugPrint("🚀 [Loading Gatekeeper VEO] Aset Selesai. Meneruskan ke Timeline...");
+              debugPrint("🛑 [Loading Gatekeeper VEO] Jeda Ekstraksi Selesai. Menampilkan Jendela Upload Karakter...");
+              
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (BuildContext dialogContext) {
+                  return AlertDialog(
+                    backgroundColor: const Color(0xFF1E1C2A), 
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: const BorderSide(color: Colors.purpleAccent, width: 1),
+                    ),
+                    title: Text(
+                      _t(isIndo, "Character Extraction Complete", "Ekstraksi Karakter Selesai"), 
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white, 
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                    content: Text(
+                      _t(isIndo, 
+                        "We have identified the characters from your narrative.\n\nWould you like to manually upload their face images, or let our AI design them automatically?", 
+                        "Kami telah mengidentifikasi karakter dari narasi Anda.\n\nApakah Anda ingin mengunggah gambar wajah mereka secara manual, atau biarkan AI kami yang mendesainnya secara otomatis?"
+                      ),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white70, 
+                        fontSize: 14,
+                        height: 1.4,
+                      ),
+                    ),
+                    actionsAlignment: MainAxisAlignment.center,
+                    actions: [
+                      // Tombol 1: Unggah Sendiri
+                      OutlinedButton(
+                        onPressed: () async {
+                          Navigator.of(dialogContext, rootNavigator: true).pop();
+                          
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => CharacterUploadVeoScreen(
+                                projectId: widget.projectId,
+                                project: project,
+                              ),
+                            ),
+                          );
+
+                          if (_isMounted) {
+                            setState(() { _hasShownUploadDialog = false; });
+                          }
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Colors.purpleAccent),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Text(
+                          _t(isIndo, "Upload Manually", "Unggah Sendiri"),
+                          style: const TextStyle(
+                            color: Colors.white, 
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Tombol 2: Auto AI
+                      ElevatedButton(
+                        onPressed: () async {
+                          Navigator.of(dialogContext, rootNavigator: true).pop(); 
+                          
+                          try {
+                            await FirebaseFirestore.instance
+                                .collection('projects_veo')
+                                .doc(widget.projectId)
+                                .update({'status': 'READY_FOR_IMAGE_GEN'});
+                          } catch (e) {
+                            debugPrint("Gagal update status: $e");
+                            if (_isMounted) setState(() { _hasShownUploadDialog = false; });
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Text(
+                          _t(isIndo, "Auto AI (Generate)", "Auto AI (Generate)"),
+                          style: const TextStyle(
+                            color: Colors.white, 
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              );
+            }
+          });
+        }
+
+        // --- SKENARIO 1: HAPPY PATH (SEMUA ASET SELESAI / RENDER SELESAI) ---
+        if ((currentStatus == "ASSETS_COMPLETE" || 
+             currentStatus == "RENDER_READY" || 
+             currentStatus == "RENDER_START" || 
+             currentStatus == "RENDERING" || 
+             currentStatus == "RENDER_COMPLETED") && !_hasNavigatedToTimeline) {
+          _hasNavigatedToTimeline = true; 
+          
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_isMounted) {
+              debugPrint("🚀 [Loading Gatekeeper VEO] Aset/Render Selesai ($currentStatus). Meneruskan ke Timeline...");
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(
                   builder: (context) => TimelineReviewVeoScreen(projectId: widget.projectId),
@@ -200,20 +349,25 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
             }
           });
         }
-		
+        
         // --- SKENARIO 2: ERROR/FALLBACK PATH (MANUAL REFINEMENT) ---
-        if ((currentStatus != null && currentStatus.startsWith("ERROR_")) && !_hasNavigated) {
-          _hasNavigated = true; 
+        if ((currentStatus != null && currentStatus.startsWith("ERROR_")) && !_hasNavigatedToTimeline) {
+          _hasNavigatedToTimeline = true; 
           
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (_isMounted) {
               debugPrint("⚠️ [Loading Gatekeeper VEO] Masalah aset terdeteksi. Melempar ke Timeline untuk Manual Fallback.");
               
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Terdapat aset yang gagal diproses. Silakan perbaiki secara manual di Timeline.'),
+                SnackBar(
+                  content: Text(
+                    _t(isIndo, 
+                      "Some assets failed to process. Please fix them manually in the Timeline.", 
+                      "Terdapat aset yang gagal diproses. Silakan perbaiki secara manual di Timeline."
+                    )
+                  ),
                   backgroundColor: Colors.redAccent,
-                  duration: Duration(seconds: 5),
+                  duration: const Duration(seconds: 5),
                 ),
               );
               
@@ -226,8 +380,8 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
           });
         }
         
-        if (currentStageIndex == -1 && !_hasNavigated) {
-          return _buildErrorUI(context, project); 
+        if (currentStageIndex == -1 && !_hasNavigatedToTimeline) {
+          return _buildErrorUI(context, project, isIndo); 
         }
 
         return Scaffold(
@@ -235,9 +389,9 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
             backgroundColor: Colors.transparent,
             elevation: 0,
             automaticallyImplyLeading: false,
-            title: const Text(
-              "Preparing the Project...", 
-              style: TextStyle(fontWeight: FontWeight.bold),
+            title: Text(
+              _t(isIndo, "Preparing the Project...", "Mempersiapkan Proyek..."), 
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             centerTitle: true,
           ),
@@ -247,7 +401,7 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
               children: [
                 Center(
                   child: Text(
-                    "Your video is being processed, wait a minutes..", 
+                    _t(isIndo, "Your video is being processed, please wait...", "Video Anda sedang diproses, mohon tunggu..."), 
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -255,10 +409,13 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  "This process may take a few minutes. Keep this page open until rendering begins.",
+                Text(
+                  _t(isIndo, 
+                    "This process may take a few minutes. Keep this page open until rendering begins.", 
+                    "Proses ini mungkin memakan waktu beberapa menit. Tetap buka halaman ini hingga rendering dimulai."
+                  ),
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 15, color: Colors.grey),
+                  style: const TextStyle(fontSize: 15, color: Colors.grey),
                 ),
                 const SizedBox(height: 32),
                 const Center(
@@ -290,13 +447,18 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
 
                         return Step(
                           title: Text(
-                            stage.title,
+                            _t(isIndo, stage.titleEn, stage.titleId),
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          subtitle: Text(stage.description, style: const TextStyle(fontSize: 14),),
+                          subtitle: Text(
+                            (currentStatus == "PROCESSING_IMAGES_IN_PROGRESS" && index == 0) 
+                              ? _t(isIndo, "Generating AI characters...", "Membuat karakter AI...")
+                              : _t(isIndo, stage.descriptionEn, stage.descriptionId), 
+                            style: const TextStyle(fontSize: 14)
+                          ),
                           content: const SizedBox.shrink(),
                           isActive: index == currentStageIndex || index < currentStageIndex,
                           state: state,
@@ -309,7 +471,7 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
                   onPressed: () {
                     Navigator.of(context).pop();
                   },
-                  child: const Text("Kembali ke Dashboard"),
+                  child: Text(_t(isIndo, "Back to Dashboard", "Kembali ke Dashboard")),
                 ),
               ],
             ),
@@ -320,10 +482,9 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
   }
 //Akhir Blok 4........................................................................................//
 
-
 //No ke-5: ERROR UI HELPER............................................................................//
 //Sub-judul: Fungsi pembangunan UI jika terjadi error fatal sebelum masuk ke Timeline...................//
-  Widget _buildErrorUI(BuildContext context, VideoProjectVeo project) {
+  Widget _buildErrorUI(BuildContext context, VideoProjectVeo project, bool isIndo) {
     return Scaffold(
       body: Center(
         child: Padding(
@@ -334,13 +495,13 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
               const Icon(Icons.error_outline, color: Colors.red, size: 60),
               const SizedBox(height: 16),
               Text(
-                "Proses Veo Gagal", 
+                _t(isIndo, "Veo Process Failed", "Proses Veo Gagal"), 
                 style: Theme.of(context).textTheme.headlineSmall,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
-                "Terjadi kesalahan pada tahap: ${project.status ?? 'Unknown'}",
+                "${_t(isIndo, 'An error occurred at stage: ', 'Terjadi kesalahan pada tahap: ')}${project.status ?? 'Unknown'}",
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -350,7 +511,7 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
               ),
               const SizedBox(height: 8),
               Text(
-                project.errorDetail ?? "Tidak ada detail error.",
+                project.errorDetail ?? _t(isIndo, "No error details available.", "Tidak ada detail error."),
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 14),
               ),
@@ -363,7 +524,7 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
                     ),
                   );
                 },
-                child: const Text("Pergi ke Proyek"),
+                child: Text(_t(isIndo, "Go to Project", "Pergi ke Proyek")),
               ),
             ],
           ),

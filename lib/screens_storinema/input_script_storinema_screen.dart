@@ -3,12 +3,13 @@
 // LIB/SCREENS_STORINEMA/INPUT_SCRIPT_STORINEMA_SCREEN.DART       //
 //================================================================//
 
-//No ke-1 : IMPORT DEPENDENSI & SETUP AWAL                        //
-//================================================================//
+//No ke-1.........................................................//
+// IMPORT DEPENDENSI & SETUP AWAL                                 //
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services_storinema/firestore_storinema_service.dart';
+import '../services/firestore_service.dart'; // [BARU] Akses logging Firestore User Center
 import '../providers_storinema/firestore_storinema_provider.dart';
 import '../providers_storinema/visual_settings_storinema_provider.dart';
 import 'project_loading_storinema_screen.dart';
@@ -16,7 +17,7 @@ import 'project_loading_storinema_screen.dart';
 import '../providers/user_provider.dart';
 import '../providers/config_provider.dart'; 
 import '../theme/app_theme.dart';
-//----------------------------------------------------------------//
+//................................................................//
 
 //No ke-2 : SETUP STATE DAN MAPS OPSI SUARA (VOICES)              //
 //================================================================//
@@ -37,20 +38,29 @@ class InputScriptStorinemaScreen extends ConsumerStatefulWidget {
 class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinemaScreen> {
   final _scriptController = TextEditingController();
   final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController(); // [SUNTIKAN BARU] Kontroler Deskripsi Overlay
+  final _descriptionController = TextEditingController(); // Kontroler Deskripsi Overlay
   final _formKey = GlobalKey<FormState>();
   
   String _selectedStyle = 'Realistic';
-  String _selectedAspectRatio = '16:9';
+  String _selectedAspectRatio = '9:16';
   
-  String _selectedLanguage = 'Indonesian'; 
-  static const String _defaultIndonesianVoice = 'id-ID-Chirp3-HD-Achernar';
-  String _selectedVoice = _defaultIndonesianVoice;
+  // [DEFAULT ENGLISH (US)]: Bahasa suara dan voice default
+  String _selectedLanguage = 'English (US)'; 
+  static const String _defaultVoice = 'en-US-Chirp3-HD-Alnilam';
+  String _selectedVoice = _defaultVoice;
   bool _isLoading = false;
   
   bool _showSubtitles = false; 
-  String _selectedResolution = '480p'; 
-  String _selectedVisualQuality = 'Standard'; // Kualitas Visual
+  String _selectedResolution = '720p'; 
+
+  // [BARU]: State Tombol ON/OFF Project Title Overlay (Secara Default ON)
+  bool _showTitle = true;
+
+  // State Tombol ON/OFF Project Description Overlay (Secara Default OFF)
+  bool _showDescription = false;
+
+  // Opsi Tingkat Biaya/Kualitas (High / Good / Standard)
+  String _selectedCostLevel = 'Standard';
 
   // ==========================================
   // OPSI SUARA (LENGKAP)
@@ -370,7 +380,7 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
   };
 
   final List<String> _languageList = [
-    'Indonesian', 'English (US)', 'English (UK)', 'English (Australia)',
+    'English (US)', 'Indonesian', 'English (UK)', 'English (Australia)',
     'English (India)', 'Arabic', 'Bengali (India)', 'Danish',
     'Dutch (Netherlands)', 'Dutch (Belgium)', 'Finnish', 'French (France)',
     'French (Canada)', 'German', 'Gujarati', 'Hindi', 'Italian', 'Japanese',
@@ -382,8 +392,8 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
 
   Map<String, String> get _currentVoiceOptions {
     switch (_selectedLanguage) {
-      case 'Indonesian': return _indonesianVoiceOptions;
       case 'English (US)': return _englishVoiceOptions;
+      case 'Indonesian': return _indonesianVoiceOptions;
       case 'English (UK)': return _englishUKVoiceOptions;
       case 'English (Australia)': return _englishAustraliaVoiceOptions;
       case 'English (India)': return _englishIndiaVoiceOptions;
@@ -419,13 +429,13 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
       case 'Ukrainian': return _ukrainianVoiceOptions;
       case 'Urdu': return _urduIndiaVoiceOptions;
       case 'Vietnamese': return _vietnameseVoiceOptions;
-      default: return _indonesianVoiceOptions;
+      default: return _englishVoiceOptions;
     }
   }
 //----------------------------------------------------------------//
 
-//No ke-3 : INIT, DISPOSE, & LOGIC CALCULATOR (SUBMIT)            //
-//================================================================//
+//No ke-3.........................................................//
+// INIT, DISPOSE, & LOGIC CALCULATOR (SUBMIT)                     //
   @override
   void initState() {
     super.initState();
@@ -442,21 +452,33 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
     _scriptController.addListener(() {
       setState(() {});
     });
+
+    // --- [LOG AKTIVITAS FITUR: KUNJUNGAN HALAMAN (VISIT)] ---
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'auto_nara_cinema',
+          eventType: 'visit',
+        );
+      }
+    });
+    // --------------------------------------------------------
   }
 
   @override
   void dispose() {
     _scriptController.dispose();
     _titleController.dispose();
-    _descriptionController.dispose(); // [SUNTIKAN BARU] Pelepasan Kontroler
+    _descriptionController.dispose();
     super.dispose();
   }
 
+  // [PENYELARASAN ESTIMASI SCENE]: Diseragamkan 1 kalimat per segmen (~100 karakter) untuk semua tier
   int _calculateEstimatedScenes(String text) {
     final String cleanText = text.trim();
     if (cleanText.isEmpty) return 0;
 
-    return (cleanText.length / 200).ceil();
+    return (cleanText.length / 100).ceil();
   }
 
   Future<void> _submitData() async {
@@ -466,9 +488,17 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
       final firestoreService = ref.read(firestoreStorinemaServiceProvider);
       final isIndo = ref.read(appLanguageProvider).languageCode == 'id';
       
+      final String effectiveDescription = _showDescription 
+          ? _descriptionController.text.trim() 
+          : '';
+
+      final String effectiveTitle = _titleController.text.trim().isNotEmpty 
+          ? _titleController.text.trim() 
+          : 'Storinema Project';
+
       try {
         final String? newProjectId = await firestoreService.addProject(
-          title: _titleController.text,
+          title: effectiveTitle,
           rawScript: _scriptController.text,
           imageStyle: _selectedStyle,
           aspectRatio: _selectedAspectRatio,
@@ -476,12 +506,22 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
           voice: _selectedVoice,
           showSubtitles: _showSubtitles,
           resolution: _selectedResolution, 
-          visualQuality: _selectedVisualQuality,
-          description: _descriptionController.text.trim(), // [SUNTIKAN BARU] Pengiriman deskripsi ter-trim ke Firestore
+          costLevel: _selectedCostLevel,
+          visualQuality: _selectedCostLevel,
+          description: effectiveDescription,
+          showDescription: _showDescription,
+          showTitle: _showTitle, // [BARU]: Meneruskan flag toggle ON/OFF Judul
         );
 
         if (mounted) {
           if (newProjectId != null && newProjectId.isNotEmpty) {
+            // --- [LOG AKTIVITAS FITUR: KONVERSI SUKSES (CONVERSION)] ---
+            ref.read(firestoreServiceProvider).logFeatureActivity(
+              featureKey: 'auto_nara_cinema',
+              eventType: 'conversion',
+            );
+            // -----------------------------------------------------------
+
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (context) => ProjectLoadingStorinemaScreen(
@@ -512,7 +552,7 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
       }
     }
   }
-//----------------------------------------------------------------//
+//................................................................//
 
 //No ke-4 : BUILD UI & FORM LAYOUT                                //
 //================================================================//
@@ -540,18 +580,19 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
     });
 
     configAsync.whenData((config) {
-      if (_selectedResolution == '480p') {
-        costPerScene = config.costs.storinemaCosts.res480;
-      } else if (_selectedResolution == '720p') {
-        costPerScene = config.costs.storinemaCosts.res720;
-      } else if (_selectedResolution == '1080p') {
-        costPerScene = config.costs.storinemaCosts.res1080;
+      // [PENYESUAIAN FORMULA TOKEN STORINEMA: HIGH / GOOD / STANDARD]
+      if (_selectedCostLevel == 'High') {
+        costPerScene = _selectedResolution == '1080p'
+            ? config.costs.storinemaCosts.highPerSegment1080p
+            : config.costs.storinemaCosts.highPerSegment720p;
+      } else if (_selectedCostLevel == 'Good') {
+        costPerScene = _selectedResolution == '1080p'
+            ? config.costs.storinemaCosts.goodPerSegment1080p
+            : config.costs.storinemaCosts.goodPerSegment720p;
       } else {
-        costPerScene = 400;
-      }
-
-      if (_selectedVisualQuality == 'High') {
-        costPerScene += 120;
+        costPerScene = _selectedResolution == '1080p'
+            ? config.costs.storinemaCosts.standardPerSegment1080p
+            : config.costs.storinemaCosts.standardPerSegment720p;
       }
 
       configReady = true;
@@ -568,7 +609,7 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
       data: AppTheme.darkTheme,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Storinema'), 
+          title: const Text('Naracinema'), 
           actions: [
             Padding(
               padding: const EdgeInsets.only(right: 20.0),
@@ -618,7 +659,41 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Row 1: Judul Proyek
+                        // Row 1: TOGGLE ON/OFF PROJECT TITLE OVERLAY (DEFAULT ON)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.04),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _showTitle ? Colors.blue.withOpacity(0.5) : Colors.white12,
+                            ),
+                          ),
+                          child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              t('Project Title Overlay', 'Judul Overlay Proyek'),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                            subtitle: Text(
+                              _showTitle
+                                  ? t('Title overlay is ON (Default)', 'Judul overlay AKTIF (Default)')
+                                  : t('Title overlay is OFF', 'Judul overlay NONAKTIF'),
+                              style: TextStyle(
+                                color: _showTitle ? Colors.blueAccent : Colors.grey,
+                                fontSize: 12,
+                              ),
+                            ),
+                            value: _showTitle,
+                            activeColor: Colors.blueAccent,
+                            onChanged: (val) {
+                              setState(() => _showTitle = val);
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Input Judul Proyek
                         TextFormField(
                           controller: _titleController,
                           maxLength: 40,
@@ -627,10 +702,10 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
                             hintText: t('e.g., "My First Explainer Video"', 'Cth: "Video Penjelasanku"'),
                           ),
                           validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
+                            if (_showTitle && (value == null || value.trim().isEmpty)) {
                               return t('Please enter a project title.', 'Mohon isi judul proyek.');
                             }
-                            if (value.length > 40) {
+                            if (value != null && value.length > 40) {
                               return t('Title cannot exceed 40 characters.', 'Judul maksimal 40 karakter.');
                             }
                             return null;
@@ -638,38 +713,75 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
                         ),
                         const SizedBox(height: 24),
 
-                        // Row 2: Deskripsi Overlay Proyek (Diletakkan di bawah Judul Proyek)
-                        TextFormField(
-                          controller: _descriptionController,
-                          maxLength: 80,
-                          maxLines: 2,
-                          decoration: InputDecoration(
-                            labelText: t('Project Description Overlay', 'Deskripsi Overlay Proyek'),
+                        // Row 2: TOGGLE ON/OFF PROJECT DESCRIPTION OVERLAY (DEFAULT OFF)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.04),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _showDescription ? Colors.blue.withOpacity(0.5) : Colors.white12,
+                            ),
                           ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return t('Please enter a description.', 'Mohon isi deskripsi.');
-                            }
-                            return null;
-                          },
+                          child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              t('Project Description Overlay', 'Deskripsi Overlay Proyek'),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                            subtitle: Text(
+                              _showDescription
+                                  ? t('Overlay description is ON', 'Deskripsi overlay AKTIF')
+                                  : t('Overlay description is OFF (Default)', 'Deskripsi overlay NONAKTIF (Default)'),
+                              style: TextStyle(
+                                color: _showDescription ? Colors.blueAccent : Colors.grey,
+                                fontSize: 12,
+                              ),
+                            ),
+                            value: _showDescription,
+                            activeColor: Colors.blueAccent,
+                            onChanged: (val) {
+                              setState(() => _showDescription = val);
+                            },
+                          ),
                         ),
+
+                        // Input deskripsi hanya aktif jika toggle ON
+                        if (_showDescription) ...[
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _descriptionController,
+                            maxLength: 80,
+                            maxLines: 2,
+                            decoration: InputDecoration(
+                              labelText: t('Project Description Text', 'Teks Deskripsi Proyek'),
+                              hintText: t('e.g., Created @ majiku.net', 'Cth: Created @ majiku.net'),
+                            ),
+                            validator: (value) {
+                              if (_showDescription && (value == null || value.trim().isEmpty)) {
+                                return t('Please enter a description.', 'Mohon isi deskripsi.');
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
                         const SizedBox(height: 24),
 
                         // Row 3: Naskah Narasi (Script)
                         TextFormField(
                           controller: _scriptController,
                           maxLines: 10,
-                          maxLength: 15000,
+                          maxLength: 18000,
                           decoration: InputDecoration(
                             labelText: t('Paste or send your narration here..', 'Paste atau kirim narasimu kesini'),
-                            hintText: t('Exp: In the heart of Sherwood Forest lived a legend known as Robin Hood. He was more than just an outlaw; he was a symbol of resistance against tyranny. Alongside his loyal band of Merry Men, Robin carried out a timeless mission of justice: robbing from the corrupt rich to give back to the oppressed poor....', 'Contoh: Di kedalaman Hutan Sherwood, hiduplah seorang legenda bernama Robin Hood. Ia bukan sekadar pencuri, melainkan simbol perlawanan terhadap tirani. Bersama kelompok setianya, Merry Men, Robin menjalankan misi keadilan yang tak lekang oleh waktu: merampas harta dari kaum kaya yang korup untuk dibagikan kepada rakyat miskin yang tertindas....'),
+                            hintText: t('Exp: In the heart of Sherwood Forest lived a legend known as Robin Hood...', 'Contoh: Di kedalaman Hutan Sherwood, hiduplah seorang legenda bernama Robin Hood...'),
                           ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
                               return t('Please enter a Narration for your video.', 'Mohon isi naskah narasi.');
                             }
-                            if (value.length > 15000) {
-                              return t('Narration cannot exceed 15,000 characters.', 'Naskah maksimal 15.000 karakter.');
+                            if (value.length > 18000) {
+                              return t('Narration cannot exceed 18,000 characters.', 'Naskah maksimal 18.000 karakter.');
                             }
                             return null;
                           },
@@ -706,8 +818,8 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
                                   labelText: t('Aspect Ratio', 'Rasio Aspek'),
                                 ),
                                 items: {
-                                  '${t('Landscape', 'Lanskap')} (16:9)': '16:9',
                                   '${t('Portrait', 'Potret')} (9:16)': '9:16',
+                                  '${t('Landscape', 'Lanskap')} (16:9)': '16:9',
                                   '${t('Square', 'Persegi')} (1:1)': '1:1',
                                 }
                                     .entries
@@ -794,10 +906,9 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
                                 decoration: InputDecoration(
                                   labelText: t('Resolution', 'Resolusi'),
                                 ),
-                                items: [
-                                  DropdownMenuItem(value: '480p', child: Text('480p (${t('Standard', 'Standar')})')),
-                                  const DropdownMenuItem(value: '720p', child: Text('720p (HD)')),
-                                  const DropdownMenuItem(value: '1080p', child: Text('1080p (FHD)')),
+                                items: const [
+                                  DropdownMenuItem(value: '720p', child: Text('720p (HD)')),
+                                  DropdownMenuItem(value: '1080p', child: Text('1080p (FHD)')),
                                 ],
                                 onChanged: (value) {
                                   if (value != null) {
@@ -811,18 +922,19 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
                             
                             Expanded(
                               child: DropdownButtonFormField<String>(
-                                value: _selectedVisualQuality,
+                                value: _selectedCostLevel,
                                 isExpanded: true,
                                 decoration: InputDecoration(
-                                  labelText: t('Visual Quality', 'Kualitas Visual'),
+                                  labelText: t('Cost Level', 'Kualitas Model AI'),
                                 ),
                                 items: [
-                                  DropdownMenuItem(value: 'Standard', child: Text(t('Standard (Good)', 'Standar (Bagus)'))),
-                                  DropdownMenuItem(value: 'High', child: Text(t('High (Precision)', 'Tinggi (Presisi)'))),
+                                  DropdownMenuItem(value: 'High', child: Text(t('High', 'Tinggi'))),
+                                  DropdownMenuItem(value: 'Good', child: Text(t('Good', 'Bagus'))),
+                                  DropdownMenuItem(value: 'Standard', child: Text(t('Standard', 'Standar'))),
                                 ],
                                 onChanged: (value) {
                                   if (value != null) {
-                                    setState(() => _selectedVisualQuality = value);
+                                    setState(() => _selectedCostLevel = value);
                                   }
                                 },
                               ),
@@ -926,5 +1038,5 @@ class _InputScriptStorinemaScreenState extends ConsumerState<InputScriptStorinem
       ),
     );
   }
-    }
+}
 //----------------------------------------------------------------//

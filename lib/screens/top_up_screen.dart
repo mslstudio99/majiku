@@ -1,10 +1,9 @@
-// [RILIS BERSIH - TOP UP SCREEN HYBRID FINAL v3]
-// KATEGORI_UX_IMPROVEMENT NO_URUT_13
-// Perbaikan: 
-// 1. Menampilkan harga REAL-TIME dari Google Play untuk SEMUA variasi (x1, x3, x10, dll).
-// 2. Menghapus logika matematika manual (x 1.3) yang dilarang.
-// 3. Auto-generate SKU ID untuk di-fetch di awal.
+//.......................................................//
+// LIB/SCREENS/TOP_UP_SCREEN.DART                        //
+//.......................................................//
 
+// No ke-1: IMPORT & DEPENDENSI                          //
+//.......................................................//
 import 'dart:io'; 
 import 'package:flutter/foundation.dart' show kIsWeb; 
 import 'package:flutter/material.dart';
@@ -12,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // Impor provider & model
@@ -19,9 +19,13 @@ import '../providers/user_provider.dart';
 import '../providers/config_provider.dart'; 
 import '../models/app_config.dart'; 
 
-// [PENTING] Impor Service Pembayaran Hybrid
+// Impor Service Pembayaran Hybrid & Firestore
 import '../services/payment_hybrid_service.dart';
+import '../services/firestore_service.dart';
+//.......................................................//
 
+// No ke-2: STATEFUL WIDGET & INISIALISASI               //
+//.......................................................//
 class TopUpScreen extends ConsumerStatefulWidget {
   const TopUpScreen({super.key});
 
@@ -49,7 +53,6 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
     'I1': 'BNI Virtual Account',
     'BR': 'BRIVA (BRI)',
     'BV': 'BSI Virtual Account',
-
   };
 
   // Helper Cek Platform
@@ -58,7 +61,7 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
   @override
   void initState() {
     super.initState();
-    // [ANTI-REGRESI] Fetch SEMUA kemungkinan harga Google saat layar dimuat
+    // Fetch semua kemungkinan harga Google saat layar dimuat
     if (_isAndroidNative) {
       _fetchAllGooglePrices();
     }
@@ -75,15 +78,10 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
   Future<void> _fetchAllGooglePrices() async {
     final service = PaymentHybridService();
     
-    // Generate semua kemungkinan ID: topup_basic, topup_basic_x3, topup_basic_x5, dst.
     final Set<String> allIds = {};
-    
-    // Kita asumsikan user bisa punya tier apa saja, jadi kita fetch semua tier
-    // agar jika tier user berubah, harga tetap ada.
     final tiers = ['topup_basic', 'topup_standard', 'topup_pro'];
     
     for (var tierId in tiers) {
-      // Helper ini (dari Service v3) otomatis membuat list ID dengan suffix _x
       allIds.addAll(service.generateVariantIds(tierId, _allowedQuantities));
     }
 
@@ -95,26 +93,26 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
       });
     }
   }
+//.......................................................//
 
-  // --- [HELPER FORMAT HARGA & TEKS] ---
-  
+// No ke-3: HELPER FORMAT HARGA & TEKS                   //
+//.......................................................//
   /// Mengembalikan String harga TOTAL untuk ditampilkan di UI.
   /// Android: Mengambil dari Cache Google (Real-time).
-  /// Web: Menghitung dari Database (Logic Lama).
+  /// Web: Menghitung dari Database dengan kurs dinamis Firestore.
   String _getDisplayTotalPrice({
     required String basePackageId,
     required int quantity,
-    required int unitPriceDb, // Harga satuan dari DB
+    required int unitPriceDb,
     required bool isIndo,
+    required double usdRate,
   }) {
-    // LOGIKA ANDROID (SAFE MODE - GOOGLE POLICY)
     if (_isAndroidNative) {
       String targetSku = basePackageId;
       if (quantity > 1) {
         targetSku = "${basePackageId}_x$quantity";
       }
       
-      // Ambil harga yang sudah diformat oleh Google (cth: "Rp 290.000,00")
       final googlePrice = PaymentHybridService().getPriceFromCache(targetSku);
       
       if (googlePrice != null) {
@@ -123,8 +121,6 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
       return isIndo ? "Memuat..." : "Loading...";
     }
 
-    // LOGIKA WEB (FORMULA LAMA)
-    // Di Web tidak ada markup 30%, harga sesuai DB x Quantity
     final int totalDbPrice = unitPriceDb * quantity;
     
     if (isIndo) {
@@ -134,7 +130,8 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
         decimalDigits: 0,
       ).format(totalDbPrice);
     } else {
-      double amountInUsd = totalDbPrice / 15500;
+      final safeUsdRate = usdRate > 0 ? usdRate : 15500.0;
+      double amountInUsd = totalDbPrice / safeUsdRate;
       return NumberFormat.currency(
         locale: 'en_US',
         symbol: '\$',
@@ -144,14 +141,18 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
   }
 
   // Helper Format Unit Price (Hanya untuk display info text, bukan tagihan)
-  String _formatMoneySimple(int amount, bool isIndo) {
-     if (isIndo) {
+  String _formatMoneySimple(int amount, bool isIndo, double usdRate) {
+    if (isIndo) {
       return NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0).format(amount);
     } else {
-      return NumberFormat.currency(locale: 'en_US', symbol: '\$', decimalDigits: 2).format(amount / 15500);
+      final safeUsdRate = usdRate > 0 ? usdRate : 15500.0;
+      return NumberFormat.currency(locale: 'en_US', symbol: '\$', decimalDigits: 2).format(amount / safeUsdRate);
     }
   }
+//.......................................................//
 
+// No ke-4: LOGIKA TRANSAKSI & PEMANTAU REALTIME        //
+//.......................................................//
   // --- [LOGIKA BACKEND: WEB (DUITKU)] ---
   Future<void> _handlePaymentWeb(String paymentMethod, String packageId, int quantity) async {
     if (_isLoading) return;
@@ -175,6 +176,8 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
       });
 
       final paymentUrl = result.data['paymentUrl'] as String?;
+      final merchantOrderId = result.data['merchantOrderId'] as String?;
+
       if (paymentUrl == null) {
         throw Exception("Payment URL tidak diterima dari server.");
       }
@@ -188,6 +191,11 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
         webOnlyWindowName: '_blank',
       )) {
         throw Exception('Tidak dapat membuka URL: $paymentUrl');
+      }
+
+      // [PELACAKAN TRANSAKSI SENTRAL REAL-TIME]
+      if (merchantOrderId != null && mounted) {
+        _showWaitingPaymentDialog(merchantOrderId);
       }
     } on FirebaseFunctionsException catch (e) {
       if (mounted) {
@@ -214,20 +222,142 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
     }
   }
 
+  /// Dialog Realtime Pelacakan Koleksi Sentral 'transactions' di Firestore
+  void _showWaitingPaymentDialog(String orderId) {
+    final currentLocale = ref.read(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogCtx) {
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: FirestoreService().streamTransactionStatus(orderId),
+          builder: (context, snapshot) {
+            final data = snapshot.data?.data();
+            final status = data?['status'] as String? ?? 'PENDING';
+
+            // 1. Status SUKSES
+            if (status == 'SUCCESS') {
+              return AlertDialog(
+                backgroundColor: const Color(0xFF1E1E1E),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 12),
+                    const Icon(Icons.check_circle_outline, color: Colors.greenAccent, size: 64),
+                    const SizedBox(height: 16),
+                    Text(
+                      t('Payment Successful!', 'Pembayaran Berhasil!'),
+                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      t('Your tokens have been credited to your account.', 'Token tambahan telah berhasil masuk ke saldo Anda.'),
+                      style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.greenAccent,
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => Navigator.of(dialogCtx).pop(),
+                      child: Text(t('Done', 'Selesai'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            // 2. Status GAGAL
+            if (status == 'FAILED') {
+              return AlertDialog(
+                backgroundColor: const Color(0xFF1E1E1E),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 12),
+                    const Icon(Icons.error_outline, color: Colors.redAccent, size: 64),
+                    const SizedBox(height: 16),
+                    Text(
+                      t('Payment Failed or Cancelled', 'Pembayaran Gagal / Dibatalkan'),
+                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => Navigator.of(dialogCtx).pop(),
+                      child: Text(t('Close', 'Tutup')),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            // 3. Status PENDING (Menunggu Pelunasan)
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E1E1E),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 12),
+                  const CircularProgressIndicator(color: Colors.deepPurpleAccent),
+                  const SizedBox(height: 20),
+                  Text(
+                    t('Waiting for Payment...', 'Menunggu Pembayaran...'),
+                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    t('Please complete the payment in the opened browser window.', 'Silakan selesaikan pembayaran di jendela browser yang terbuka.'),
+                    style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Order ID: $orderId',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogCtx).pop(),
+                    child: Text(t('Close Window', 'Tutup Jendela Ini'), style: TextStyle(color: Colors.grey.shade400)),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   // --- [LOGIKA BACKEND: ANDROID (GOOGLE PLAY)] ---
   Future<void> _handlePaymentAndroid(String basePackageId, int quantity) async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
 
     try {
-      // 1. Tentukan SKU Target
       String targetSku = basePackageId;
       if (quantity > 1) {
         targetSku = "${basePackageId}_x$quantity";
       }
 
-      // 2. Panggil Service Hybrid
-      // Service v3 akan handle fetch otomatis jika cache hilang (fallback)
       await PaymentHybridService().payWithGooglePlay(productId: targetSku);
       
     } catch (e) {
@@ -301,8 +431,10 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
       },
     );
   }
+//.......................................................//
 
-  // --- [LOGIKA STEPPER] ---
+// No ke-5: LOGIKA STEPPER QUANTITY                      //
+//.......................................................//
   void _incrementQuantity() {
     int currentIndex = _allowedQuantities.indexOf(_quantity);
     if (currentIndex < _allowedQuantities.length - 1) {
@@ -322,7 +454,10 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
       });
     }
   }
+//.......................................................//
 
+// No ke-6: BUILDER UTAMA ANTARMUKA PENGGUNA             //
+//.......................................................//
   @override
   Widget build(BuildContext context) {
     // 1. Providers
@@ -374,23 +509,25 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
                 currentTierName = "Basic";
               }
 
-              // 2. Ambil Harga Dasar dari Config (Hanya untuk referensi Web)
+              // 2. Ambil Kurs Dinamis dari AppConfig Firestore
+              final double liveUsdRate = config.usdRate > 0 ? config.usdRate : 15500.0;
+
+              // 3. Ambil Harga Dasar dari Config (Hanya untuk referensi Web)
               final packageConfig = config.getPackage(pricePackageId);
               
               final int baseUnitPriceDb = packageConfig?.amount ?? 95000;
               final unitTokens = packageConfig?.tokens ?? 10000;
 
-              // 3. Hitung Token Total
+              // 4. Hitung Token Total
               final int totalTokens = unitTokens * _quantity;
 
-              // 4. Hitung Harga Total Display (Hybrid Logic)
-              // Logic Android: Mengambil dari cache Google (Real-time & Policy Compliant)
-              // Logic Web: Menggunakan rumus database
+              // 5. Hitung Harga Total Display (Hybrid Logic dengan Kurs Firestore)
               final String displayTotalPrice = _getDisplayTotalPrice(
                 basePackageId: pricePackageId,
                 quantity: _quantity,
                 unitPriceDb: baseUnitPriceDb,
                 isIndo: isIndo,
+                usdRate: liveUsdRate,
               );
 
               return SingleChildScrollView(
@@ -455,9 +592,8 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
                             fontWeight: FontWeight.bold
                           ),
                         ),
-                         Text(
-                          // Tampilkan "Estimasi" harga satuan DB hanya untuk info, bukan harga final
-                          '${t("Unit Price", "Harga Satuan")}: ${_formatMoneySimple(baseUnitPriceDb, isIndo)} / ${numberFormat.format(unitTokens)} TM',
+                        Text(
+                          '${t("Unit Price", "Harga Satuan")}: ${_formatMoneySimple(baseUnitPriceDb, isIndo, liveUsdRate)} / ${numberFormat.format(unitTokens)} TM',
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             color: Colors.grey[600]
                           ),
@@ -517,13 +653,11 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
                           style: Theme.of(context).textTheme.labelLarge
                         ),
                         
-                        // [CRITICAL] Widget ini menampilkan harga REAL dari Google
                         Text(
                           displayTotalPrice, 
                           style: Theme.of(context).textTheme.displaySmall?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: Colors.deepPurple,
-                            // Resize font jika teks "Memuat..."
                             fontSize: displayTotalPrice.length > 15 ? 24 : (isIndo ? 36 : 40),
                           ),
                         ),
@@ -553,7 +687,6 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
                                 ? null 
                                 : () {
                                     if (_isAndroidNative) {
-                                      // Jika harga masih "Loading...", jangan boleh klik
                                       if (displayTotalPrice.contains("Load") || displayTotalPrice.contains("Muat")) {
                                          return;
                                       }
@@ -580,3 +713,4 @@ class _TopUpScreenState extends ConsumerState<TopUpScreen> {
     );
   }
 }
+//.......................................................//

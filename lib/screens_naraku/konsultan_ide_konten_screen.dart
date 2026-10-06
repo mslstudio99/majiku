@@ -1,15 +1,18 @@
-// [RILIS FINAL - KONSULTAN IDE: POLICY COMPLIANT & FIRESTORE LOGIC]
-// KATEGORI_POLICY_UPDATE NO_URUT_04
-// Lokasi: lib/screens_naraku/konsultan_ide_konten_screen.dart
-// TUJUAN:
-// 1. [FIX] Menggunakan user.uid untuk mencegah error.
-// 2. Menambahkan fitur Lapor (Flag) untuk kepatuhan Google Play.
-// 3. UI Bersih (Judul di Card) & Tombol Responsif.
+//................................................................//
+// NAMA FILE: KONSULTAN_IDE_KONTEN_SCREEN.DART                    //
+// DIREKTORI: LIB/SCREENS_NARAKU/KONSULTAN_IDE_KONTEN_SCREEN.DART //
+// DESKRIPSI: KONSULTAN IDE KONTEN (POLICY COMPLIANT & LOGGING)   //
+//................................................................//
 
+//No ke-1.........................................................//
+// IMPORT MODULE & DEPENDENCIES                                   //
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // [WAJIB]
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+// [IMPORT SERVICE LOGGING USER CENTER]
+import '../services/firestore_service.dart';
 
 // [IMPORT NAVIGASI MASTER]
 import '../screens/input_script_screen.dart';
@@ -31,32 +34,57 @@ import '../view_model_naraku/konsultan_ide_konten_view_model.dart';
 
 // [IMPORT PROVIDER]
 import '../providers/user_provider.dart';
-import '../providers/config_provider.dart'; // Akses Bahasa
+import '../providers/config_provider.dart'; 
 import '../models/app_user.dart';
 import '../models/app_config.dart';
+//................................................................//
 
-class KonsultanIdeKontenScreen extends ConsumerWidget {
+//No ke-2.........................................................//
+// MAIN CLASS & STATE DECLARATION (STATEFUL CONVERSION)            //
+class KonsultanIdeKontenScreen extends ConsumerStatefulWidget {
   const KonsultanIdeKontenScreen({super.key});
 
+  @override
+  ConsumerState<KonsultanIdeKontenScreen> createState() =>
+      _KonsultanIdeKontenScreenState();
+}
+
+class _KonsultanIdeKontenScreenState
+    extends ConsumerState<KonsultanIdeKontenScreen> {
   final int _maxPromptLength = 200;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // [STATE & LOGIC]
+  void initState() {
+    super.initState();
+    // --- [LOG AKTIVITAS: KUNJUNGAN AUTO NARRATIVE -> KONSULTAN IDE] ---
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'auto_narrative',
+          subFeatureKey: 'konsultan_ide',
+          eventType: 'visit',
+        );
+      }
+    });
+    // ------------------------------------------------------------------
+  }
+//................................................................//
+
+//No ke-3.........................................................//
+// MAIN BUILD METHOD & SCAFFOLD                                   //
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(konsultanIdeKontenViewModelProvider);
     final viewModel = ref.read(konsultanIdeKontenViewModelProvider.notifier);
     final AsyncValue<AppUser> userState = ref.watch(firestoreUserProvider);
     final AsyncValue<AppConfig> configState = ref.watch(appConfigProvider);
 
-    // [BAHASA]
     final currentLocale = ref.watch(appLanguageProvider);
     final isIndo = currentLocale.languageCode == 'id';
     String t(String en, String id) => isIndo ? id : en;
 
-    // [THEME SHORTCUT]
     final theme = Theme.of(context);
 
-    // [LISTENER]
     ref.listen<KonsultanIdeKontenState>(konsultanIdeKontenViewModelProvider,
         (previous, next) {
       if (next.errorMessage != null && previous?.errorMessage == null) {
@@ -67,12 +95,20 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
           ),
         );
       }
+
+      // --- [LOG AKTIVITAS: KONVERSI SUKSES GENERATE IDE KONTEN] ---
+      if (previous?.isLoading == true && !next.isLoading && next.generatedIdeas.isNotEmpty) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'auto_narrative',
+          subFeatureKey: 'konsultan_ide',
+          eventType: 'conversion',
+        );
+      }
+      // -------------------------------------------------------------
     });
 
     return Scaffold(
-      // Background otomatis hitam dari Theme
       appBar: AppBar(
-        // [UI BERSIH] Judul dihapus di AppBar
         title: null,
         actions: [
           TextButton.icon(
@@ -115,8 +151,10 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
       ),
     );
   }
+//................................................................//
 
-  // --- [LOGIC REAL] LAPOR KONTEN KE FIRESTORE ---
+//No ke-4.........................................................//
+// ACTION LOGIC (FIRESTORE REPORT)                                //
   void _showReportDialog(BuildContext context, WidgetRef ref, String content) {
     final TextEditingController reasonController = TextEditingController();
     
@@ -151,10 +189,7 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () {
-              // [FIREBASE LOGIC] Simpan Laporan
               final user = ref.read(firestoreUserProvider).valueOrNull;
-              
-              // [BUGFIX] Menggunakan .uid bukan .id
               final userId = user?.uid ?? 'anonymous'; 
 
               FirebaseFirestore.instance.collection('reports').add({
@@ -162,7 +197,7 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
                 'reason': reasonController.text.isEmpty ? 'No reason provided' : reasonController.text,
                 'reportedAt': FieldValue.serverTimestamp(),
                 'userId': userId,
-                'feature': 'Konsultan Ide Konten', // Penanda fitur
+                'feature': 'Konsultan Ide Konten',
               }).then((_) {
                 if (context.mounted) {
                   Navigator.pop(ctx);
@@ -191,8 +226,10 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
       ),
     );
   }
+//................................................................//
 
-  // --- Input Card ---
+//No ke-5.........................................................//
+// UI HELPERS (INPUT CARD & LOGIKA TOMBOL)                        //
   Widget _buildInputCard(
     BuildContext context,
     WidgetRef ref,
@@ -210,7 +247,6 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
       charCounter.value = viewModel.promptController.text.length;
     });
 
-    // --- Logika Tombol ---
     final bool vmIsLoading = state.isLoading;
     final bool providersAreLoading =
         userState.isLoading || configState.isLoading;
@@ -236,7 +272,6 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
     final bool isButtonDisabled =
         vmIsLoading || providersAreLoading || providersHaveError || !canAfford;
     
-    // [THEME] Warna Tombol: Primary (Deep Purple) atau Disabled
     final Color buttonColor =
         (isButtonDisabled && !vmIsLoading && !providersAreLoading)
             ? theme.disabledColor
@@ -249,7 +284,6 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // [JUDUL FITUR DI SINI]
             Text(
               t('Content Idea Consultant', 'Konsultan Ide Konten'),
               style: theme.textTheme.headlineSmall,
@@ -281,7 +315,6 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 10),
             
-            // [ELEGANT BLACK INPUT]
             TextField(
               controller: viewModel.promptController,
               maxLines: 3,
@@ -315,7 +348,7 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
                         color: Colors.white,
                       ),
                     )
-                  : const Icon(Icons.lightbulb, size: 20), // Icon Bulb
+                  : const Icon(Icons.lightbulb, size: 20),
               label: Text(
                 buttonLabel,
                 style: const TextStyle(fontWeight: FontWeight.bold),
@@ -339,8 +372,10 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
       ),
     );
   }
+//................................................................//
 
-  // --- Output Card ---
+//No ke-6.........................................................//
+// UI HELPERS (OUTPUT CARD & ACTION BUTTONS)                      //
   Widget _buildOutputCard(
     BuildContext context,
     WidgetRef ref,
@@ -365,7 +400,6 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // [REVISI UI] Header dengan Tombol Lapor (Flag)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -373,7 +407,6 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
                   t('Recommended Ideas', 'Ide Rekomendasi'),
                   style: theme.textTheme.headlineSmall,
                 ),
-                // Tombol Lapor (Hanya muncul jika ada konten)
                 if (hasOutput)
                   IconButton(
                     icon: const Icon(Icons.flag_outlined, color: Colors.redAccent),
@@ -410,7 +443,6 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 20),
             
-            // --- [HEADER & KONTROL OUTPUT] ---
             Row(
               children: [
                 Expanded(
@@ -460,12 +492,13 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
       ),
     );
   }
+//................................................................//
 
-  // --- Drawer Master (Themed) ---
+//No ke-7.........................................................//
+// DRAWER BUILDER                                                 //
   Widget _buildNarakuDrawer(BuildContext context, String Function(String, String) t) {
     final theme = Theme.of(context);
 
-    // Helper Navigasi
     void _navigate(Widget screen) {
       Navigator.pop(context);
       Navigator.of(context).push(MaterialPageRoute(builder: (c) => screen));
@@ -490,7 +523,6 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // [UI DRAWER HEADER RAPI]
           Container(
             padding: const EdgeInsets.fromLTRB(16, 50, 16, 20),
             color: theme.appBarTheme.backgroundColor,
@@ -510,7 +542,7 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
             ),
           ),
 
-          _menuItem(t('Idea Consultant', 'Konsultan Ide Konten'), Icons.lightbulb_outline, () {}, isDisabled: true), // Halaman Ini
+          _menuItem(t('Idea Consultant', 'Konsultan Ide Konten'), Icons.lightbulb_outline, () {}, isDisabled: true),
           _menuItem(t('General Content', 'Generator Konten Umum'), Icons.rate_review_outlined, () => _navigate(const GeneratorKontenUmumScreen())),
           _menuItem(t('Short Content', 'Generator Konten Short'), Icons.movie_creation_outlined, () => _navigate(const GeneratorKontenShortScreen())),
           _menuItem(t('History Story', 'Generator Kisah Sejarah'), Icons.account_balance_outlined, () => _navigate(const GeneratorKisahSejarahScreen())),
@@ -553,3 +585,4 @@ class KonsultanIdeKontenScreen extends ConsumerWidget {
     );
   }
 }
+//................................................................//

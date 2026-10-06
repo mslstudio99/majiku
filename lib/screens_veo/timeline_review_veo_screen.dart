@@ -340,6 +340,66 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
       }
     });
   }
+
+  // --- [SUNTIKAN FITUR PLAY/PAUSE INDIVIDUAL FOOTAGE] ---
+  void _togglePlaySingleVideo(int sceneIndex) {
+    if (_currentSequenceIndex == sceneIndex &&
+        _videoController != null &&
+        _videoController!.value.isInitialized) {
+      if (_videoController!.value.isPlaying) {
+        _videoController!.pause();
+        _playbackTimer?.cancel();
+        setState(() {
+          _isPlayingSequence = false;
+        });
+      } else {
+        _videoController!.play();
+        setState(() {
+          _isPlayingSequence = false;
+        });
+      }
+      return;
+    }
+    _playSingleVideo(sceneIndex);
+  }
+
+  Future<void> _playSingleVideo(int sceneIndex) async {
+    _stopSequencePlayback(resetIndex: false);
+    
+    setState(() {
+      _isPlayingSequence = false;
+      _currentSequenceIndex = sceneIndex;
+    });
+    
+    await _videoController?.dispose();
+    _videoController = null;
+    
+    if (!mounted) return;
+    final scene = _currentScenes[sceneIndex];
+    ref.read(selectedSceneVeoProvider.notifier).state = scene;
+    
+    final videoUrl = scene.videoUrl;
+    if (videoUrl.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Video belum tersedia untuk diputar.')),
+      );
+      return;
+    }
+    
+    try {
+      _videoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+      await _videoController!.initialize();
+      if (!mounted) {
+        _videoController?.dispose();
+        return;
+      }
+      _videoController!.setLooping(true); // Looping per-segmen jika di play individual
+      _videoController!.play();
+      setState(() {});
+    } catch (e) {
+      logger.error("Error playing single video for scene $sceneIndex: $e");
+    }
+  }
 //Akhir Blok 4........................................................................................//
 
 
@@ -427,9 +487,8 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
   }
 
   Widget _buildVideoDisplay({Key? key}) {
-    if (_isPlayingSequence &&
-        _videoController != null &&
-        _videoController!.value.isInitialized) {
+    // [MODIFIKASI] Agar video player tetap tampil meski play secara individual (_isPlayingSequence false)
+    if (_videoController != null && _videoController!.value.isInitialized) {
       return VideoPlayer(_videoController!);
     }
     return Tooltip(
@@ -495,6 +554,11 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
 //Akhir Blok 5........................................................................................//
 
 
+//====================================================================================================//
+// NAMA FILE: TIMELINE_REVIEW_VEO_SCREEN.DART                                                         //
+// DIREKTORI: lib/screens_veo/timeline_review_veo_screen.dart                                         //
+//====================================================================================================//
+
 //No ke-6: WIDGET UTAMA (METHOD BUILD)................................................................//
 //Sub-judul: Membangun struktur UI, Smart Controller Auto-Render, dan List Scene Timeline.............//
   @override
@@ -536,53 +600,6 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
         projectData.finalVideoUrl != null &&
         projectData.finalVideoUrl!.isNotEmpty;
 
-    // [SMART CONTROLLER: AUTO-TRIGGER RENDER]
-    if (projectData != null &&
-        projectData.status == 'ASSETS_COMPLETE' &&
-        areAllScenesValid &&
-        !_hasAutoTriggeredRender &&
-        !_isTriggeringRender &&
-        !isRenderSuccessGlobal) {
-      
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        setState(() {
-          _hasAutoTriggeredRender = true; 
-          _isTriggeringRender = true;     
-        });
-        
-        try {
-          logger.info("[AUTO-RENDER VEO] Preparing and saving render packet...");
-          await prepareAndSaveRenderPacketVeo(ref, widget.projectId);
-          
-          logger.info("[AUTO-RENDER VEO] Updating status to RENDER_READY...");
-          await ref.read(firestoreVeoServiceProvider).updateProject(
-            widget.projectId,
-            {
-              'status': 'RENDER_READY',
-              'renderStartedAt': FieldValue.serverTimestamp(),
-              'errorDetail': FieldValue.delete()
-            }
-          );
-          logger.info("[AUTO-RENDER VEO] Trigger successful for ${widget.projectId}");
-        } catch (e) {
-          logger.error("[AUTO-RENDER VEO] Failed to auto-trigger render", e);
-          if (mounted) {
-            setState(() {
-              _isTriggeringRender = false;
-              _hasAutoTriggeredRender = false; // Buka kunci agar bisa coba manual jika error
-            });
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('❌ Auto-Render failed: $e'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
-      });
-    }
-
     // Jika render sudah sukses, matikan Play/Replay agar fokus pada Download
     final bool canPlayOrReplay = projectData != null && !isCalculating && areAllScenesValid && !isRenderSuccessGlobal;
     final double aspectRatioValue = _calculateAspectRatio(projectData?.aspectRatio);
@@ -598,7 +615,6 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
         fontSize: previewFontSize,
         color: color,
         fontWeight: weight,
-        // Simulasi FFmpeg ASS BorderStyle=1 (Outline tebal)
         shadows: const [
           Shadow(blurRadius: 1.5, color: Colors.black, offset: Offset( 1.5,  1.5)),
           Shadow(blurRadius: 1.5, color: Colors.black, offset: Offset(-1.5, -1.5)),
@@ -646,26 +662,15 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
               );
             }
 
-            if (_isTriggeringRender &&
-                (project.status == 'RENDERING' ||
-                 project.status == 'RENDER_READY' ||
-                 project.status == 'RENDER_START' ||
-                 project.status == 'RENDER_COMPLETED' ||
-                 (project.status != null && project.status!.startsWith('ERROR')))) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) setState(() => _isTriggeringRender = false);
-              });
-            }
-
             final bool isRenderComplete = isRenderSuccessGlobal;
             final String? finalVideoUrl = project.finalVideoUrl;
             
-            final bool isProjectRendering = (project.status == 'RENDER_READY' || 
+            // [SINKRONISASI UI]: Menampilkan Overlay MURNI membaca status dari Backend
+            final bool isProjectRendering = !isRenderComplete && (
+                project.status == 'RENDER_READY' || 
                 project.status == 'RENDER_START' ||
-                project.status == 'RENDERING' ||
-                _isTriggeringRender);
+                project.status == 'RENDERING');
 
-            // Manual Render hanya bisa diklik jika ada validitas penuh dan belum selesai rendering
             final bool canRender = areAllScenesValid && !isRenderComplete && !isProjectRendering;
             
             bool hasValidStartTime = false;
@@ -761,7 +766,6 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
                                                   const EdgeInsets.symmetric(
                                                       horizontal: 12,
                                                       vertical: 6),
-                                              // [PEMBERSIHAN] Menghapus BoxDecoration (Kotak Hitam)
                                               child: Text(
                                                 visualSettings
                                                     .titleSettings.text,
@@ -770,7 +774,7 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
                                                       .baseFontSize,
                                                   visualSettings
                                                       .titleSettings.color,
-                                                  weight: FontWeight.bold, // [MODIFIKASI] Title = Bold
+                                                  weight: FontWeight.bold,
                                                 ),
                                                 textAlign: TextAlign.center,
                                                 maxLines: visualSettings
@@ -807,7 +811,6 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
                                                   const EdgeInsets.symmetric(
                                                       horizontal: 12,
                                                       vertical: 6),
-                                              // [PEMBERSIHAN] Menghapus BoxDecoration (Kotak Hitam)
                                               child: Text(
                                                 visualSettings
                                                     .descriptionSettings.text,
@@ -818,7 +821,7 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
                                                   visualSettings
                                                       .descriptionSettings
                                                       .color,
-                                                  weight: FontWeight.normal, // [MODIFIKASI] Desc = Normal
+                                                  weight: FontWeight.normal,
                                                 ),
                                                 textAlign: TextAlign.center,
                                                 maxLines: visualSettings
@@ -897,244 +900,388 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
                             return const Center(
                                 child: Text("No scenes found for this project."));
                           }
+                          
                           return Column(
                             children: [
                               Expanded(
-                                child: ListView.builder(
-                                  itemCount: scenes.length,
-                                  itemBuilder: (context, index) {
-                                    final sceneIndex = index;
-                                    final scene = scenes[sceneIndex];
-                                    final isCurrentlyPlayingInSequence =
-                                        _isPlayingSequence &&
-                                            _currentSequenceIndex == sceneIndex;
-                                    final bool isSelectedManually = ref
-                                            .watch(selectedSceneVeoProvider)
-                                            ?.id ==
-                                        scene.id &&
-                                        !_isPlayingSequence;
+                                child: CustomScrollView(
+                                  slivers: [
+                                    SliverList(
+                                      delegate: SliverChildBuilderDelegate(
+                                        (context, index) {
+                                          final sceneIndex = index;
+                                          final scene = scenes[sceneIndex];
+                                          final isCurrentlyPlayingInSequence =
+                                              _isPlayingSequence &&
+                                                  _currentSequenceIndex == sceneIndex;
+                                          final bool isSelectedManually = ref
+                                                  .watch(selectedSceneVeoProvider)
+                                                  ?.id ==
+                                              scene.id &&
+                                              !_isPlayingSequence;
 
-                                    final bool isSceneProcessing =
-                                        scene.status == 'QUEUED_FOR_REFINE' ||
-                                            scene.status == 'IS_REFINING' ||
-                                            scene.status == 'QUEUED_FOR_VIDEO' ||
-                                            scene.status == 'GENERATING_VIDEO' ||
-                                            scene.status == 'PENDING_REFINEMENT' ||
-                                            false;
+                                          final bool isSceneProcessing =
+                                              scene.status == 'QUEUED_FOR_REFINE' ||
+                                                  scene.status == 'IS_REFINING' ||
+                                                  scene.status == 'QUEUED_FOR_VIDEO' ||
+                                                  scene.status == 'GENERATING_VIDEO' ||
+                                                  scene.status == 'PENDING_REFINEMENT' ||
+                                                  false;
 
-                                    final bool isError = (scene.status ?? '').startsWith('ERROR');
+                                          final bool isError = (scene.status ?? '').startsWith('ERROR');
+                                          final bool isThisScenePlaying = _currentSequenceIndex == sceneIndex &&
+                                              _videoController != null &&
+                                              _videoController!.value.isInitialized &&
+                                              _videoController!.value.isPlaying;
 
-                                    return Card(
-                                      margin: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      color: isCurrentlyPlayingInSequence
-                                          ? Colors.lightBlue[50]
-                                          : (isSelectedManually
-                                              ? Colors.grey[200]
-                                              : null),
-                                      elevation: isCurrentlyPlayingInSequence
-                                          ? 4
-                                          : (isSelectedManually ? 2 : 1),
-                                      child: InkWell(
-                                        onTap: () {
-                                          if (_isPlayingSequence) {
-                                            _stopSequencePlayback(
-                                                resetIndex: false);
-                                          }
-                                          ref
-                                              .read(selectedSceneVeoProvider
-                                                  .notifier)
-                                              .state = scene;
-                                        },
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(8.0),
-                                          child: Row(
-                                            children: [
-                                              Container(
-                                                width: 32,
-                                                alignment: Alignment.centerLeft,
-                                                child: Text(
-                                                  "${index + 1}.",
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .titleSmall
-                                                      ?.copyWith(
-                                                        color: Theme.of(context)
-                                                            .colorScheme
-                                                            .onSurface
-                                                            .withOpacity(0.6),
-                                                        fontWeight: FontWeight.bold,
-                                                      ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 4),
-
-                                              Container(
-                                                width: 80,
-                                                height: 60,
-                                                decoration: BoxDecoration(
-                                                  color: Colors.grey[300],
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                  border:
-                                                      isCurrentlyPlayingInSequence
-                                                          ? Border.all(
-                                                              color: Colors
-                                                                  .blueAccent,
-                                                              width: 2)
-                                                          : (isSelectedManually
-                                                              ? Border.all(
-                                                                  color: Colors
-                                                                      .grey,
-                                                                  width: 1)
-                                                              : null),
-                                                ),
-                                                child: isSceneProcessing
-                                                    ? const Center(
-                                                        child: SizedBox(
-                                                          width: 24,
-                                                          height: 24,
-                                                          child:
-                                                              CircularProgressIndicator(
-                                                                  strokeWidth:
-                                                                      3.0),
-                                                        ),
-                                                      )
-                                                    : _VideoThumbnailItem(
-                                                        videoUrl: scene.videoUrl),
-                                              ),
-                                              const SizedBox(width: 12),
-
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
+                                          return Card(
+                                            margin: const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 4),
+                                            color: isCurrentlyPlayingInSequence
+                                                ? Colors.lightBlue[50]
+                                                : (isSelectedManually
+                                                    ? Colors.grey[200]
+                                                    : null),
+                                            elevation: isCurrentlyPlayingInSequence
+                                                ? 4
+                                                : (isSelectedManually ? 2 : 1),
+                                            child: InkWell(
+                                              onTap: () {
+                                                if (_isPlayingSequence) {
+                                                  _stopSequencePlayback(
+                                                      resetIndex: false);
+                                                }
+                                                ref
+                                                    .read(selectedSceneVeoProvider
+                                                        .notifier)
+                                                    .state = scene;
+                                              },
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(8.0),
+                                                child: Row(
                                                   children: [
-                                                    Text(
-                                                      scene.segmentText ?? "",
-                                                      style: const TextStyle(
-                                                          fontSize: 14,
-                                                          fontWeight:
-                                                              FontWeight.w500),
-                                                      maxLines: 2,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    if (scene.errorDetail !=
-                                                            null &&
-                                                        scene.errorDetail!
-                                                            .isNotEmpty)
-                                                      Padding(
-                                                        padding: const EdgeInsets
-                                                            .only(top: 2.0),
-                                                        child: Tooltip(
-                                                          message:
-                                                              scene.errorDetail!,
-                                                          child: Text(
-                                                            scene.errorDetail!,
-                                                            style: TextStyle(
-                                                                fontSize: 10,
-                                                                color: Colors
-                                                                    .red[700]),
-                                                            maxLines: 1,
-                                                            overflow: TextOverflow
-                                                                .ellipsis,
-                                                          ),
-                                                        ),
+                                                    Container(
+                                                      width: 32,
+                                                      alignment: Alignment.centerLeft,
+                                                      child: Text(
+                                                        "${index + 1}.",
+                                                        style: Theme.of(context)
+                                                            .textTheme
+                                                            .titleSmall
+                                                            ?.copyWith(
+                                                              color: Theme.of(context)
+                                                                  .colorScheme
+                                                                  .onSurface
+                                                                  .withOpacity(0.6),
+                                                              fontWeight: FontWeight.bold,
+                                                            ),
                                                       ),
+                                                    ),
+                                                    const SizedBox(width: 4),
+
+                                                    Container(
+                                                      width: 80,
+                                                      height: 60,
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.grey[300],
+                                                        borderRadius:
+                                                            BorderRadius.circular(8),
+                                                        border:
+                                                            isCurrentlyPlayingInSequence
+                                                                ? Border.all(
+                                                                    color: Colors
+                                                                        .blueAccent,
+                                                                    width: 2)
+                                                                : (isSelectedManually
+                                                                    ? Border.all(
+                                                                        color: Colors
+                                                                            .grey,
+                                                                        width: 1)
+                                                                    : null),
+                                                      ),
+                                                      child: isSceneProcessing
+                                                          ? const Center(
+                                                              child: SizedBox(
+                                                                width: 24,
+                                                                height: 24,
+                                                                child:
+                                                                    CircularProgressIndicator(
+                                                                        strokeWidth:
+                                                                            3.0),
+                                                              ),
+                                                            )
+                                                          : Stack(
+                                                              alignment: Alignment.center,
+                                                              children: [
+                                                                Positioned.fill(
+                                                                  child: _VideoThumbnailItem(
+                                                                      videoUrl: scene.videoUrl),
+                                                                ),
+                                                                if (scene.videoUrl.isNotEmpty)
+                                                                  Material(
+                                                                    color: Colors.transparent,
+                                                                    child: InkWell(
+                                                                      borderRadius: BorderRadius.circular(20),
+                                                                      onTap: () => _togglePlaySingleVideo(sceneIndex),
+                                                                      child: Container(
+                                                                        padding: const EdgeInsets.all(4),
+                                                                        decoration: const BoxDecoration(
+                                                                          color: Colors.black54,
+                                                                          shape: BoxShape.circle,
+                                                                        ),
+                                                                        child: Icon(
+                                                                          isThisScenePlaying
+                                                                              ? Icons.pause
+                                                                              : Icons.play_arrow,
+                                                                          color: Colors.white,
+                                                                          size: 22,
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                              ],
+                                                            ),
+                                                    ),
+                                                    const SizedBox(width: 12),
+
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment.start,
+                                                        children: [
+                                                          Text(
+                                                            scene.segmentText ?? "",
+                                                            style: const TextStyle(
+                                                                fontSize: 14,
+                                                                fontWeight:
+                                                                    FontWeight.w500),
+                                                            maxLines: 2,
+                                                            overflow:
+                                                                TextOverflow.ellipsis,
+                                                          ),
+                                                          const SizedBox(height: 4),
+                                                          if (scene.errorDetail !=
+                                                                  null &&
+                                                              scene.errorDetail!
+                                                                  .isNotEmpty)
+                                                            Padding(
+                                                              padding: const EdgeInsets
+                                                                  .only(top: 2.0),
+                                                              child: Tooltip(
+                                                                message:
+                                                                    scene.errorDetail!,
+                                                                child: Text(
+                                                                  scene.errorDetail!,
+                                                                  style: TextStyle(
+                                                                      fontSize: 10,
+                                                                      color: Colors
+                                                                          .red[700]),
+                                                                  maxLines: 1,
+                                                                  overflow: TextOverflow
+                                                                      .ellipsis,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                        ],
+                                                      ),
+                                                    ),
+
+                                                    if (isError)
+                                                      IconButton(
+                                                        icon: Icon(Icons.edit, 
+                                                            color: Colors.orange[700]),
+                                                        tooltip: 'Edit Prompt & Retry',
+                                                        onPressed: () {
+                                                          final TextEditingController _promptController = TextEditingController(
+                                                            text: scene.refinedPrompt ?? scene.rawPrompt ?? ""
+                                                          );
+
+                                                          showDialog(
+                                                            context: context,
+                                                            builder: (ctx) => AlertDialog(
+                                                              backgroundColor: Theme.of(context).cardColor,
+                                                              title: Text('Edit Prompt (Scene ${index + 1})'),
+                                                              content: Column(
+                                                                mainAxisSize: MainAxisSize.min,
+                                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                                children: [
+                                                                   Text(
+                                                                    'Generation failed. You can manually edit the prompt below to fix policy issues or improve quality.\n',
+                                                                    style: Theme.of(context).textTheme.bodyMedium
+                                                                   ),
+                                                                   TextField(
+                                                                     controller: _promptController,
+                                                                     maxLines: 5,
+                                                                     decoration: const InputDecoration(
+                                                                       border: OutlineInputBorder(),
+                                                                       hintText: "Enter revised prompt here...",
+                                                                       labelText: "Video Prompt",
+                                                                     ),
+                                                                   ),
+                                                                   const SizedBox(height: 8),
+                                                                   Text(
+                                                                    'Last Error: ${scene.errorDetail ?? "Unknown"}',
+                                                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.red),
+                                                                   ),
+                                                                ],
+                                                              ),
+                                                              actions: [
+                                                                TextButton(
+                                                                  child: const Text('Cancel'),
+                                                                  onPressed: () => Navigator.of(ctx).pop(),
+                                                                ),
+                                                                FilledButton(
+                                                                  style: FilledButton.styleFrom(
+                                                                    backgroundColor: Colors.blue.shade700,
+                                                                  ),
+                                                                  child: const Text('Save & Regenerate'),
+                                                                  onPressed: () {
+                                                                    final newPrompt = _promptController.text;
+                                                                    if (newPrompt.trim().isEmpty) {
+                                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                                        const SnackBar(content: Text("Prompt cannot be empty!"))
+                                                                      );
+                                                                      return;
+                                                                    }
+
+                                                                    ref.read(firestoreVeoServiceProvider)
+                                                                       .updateScenePromptAndRegenerate(
+                                                                          widget.projectId,
+                                                                          scene.id,
+                                                                          newPrompt 
+                                                                       );
+                                                                    Navigator.of(ctx).pop();
+                                                                  },
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          );
+                                                        },
+                                                      ),
+                                                    
+                                                    const SizedBox(width: 4),
+                                                    IconButton(
+                                                      icon: const Icon(Icons.download, 
+                                                          color: Colors.blueAccent, size: 20),
+                                                      tooltip: 'Download Video Scene ${index + 1}',
+                                                      onPressed: () {
+                                                        if (scene.videoUrl.isNotEmpty) {
+                                                          _launchURL(scene.videoUrl);
+                                                        } else {
+                                                          ScaffoldMessenger.of(context).showSnackBar(
+                                                            const SnackBar(content: Text('Video belum tersedia'))
+                                                          );
+                                                        }
+                                                      },
+                                                    ),
+                                                    IconButton(
+                                                      icon: const Icon(Icons.flag_outlined, 
+                                                        color: Colors.redAccent, 
+                                                        size: 20
+                                                      ),
+                                                      tooltip: 'Lapor Konten Scene ${index + 1}',
+                                                      onPressed: () => _showSceneReportDialog(scene, index),
+                                                    ),
                                                   ],
                                                 ),
                                               ),
+                                            ),
+                                          );
+                                        },
+                                        childCount: scenes.length,
+                                      ),
+                                    ),
 
-                                              if (isError)
-                                                IconButton(
-                                                  icon: Icon(Icons.edit, 
-                                                      color: Colors.orange[700]),
-                                                  tooltip: 'Edit Prompt & Retry',
-                                                  onPressed: () {
-                                                    final TextEditingController _promptController = TextEditingController(
-                                                      text: scene.refinedPrompt ?? scene.rawPrompt ?? ""
-                                                    );
-
-                                                    showDialog(
-                                                      context: context,
-                                                      builder: (ctx) => AlertDialog(
-                                                        backgroundColor: Theme.of(context).cardColor,
-                                                        title: Text('Edit Prompt (Scene ${index + 1})'),
-                                                        content: Column(
-                                                          mainAxisSize: MainAxisSize.min,
-                                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                                          children: [
-                                                             Text(
-                                                              'Generation failed. You can manually edit the prompt below to fix policy issues or improve quality.\n',
-                                                              style: Theme.of(context).textTheme.bodyMedium
-                                                             ),
-                                                             TextField(
-                                                               controller: _promptController,
-                                                               maxLines: 5,
-                                                               decoration: const InputDecoration(
-                                                                 border: OutlineInputBorder(),
-                                                                 hintText: "Enter revised prompt here...",
-                                                                 labelText: "Video Prompt",
-                                                               ),
-                                                             ),
-                                                             const SizedBox(height: 8),
-                                                             Text(
-                                                              'Last Error: ${scene.errorDetail ?? "Unknown"}',
-                                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.red),
-                                                             ),
-                                                          ],
-                                                        ),
-                                                        actions: [
-                                                          TextButton(
-                                                            child: const Text('Cancel'),
-                                                            onPressed: () => Navigator.of(ctx).pop(),
-                                                          ),
-                                                          FilledButton(
-                                                            style: FilledButton.styleFrom(
-                                                              backgroundColor: Colors.blue.shade700,
-                                                            ),
-                                                            child: const Text('Save & Regenerate'),
-                                                            onPressed: () {
-                                                              final newPrompt = _promptController.text;
-                                                              if (newPrompt.trim().isEmpty) {
-                                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                                  const SnackBar(content: Text("Prompt cannot be empty!"))
-                                                                );
-                                                                return;
-                                                              }
-
-                                                              ref.read(firestoreVeoServiceProvider)
-                                                               .updateScenePromptAndRegenerate(
-                                                                  widget.projectId,
-                                                                  scene.id,
-                                                                  newPrompt 
-                                                               );
-                                                              Navigator.of(ctx).pop();
-                                                            },
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    );
-                                                  },
-                                                ),
-                                              
-                                              const SizedBox(width: 4),
-                                              IconButton(
-                                                icon: const Icon(Icons.flag_outlined, 
-                                                  color: Colors.redAccent, 
-                                                  size: 20
-                                                ),
-                                                tooltip: 'Lapor Konten Scene ${index + 1}',
-                                                onPressed: () => _showSceneReportDialog(scene, index),
-                                              ),
-                                            ],
+                                    if (project.identifiedCharacters.isNotEmpty) ...[
+                                      SliverToBoxAdapter(
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 24.0, bottom: 8.0),
+                                          child: Text(
+                                            "Image character:",
+                                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    );
-                                  },
+
+                                      SliverList(
+                                        delegate: SliverChildBuilderDelegate(
+                                          (context, index) {
+                                            final charMap = project.identifiedCharacters[index];
+                                            final String charName = charMap['name'] as String? ?? "Character ${index + 1}";
+                                            final String? imageUrl = (charMap['imageUri'] as String?) ??
+                                                (charMap['imageUrl'] as String?) ??
+                                                (charMap['gcsUri'] as String?);
+
+                                            if (imageUrl == null || imageUrl.isEmpty) {
+                                              return const SizedBox.shrink();
+                                            }
+
+                                            return Card(
+                                              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              elevation: 1,
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(8.0),
+                                                child: Row(
+                                                  children: [
+                                                    Container(
+                                                      width: 32,
+                                                      alignment: Alignment.centerLeft,
+                                                      child: Text(
+                                                        "${index + 1}.",
+                                                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Container(
+                                                      width: 80,
+                                                      height: 60,
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.grey[300],
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        image: DecorationImage(
+                                                          image: NetworkImage(imageUrl),
+                                                          fit: BoxFit.cover,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 12),
+                                                    Expanded(
+                                                      child: Text(
+                                                        charName,
+                                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ),
+                                                    IconButton(
+                                                      icon: const Icon(Icons.download, color: Colors.blueAccent, size: 20),
+                                                      tooltip: 'Download Image $charName',
+                                                      onPressed: () => _launchURL(imageUrl),
+                                                    ),
+                                                    IconButton(
+                                                      icon: const Icon(Icons.flag_outlined, color: Colors.redAccent, size: 20),
+                                                      tooltip: 'Lapor Image $charName',
+                                                      onPressed: () => _showCharacterReportDialog(charName, imageUrl, index),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          childCount: project.identifiedCharacters.length,
+                                        ),
+                                      ),
+                                    ],
+                                    const SliverToBoxAdapter(
+                                      child: SizedBox(height: 16),
+                                    ),
+                                  ],
                                 ),
                               ),
 
@@ -1219,29 +1366,15 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
                                       children: [
                                         ElevatedButton(
                                           style: ElevatedButton.styleFrom(
-                                                  backgroundColor:
-                                                      Colors.red.shade700,
+                                                  backgroundColor: Colors.red.shade700,
                                                   foregroundColor: Colors.white,
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                          horizontal: 20,
-                                                          vertical: 12),
-                                                  textStyle: const TextStyle(
-                                                      fontSize: 16,
-                                                      fontWeight: FontWeight.bold))
+                                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))
                                               .copyWith(
-                                            backgroundColor: MaterialStateProperty
-                                                .resolveWith<Color?>(
-                                                    (states) => states.contains(
-                                                            MaterialState.disabled)
-                                                        ? Colors.red.shade200
-                                                        : Colors.red.shade700),
-                                            foregroundColor: MaterialStateProperty
-                                                .resolveWith<Color?>(
-                                                    (states) => states.contains(
-                                                            MaterialState.disabled)
-                                                        ? Colors.white70
-                                                        : Colors.white),
+                                            backgroundColor: MaterialStateProperty.resolveWith<Color?>(
+                                                    (states) => states.contains(MaterialState.disabled) ? Colors.red.shade200 : Colors.red.shade700),
+                                            foregroundColor: MaterialStateProperty.resolveWith<Color?>(
+                                                    (states) => states.contains(MaterialState.disabled) ? Colors.white70 : Colors.white),
                                           ),
                                           onPressed: !canRender
                                               ? null
@@ -1253,50 +1386,28 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
                                                   showDialog(
                                                     context: context,
                                                     barrierDismissible: false,
-                                                    builder:
-                                                        (BuildContext context) {
+                                                    builder: (BuildContext context) {
                                                       bool _isSaving = false;
-                                                      String _loadingMessage =
-                                                          "Saving render packet...";
+                                                      String _loadingMessage = "Memulai Render...";
                                                       return StatefulBuilder(
-                                                        builder: (context,
-                                                            setDialogState) {
+                                                        builder: (context, setDialogState) {
                                                           return AlertDialog(
-                                                            title: const Text(
-                                                                'Start Video Render?'),
+                                                            title: const Text('Mulai Render Video?'),
                                                             content: Column(
-                                                              mainAxisSize:
-                                                                  MainAxisSize.min,
-                                                              crossAxisAlignment:
-                                                                  CrossAxisAlignment
-                                                                      .start,
+                                                              mainAxisSize: MainAxisSize.min,
+                                                              crossAxisAlignment: CrossAxisAlignment.start,
                                                               children: [
-                                                                const Text(
-                                                                  "This will assemble all final data (scenes, timing, and styles) and send it to the render queue.\n\n"
-                                                                  "This action cannot be undone.",
-                                                                ),
+                                                                const Text("Data akan dikirim ke server untuk digabungkan menjadi video utuh."),
                                                                 if (_isSaving)
                                                                   Padding(
-                                                                    padding:
-                                                                        const EdgeInsets
-                                                                            .only(
-                                                                            top: 16.0),
+                                                                    padding: const EdgeInsets.only(top: 16.0),
                                                                     child: Row(
                                                                       children: [
                                                                         const SizedBox(
-                                                                            width: 20,
-                                                                            height:
-                                                                                20,
-                                                                            child:
-                                                                                CircularProgressIndicator(
-                                                                                    strokeWidth:
-                                                                                        3)),
-                                                                        const SizedBox(
-                                                                            width:
-                                                                                12),
-                                                                        Flexible(
-                                                                            child: Text(
-                                                                                _loadingMessage)),
+                                                                          width: 20, height: 20,
+                                                                          child: CircularProgressIndicator(strokeWidth: 3)),
+                                                                        const SizedBox(width: 12),
+                                                                        Flexible(child: Text(_loadingMessage)),
                                                                       ],
                                                                     ),
                                                                   ),
@@ -1304,106 +1415,34 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
                                                             ),
                                                             actions: <Widget>[
                                                               TextButton(
-                                                                child: const Text(
-                                                                    'Cancel'),
-                                                                onPressed: _isSaving
-                                                                    ? null
-                                                                    : () =>
-                                                                        Navigator.of(
-                                                                                context)
-                                                                            .pop(),
+                                                                child: const Text('Batal'),
+                                                                onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
                                                               ),
                                                               TextButton(
                                                                 child: Text(
-                                                                  _isSaving
-                                                                      ? 'SAVING...'
-                                                                      : 'RENDER',
-                                                                  style: TextStyle(
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .bold,
-                                                                      color:
-                                                                          _isSaving
-                                                                              ? Colors
-                                                                                  .grey
-                                                                              : Colors
-                                                                                  .red),
+                                                                  _isSaving ? 'MEMPROSES...' : 'RENDER SEKARANG',
+                                                                  style: TextStyle(fontWeight: FontWeight.bold, color: _isSaving ? Colors.grey : Colors.red),
                                                                 ),
                                                                 onPressed: _isSaving
                                                                     ? null
                                                                     : () async {
-                                                                        setDialogState(
-                                                                          () {
-                                                                            _isSaving =
-                                                                                true;
-                                                                            _loadingMessage =
-                                                                                "Saving render packet...";
-                                                                          },
-                                                                        );
+                                                                        setDialogState(() { _isSaving = true; });
                                                                         try {
-                                                                          logger.info(
-                                                                              "Step 1/2: Preparing and saving full render packet for ${widget.projectId}...");
-                                                                          await prepareAndSaveRenderPacketVeo(
-                                                                              ref,
-                                                                              widget
-                                                                                  .projectId);
-                                                                          setDialogState(
-                                                                            () {
-                                                                              _loadingMessage =
-                                                                                  "Triggering backend render...";
-                                                                            },
+                                                                          // [HANYA MENGUBAH STATUS KE ASSETS_COMPLETE]
+                                                                          // Membiarkan Backend yang bekerja merakit paket
+                                                                          await ref.read(firestoreVeoServiceProvider).updateProject(
+                                                                              widget.projectId,
+                                                                              {
+                                                                                'status': 'ASSETS_COMPLETE',
+                                                                                'errorDetail': FieldValue.delete()
+                                                                              }
                                                                           );
-                                                                          await Future
-                                                                              .delayed(
-                                                                            const Duration(
-                                                                                milliseconds:
-                                                                                    200),
-                                                                          );
-                                                                          logger.info(
-                                                                              "Step 2/2: Updating status to RENDER_READY for ${widget.projectId}...");
-                                                                          await ref
-                                                                              .read(
-                                                                                  firestoreVeoServiceProvider)
-                                                                              .updateProject(
-                                                                                  widget
-                                                                                      .projectId,
-                                                                                  {
-                                                                                'status':
-                                                                                    'RENDER_READY',
-                                                                                'renderStartedAt': FieldValue
-                                                                                    .serverTimestamp(),
-                                                                                'errorDetail': FieldValue
-                                                                                    .delete()
-                                                                              });
-                                                                          logger.info(
-                                                                              "Render trigger successful for ${widget.projectId}");
-                                                                          if (mounted) {
-                                                                            Navigator.of(
-                                                                                    context)
-                                                                                .pop();
-                                                                            setState(
-                                                                              () {
-                                                                                _isTriggeringRender =
-                                                                                    true;
-                                                                              },
-                                                                            );
-                                                                          }
+                                                                          if (mounted) Navigator.of(context).pop();
                                                                         } catch (e) {
-                                                                          logger.error(
-                                                                              "Failed to prepare or trigger render for ${widget.projectId}",
-                                                                              e);
                                                                           if (mounted) {
-                                                                            Navigator.of(
-                                                                                    context)
-                                                                                .pop();
-                                                                            ScaffoldMessenger.of(
-                                                                                    context)
-                                                                                .showSnackBar(
-                                                                              SnackBar(
-                                                                                  content: Text(
-                                                                                      '❌ Failed to send render packet: $e'),
-                                                                                  backgroundColor:
-                                                                                      Colors.red),
+                                                                            Navigator.of(context).pop();
+                                                                            ScaffoldMessenger.of(context).showSnackBar(
+                                                                              SnackBar(content: Text('❌ Gagal: $e'), backgroundColor: Colors.red),
                                                                             );
                                                                           }
                                                                         }
@@ -1496,7 +1535,7 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
 //Akhir Blok 6........................................................................................//
 
 
-//No ke-7: FITUR LAPOR / FLAG SCENE...................................................................//
+//No ke-7: FITUR LAPOR / FLAG SCENE & CHARACTER.......................................................//
 //Sub-judul: Memunculkan dialog pelaporan pelanggaran ke database.....................................//
   void _showSceneReportDialog(SceneVeo scene, int index) {
     final TextEditingController reasonController = TextEditingController();
@@ -1550,6 +1589,71 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text("Laporan dikirim. Terima kasih."),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              });
+            },
+            child: const Text("Lapor", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCharacterReportDialog(String charName, String imageUrl, int index) {
+    final TextEditingController reasonController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("Lapor Karakter $charName"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Apakah gambar karakter ini melanggar kebijakan?",
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                hintText: "Alasan (SARA, Kekerasan, dll)...",
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Batal"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              final user = ref.read(firestoreUserProvider).valueOrNull;
+              final userId = user?.uid ?? 'anonymous'; 
+
+              FirebaseFirestore.instance.collection('reports').add({
+                'projectId': widget.projectId,
+                'characterName': charName,
+                'content': imageUrl,
+                'contentType': 'veo_character_image',
+                'reason': reasonController.text.isEmpty ? 'No reason provided' : reasonController.text,
+                'reportedAt': FieldValue.serverTimestamp(),
+                'userId': userId,
+                'feature': 'Timeline Review Veo', 
+              }).then((_) {
+                if (mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Laporan karakter dikirim. Terima kasih."),
                       backgroundColor: Colors.green,
                     ),
                   );
@@ -1643,3 +1747,4 @@ class _DummyLoggerVeo {
 
 final logger = _DummyLoggerVeo();
 //Akhir Blok 8........................................................................................//
+

@@ -1,30 +1,32 @@
-//..................................................//
-// LIB/SCREENS/LOGIN_SCREEN.DART                    //
-//..................................................//
+//................................................................//
+// NAMA FILE: LOGIN_SCREEN.DART                                   //
+// PATH/DIREKTORI: lib/screens/login_screen.dart                  //
+// FUNGSI UTAMA: TAMPILAN LOGIN, REGISTRASI & VALIDASI AKUN       //
+//................................................................//
 
-//No ke-1...........................................//
-// IMPORT DAN SETUP AWAL                            //
+//No ke-1.........................................................//
+// IMPORT DAN SETUP AWAL                                          //
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-// 1. Impor Auth ViewModel
+// Dependensi Majiku
 import '../view_model/auth_view_model.dart';
-// 2. Impor Config Provider (untuk akses bahasa)
 import '../providers/config_provider.dart';
 
 /*
-KATEGORI_AUTH_UPDATE_04 (REVISI PARIPURNA - UX FORGET PASSWORD)
+KATEGORI_AUTH_UPDATE_07 (REVISI FINAL - SEAMLESS AUTH TRANSITION)
 Nama File: lib/screens/login_screen.dart
 Tujuan:
-- [FIX] Menghilangkan error bubble pada password saat menekan tombol Lupa Sandi.
-- [UI] Floating Error Bubble modern dengan Glassmorphism & Pointer.
-- [UX] Validasi instan yang menunjuk langsung ke objek (Visual Cue).
-- [ANTI-REGRESI] Mempertahankan semua logic Auth dan Multi-bahasa.
+- [SEAMLESS FLOW] Menghubungkan langsung aksi Buat Akun ke VerifyEmailScreen via router.
+- [ANTI-FRAUD WHITELIST] Mempertahankan filter domain (@gmail, @outlook, @icloud, @yahoo).
+- [ERROR FEEDBACK] Menampilkan pesan kesalahan Firebase secara elegan dan presisi.
+- [UX VISUAL CUE] Mempertahankan floating error bubble yang menunjuk ke kolom input.
 */
-//..................................................//
+//................................................................//
 
-//No ke-2...........................................//
-// LOGIN SCREEN STATE & LOGIC AUTH                  //
+//No ke-2.........................................................//
+// LOGIN SCREEN STATE & LOGIC AUTH                                //
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -55,8 +57,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final isIndo = ref.read(appLanguageProvider).languageCode == 'id';
     final email = _emailController.text.trim();
     
-    // [MODIFIKASI KRITIS]: Menghapus error password yang mungkin tersangkut,
-    // karena reset password murni hanya membutuhkan email.
     setState(() {
       _passwordErrorMsg = null; 
       
@@ -77,10 +77,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
     );
   }
-//..................................................//
+//................................................................//
 
-//No ke-3...........................................//
-// BUILD UI & WIDGET LAYOUT                         //
+//No ke-3.........................................................//
+// BUILD UI & WIDGET LAYOUT                                       //
   @override
   Widget build(BuildContext context) {
     final isLoading = ref.watch(authViewModelProvider);
@@ -141,13 +141,48 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 
                 const SizedBox(height: 20),
                 
-                // --- Sign In Button ---
+                // --- Tombol Masuk (Sign In) ---
                 ElevatedButton(
-                  onPressed: isLoading ? null : () {
-                    ref.read(authViewModelProvider.notifier).signInWithEmail(
-                      _emailController.text.trim(),
-                      _passwordController.text.trim(),
-                    );
+                  onPressed: isLoading ? null : () async {
+                    final email = _emailController.text.trim();
+                    final pass = _passwordController.text.trim();
+
+                    setState(() {
+                      _emailErrorMsg = null;
+                      _passwordErrorMsg = null;
+                      if (email.isEmpty) _emailErrorMsg = t('Enter active email!', 'Isi email aktif!');
+                      if (pass.isEmpty) _passwordErrorMsg = t('Enter password!', 'Isi kata sandi!');
+                    });
+
+                    if (_emailErrorMsg != null || _passwordErrorMsg != null) return;
+
+                    try {
+                      await ref.read(authViewModelProvider.notifier).signInWithEmail(email, pass);
+                    } on FirebaseAuthException catch (e) {
+                      if (!mounted) return;
+                      String errorText = t('Sign In Failed: ${e.message}', 'Gagal Masuk: ${e.message}');
+                      if (e.code == 'user-not-found') {
+                        errorText = t('Account not found. Please register first.', 'Akun tidak ditemukan. Silakan buat akun.');
+                      } else if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+                        errorText = t('Invalid email or password.', 'Email atau kata sandi salah.');
+                      } else if (e.code == 'too-many-requests') {
+                        errorText = t('Too many attempts. Try again later.', 'Terlalu banyak percobaan. Coba lagi nanti.');
+                      }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(errorText),
+                          backgroundColor: Colors.redAccent.shade700,
+                        ),
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(t('Error signing in. Please try again.', 'Terjadi kendala saat masuk. Silakan coba lagi.')),
+                          backgroundColor: Colors.redAccent.shade700,
+                        ),
+                      );
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -160,22 +195,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 
                 const SizedBox(height: 12),
                 
-                // --- Register Button (Trigger Validation) ---
+                // --- Tombol Buat Akun (Register) ---
                 OutlinedButton(
-                  onPressed: isLoading ? null : () {
+                  onPressed: isLoading ? null : () async {
                     final email = _emailController.text.trim();
                     final pass = _passwordController.text.trim();
 
-                    // Validasi keren diletakkan di sini
                     setState(() {
-                      // Reset state error sebelum validasi baru
                       _emailErrorMsg = null;
                       _passwordErrorMsg = null;
 
                       if (email.isEmpty) {
                         _emailErrorMsg = t('Enter active email!', 'Isi email aktif!');
                       } else {
-                        // [MODIFIKASI KRITIS]: Filter Whitelist Domain Global untuk mencegah scam
+                        // Filter Whitelist Domain Global untuk mencegah scam
                         final allowedDomains = ['@gmail.com', '@outlook.com', '@hotmail.com', '@icloud.com', '@yahoo.com'];
                         final lowerEmail = email.toLowerCase();
                         final isValidDomain = allowedDomains.any((domain) => lowerEmail.endsWith(domain));
@@ -190,12 +223,40 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                       if (pass.isEmpty) {
                         _passwordErrorMsg = t('Enter password!', 'Isi kata sandi!');
+                      } else if (pass.length < 6) {
+                        _passwordErrorMsg = t('Password must be at least 6 characters!', 'Kata sandi minimal 6 karakter!');
                       }
                     });
 
-                    // [ANTI-REGRESI]: Eksekusi pendaftaran hanya jika tidak ada pesan error sama sekali
+                    // Eksekusi pendaftaran jika validasi bersih
                     if (_emailErrorMsg == null && _passwordErrorMsg == null) {
-                      ref.read(authViewModelProvider.notifier).createUserWithEmail(email, pass);
+                      try {
+                        await ref.read(authViewModelProvider.notifier).createUserWithEmail(email, pass);
+                        // Begitu sukses, main.dart langsung mendeteksi akun baru
+                        // dan otomatis mengalirkan tampilan ke VerifyEmailScreen secara mulus!
+                      } on FirebaseAuthException catch (e) {
+                        if (!mounted) return;
+                        String errorText = t('Registration Failed: ${e.message}', 'Pendaftaran Gagal: ${e.message}');
+                        if (e.code == 'email-already-in-use') {
+                          errorText = t('This email is already registered. Please Sign In.', 'Email ini sudah terdaftar. Silakan Masuk.');
+                        } else if (e.code == 'weak-password') {
+                          errorText = t('Password is too weak.', 'Kata sandi terlalu lemah.');
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(errorText),
+                            backgroundColor: Colors.redAccent.shade700,
+                          ),
+                        );
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(t('Registration failed. Please try again.', 'Gagal mendaftar. Silakan coba lagi.')),
+                            backgroundColor: Colors.redAccent.shade700,
+                          ),
+                        );
+                      }
                     }
                   },
                   style: OutlinedButton.styleFrom(
@@ -242,18 +303,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         // --- THE COOL BUBBLE ---
         if (errorMsg != null)
           Positioned(
-            right: -10, // Menempel sedikit ke dalam agar pointer pas
-            top: -45,   // Melayang di atas kolom
+            right: -10,
+            top: -45,
             child: _ErrorTooltip(message: errorMsg),
           ),
       ],
     );
   }
 }
-//..................................................//
+//................................................................//
 
-//No ke-4...........................................//
-// CUSTOM TOOLTIP WIDGET & PAINTER                  //
+//No ke-4.........................................................//
+// CUSTOM TOOLTIP WIDGET & PAINTER                                //
 // Widget Kotak Peringatan Custom (Pointer & Bubble)
 class _ErrorTooltip extends StatelessWidget {
   final String message;
@@ -284,7 +345,7 @@ class _ErrorTooltip extends StatelessWidget {
         ),
         // Pointer (Segitiga kecil menunjuk ke kolom)
         Padding(
-          padding: const EdgeInsets.only(right: 20), // [FIXED] Menggunakan EdgeInsets.only
+          padding: const EdgeInsets.only(right: 20),
           child: CustomPaint(
             size: const Size(12, 8),
             painter: _TrianglePainter(color: Colors.redAccent.shade700),
@@ -311,4 +372,4 @@ class _TrianglePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-//..................................................//
+//................................................................//

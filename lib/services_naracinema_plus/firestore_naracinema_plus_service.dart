@@ -185,7 +185,7 @@ class FirestoreNaracinemaPlusService {
     }
   }
 
-  // [PERBAIKAN]: Menyamakan nama method dengan pemanggilan di Screen UI (requestVideoRegeneration)
+  // [PERBAIKAN]: Audio TTS dipertahankan (tidak dihapus) agar hemat kuota & render cepat
   Future<void> requestVideoRegeneration(String projectId, String sceneId) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception('User not logged in');
@@ -196,18 +196,19 @@ class FirestoreNaracinemaPlusService {
 
       await sceneRef.update({
         'status': 'PENDING_REFINEMENT',
-        'imageUrl': FieldValue.delete(), // Menghapus field imageUrl (jika masih ada)
-        'videoUrl': FieldValue.delete(), // Menghapus video AI lama
-        'ttsAudioUrl': FieldValue.delete(), // [PERBAIKAN MUTLAK]: Membersihkan memori Audio TTS Lama
+        'imageUrl': FieldValue.delete(), // Menghapus field imageUrl lama (jika ada)
+        'videoUrl': FieldValue.delete(), // Menghapus video lama
         'errorDetail': FieldValue.delete(), 
+        'retryCount': 0,
       });
-        debugPrint("requestVideoRegeneration (NARACINEMA PLUS): Regeneration requested for scene $sceneId.");
+      debugPrint("requestVideoRegeneration (NARACINEMA PLUS): Regeneration requested for scene $sceneId.");
     } catch (e) {
       debugPrint("❌ Failed to request regeneration (NARACINEMA PLUS) for scene $sceneId: $e");
       rethrow;
     }
   }
 
+  // [PERBAIKAN]: Audio TTS dipertahankan (tidak dihapus) saat update prompt
   Future<void> updateScenePromptAndRegenerate(
       String projectId, String sceneId, String newPrompt) async {
     final user = _auth.currentUser;
@@ -233,9 +234,8 @@ class FirestoreNaracinemaPlusService {
         'status': 'PENDING_REFINEMENT',
         'errorDetail': FieldValue.delete(),
         'retryCount': 0,
-        'imageUrl': FieldValue.delete(), // Hapus data lama sebelum generate ulang
-        'videoUrl': FieldValue.delete(), // Hapus video AI lama
-        'ttsAudioUrl': FieldValue.delete(), // [PERBAIKAN MUTLAK]: Membersihkan memori Audio TTS Lama
+        'imageUrl': FieldValue.delete(), // Hapus data visual lama sebelum generate ulang
+        'videoUrl': FieldValue.delete(), // Hapus video lama
       });
       
       debugPrint("updateScenePromptAndRegenerate (NARACINEMA PLUS): Success.");
@@ -259,6 +259,8 @@ class FirestoreNaracinemaPlusService {
     required String resolution,    
     required String costLevel,     
     required String description, 
+    required bool showTitle, // [BARU]: Menerima status ON/OFF Judul Overlay
+    required bool showDescription, // Menerima status ON/OFF Deskripsi Overlay
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -270,16 +272,30 @@ class FirestoreNaracinemaPlusService {
       final docRef = _db.collection('projects_naracinema_plus').doc();
       final String projectId = docRef.id;
 
-      // [PERBAIKAN MUTLAK]: Deklarasikan finalTitle agar tidak kosong saat dilempar ke visual settings
       final String finalTitle = title.isNotEmpty ? title : "Untitled Naracinema Plus Project";
       
-      final defaultVisualSettings = VisualSettingsNaracinemaPlus.defaultSettingsWithTitle(finalTitle, description);
+      // Jika toggle Judul OFF, pastikan judul yang di-passing ke VisualSettings adalah string kosong
+      final String effectiveTitle = showTitle ? finalTitle : "";
+
+      // Jika toggle Deskripsi OFF, pastikan deskripsi yang di-passing ke VisualSettings adalah string kosong
+      final String effectiveDescription = showDescription ? description : "";
+
+      final defaultVisualSettings = VisualSettingsNaracinemaPlus.defaultSettingsWithTitle(effectiveTitle, effectiveDescription);
       final double aspectRatioValue = _calculateAspectRatioFromString(aspectRatio);
       
-      // [PERBAIKAN MUTLAK]: Melempar parameter 'resolution' (bukan projectId) agar ukuran font akurat
       final visualSettingsMap = defaultVisualSettings.toJson(aspectRatioValue, resolution);
 
-      debugPrint("addProject (NARACINEMA PLUS): Creating new project for user ${user.uid} with title: $finalTitle");
+      // Pastikan di dalam map visualSettings, titleOverlay text sinkron dengan toggle
+      if (!showTitle && visualSettingsMap.containsKey('titleOverlay')) {
+        visualSettingsMap['titleOverlay']['text'] = "";
+      }
+
+      // Pastikan di dalam map visualSettings, descriptionOverlay text sinkron dengan toggle
+      if (!showDescription && visualSettingsMap.containsKey('descriptionOverlay')) {
+        visualSettingsMap['descriptionOverlay']['text'] = "";
+      }
+
+      debugPrint("addProject (NARACINEMA PLUS): Creating new project for user ${user.uid} with title: $finalTitle (showTitle: $showTitle, showDescription: $showDescription)");
       
       await docRef.set({
         'userId': user.uid,
@@ -292,7 +308,9 @@ class FirestoreNaracinemaPlusService {
         'showSubtitles': showSubtitles, 
         'resolution': resolution,       
         'costLevel': costLevel,         
-        'description': description, 
+        'description': effectiveDescription,
+        'showTitle': showTitle, // [BARU]: Disimpan ke Firestore agar dibaca oleh Cloud Functions Gatekeeper
+        'showDescription': showDescription, // Disimpan ke Firestore agar dibaca oleh Cloud Functions Gatekeeper
         
         'status': 'PROCESSING_SCENE', 
         
@@ -301,7 +319,7 @@ class FirestoreNaracinemaPlusService {
         'expireAt': Timestamp.fromDate(DateTime.now().add(const Duration(hours: 24))),
 
         'visualSettings': visualSettingsMap, // Fallback untuk Flutter UI
-        // [SUNTIKAN MUTLAK]: Langsung inisialisasi renderPacket untuk memuaskan Backend Engine!
+        // Inisialisasi renderPacket untuk Cloud Run Backend Engine
         'renderPacket': {
           'styleSettings': visualSettingsMap,
         },
@@ -311,7 +329,7 @@ class FirestoreNaracinemaPlusService {
         'errorDetail': null,
       });
 
-      debugPrint('✅ Project (NARACINEMA PLUS) created with ID $projectId and default visual settings. Backend auto-triggered.');
+      debugPrint('✅ Project (NARACINEMA PLUS) created with ID $projectId. Title Overlay: ${showTitle ? "ON" : "OFF"}, Description Overlay: ${showDescription ? "ON" : "OFF"}.');
       return projectId;
 
     } catch (e) {

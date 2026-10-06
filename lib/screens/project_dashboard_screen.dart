@@ -3,11 +3,11 @@
 // DASHBOARD UTAMA                                      //
 //......................................................//
 
-// No ke-1 - IMPOR DEPENDENSI & LAYAR TERKAIT           //
-// Konfigurasi provider, layar generator, histori, dan tema //
+// No ke-1 - IMPOR DEPENDENSI & LAYAR TERKAIT...........//
+// Konfigurasi provider, layar generator, histori, dll..//
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart'; // [BARU] Impor url_launcher untuk buka link Tutorial
+import 'package:url_launcher/url_launcher.dart'; // Impor url_launcher untuk buka link Tutorial
 
 // --- [CONFIG] Provider Bahasa ---
 import '../providers/config_provider.dart';
@@ -18,10 +18,16 @@ import '../screens_storinema/input_script_storinema_screen.dart'; // VStorinema
 import 'input_script_screen.dart'; // VMotion
 import '../screens_veo/input_script_veo_screen.dart'; // VFootage
 
+// --- [MARKETING VIDEO] Impor Layar Generator ---
+import '../screens_marketting_video/input_script_marketting_video_screen.dart';
+
 // --- [BARU] Impor Layar Histori (Menu Utama) ---
 import 'history_motion_screen.dart'; // Histori VMotion
 import '../screens_veo/history_footage_screen.dart'; // Histori VFootage
 import '../screens_storinema/history_storinema_screen.dart'; // Histori VStorinema
+
+// --- [MARKETING VIDEO] Impor Layar Histori ---
+import '../screens_marketting_video/history_marketting_video_screen.dart';
 
 // --- [NARACINEMA PLUS] Impor Layar Generator & Histori ---
 import '../screens_naracinema_plus/input_script_naracinema_plus_screen.dart'; 
@@ -34,6 +40,7 @@ import 'other_tools_history_screen.dart'; // Layar Other Tools History
 // --- [DAILY FREE] Impor Layar Generator Gratis Harian ---
 import '../screens_daily_free/free_t2image_screen.dart';
 import '../screens_daily_free/free_t2speech_screen.dart';
+import '../screens_daily_free/free_daily_quotes_screen.dart'; // [BARU]: Impor Layar Kata Bijak Harian
 
 // --- [LAMA] Integrasi Token & Akun (Dipertahankan 100%) ---
 import '../providers/user_provider.dart';
@@ -47,10 +54,10 @@ import 'user_rate_us_screen.dart';
 
 // --- [BARU] Impor Tema Dark Modern ---
 import '../theme/app_theme.dart';
-// Penutup Blok //
+//......................................................//
 
-// No ke-2 - STATEFUL WIDGET DASHBOARD & HELPER         //
-// Manajemen state untuk Dashboard dan fungsi utilitas navigasi //
+// No ke-2 - STATEFUL WIDGET DASHBOARD & HELPER.........//
+// Manajemen state untuk Dashboard dan utilitas navigasi//
 class ProjectDashboardScreen extends ConsumerStatefulWidget {
   const ProjectDashboardScreen({super.key});
 
@@ -86,10 +93,10 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
       ),
     );
   }
-// Penutup Blok //
+//......................................................//
 
-// No ke-3 - BUILD METHOD UTAMA                         //
-// Merender AppBar Token/Akun dan Layout Grid Menu      //
+// No ke-3 - BUILD METHOD UTAMA.........................//
+// Merender AppBar Token/Akun dan Layout Grid Menu......//
   @override
   Widget build(BuildContext context) {
     final userAsyncValue = ref.watch(firestoreUserProvider);
@@ -394,16 +401,20 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
       ),
     );
   }
-// Penutup Blok //
+//......................................................//
 
-// No ke-4 - WIDGET BUILDER UNTUK GRID MENU             //
-// Membangun Grid Proyek Baru dan Grid Histori          //
+// No ke-4 - WIDGET BUILDER UNTUK GRID MENU.............//
+// Membangun Grid Proyek Baru dan Grid Histori..........//
 
   // --- 1. Grid Image Utama (Baris Atas - Buat Proyek) ---
   Widget _buildImageButtonsGrid() {
     final List<Map<String, dynamic>> menuItems = [
       {'img': 'narrative.png', 'title': 'AUTO NARRATIVE', 'action': () => _navigateTo(GeneratorKontenShortScreen())},
       {'img': 'vstorimotion.png', 'title': 'AUTO NARA MOTION', 'action': () => _navigateTo(InputScriptScreen())},
+      
+      // --- [MARKETING VIDEO] Tambahan Menu Create ---
+      {'img': 'marketing_video.png', 'title': 'AUTO MARKETING VIDEO', 'action': () => _navigateTo(const InputScriptMarkettingVideoScreen())},
+      
       {'img': 'vstorinema.png', 'title': 'AUTO NARA CINEMA', 'action': () => _navigateTo(InputScriptStorinemaScreen())},
       {'img': 'vcinema.png', 'title': 'AUTO NARACINEMA-PLUS', 'action': () => _navigateTo(const InputScriptNaracinemaPlusScreen())},
       {'img': 'vmovie.png', 'title': 'AUTO MOVIE', 'action': () => _navigateTo(InputScriptVeoScreen())},
@@ -442,6 +453,10 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
     final List<Map<String, dynamic>> historyItems = [
       {'img': 'narrative.png', 'title': 'AUTO NARRATIVE', 'action': null},
       {'img': 'vstorimotion.png', 'title': 'AUTO NARA MOTION', 'action': () => _navigateTo(HistoryMotionScreen())},
+      
+      // --- [MARKETING VIDEO] Tambahan Menu Histori ---
+      {'img': 'marketing_video.png', 'title': 'AUTO MARKETING VIDEO', 'action': () => _navigateTo(const HistoryMarkettingVideoScreen())},
+      
       {'img': 'vstorinema.png', 'title': 'AUTO NARA CINEMA', 'action': () => _navigateTo(HistoryStorinemaScreen())},
       {'img': 'vcinema.png', 'title': 'AUTO NARACINEMA-PLUS', 'action': () => _navigateTo(const HistoryNaracinemaPlusScreen())},
       {'img': 'vmovie.png', 'title': 'AUTO MOVIE', 'action': () => _navigateTo(HistoryFootageScreen())},
@@ -480,6 +495,8 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
     final List<Map<String, dynamic>> freeItems = [
       {'img': 'freet2image.png', 'title': 'FREE T2IMAGE', 'action': () => _navigateTo(const FreeT2ImageScreen())}, 
       {'img': 'freet2speech.png', 'title': 'FREE T2SPEECH', 'action': () => _navigateTo(const FreeT2SpeechScreen())}, 
+      // [BARU]: Menambahkan Tombol Menu Daily Quotes (Ikon: daily_quotes.png)
+      {'img': 'daily_quotes.png', 'title': 'DAILY QUOTES', 'action': () => _navigateTo(const FreeDailyQuotesScreen())}, 
     ];
 
     return GridView.builder(
@@ -514,8 +531,8 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
     required String title, 
     required VoidCallback onTap,
     required bool isActive, 
-    required double widthLogo, // [BARU] Parameter Lebar Logo
-    required double heightLogo, // [BARU] Parameter Tinggi Logo
+    required double widthLogo, 
+    required double heightLogo, 
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -545,8 +562,8 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
               Expanded(
                 child: Center(
                   child: FractionallySizedBox(
-                    widthFactor: widthLogo,   // <--- Diterapkan di sini
-                    heightFactor: heightLogo, // <--- Diterapkan di sini
+                    widthFactor: widthLogo,   
+                    heightFactor: heightLogo, 
                     child: Opacity(
                       opacity: isActive ? 1.0 : 0.3, 
                       child: Image.asset(imagePath, fit: BoxFit.contain),
@@ -574,4 +591,4 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
     );
   }
 }
-// Penutup Blok //
+//......................................................//

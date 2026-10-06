@@ -1,3 +1,8 @@
+//......................................................//
+// LIB/SCREENS_DAILY_FREE/FREE_T2SPEECH_SCREEN.DART     //
+// FITUR DAILY FREE - GENERATOR T2SPEECH                //
+//......................................................//
+
 // No ke-1: IMPORT & SETUP                              //
 //......................................................//
 import 'package:flutter/material.dart';
@@ -6,11 +11,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:audioplayers/audioplayers.dart'; 
 
+// [IMPORT SERVICE LOGGING USER CENTER]
+import '../services/firestore_service.dart';
+
 import '../view_model_daily_free/free_t2speech_view_model.dart';
 import '../providers/user_provider.dart';
 import '../providers/config_provider.dart';
 import '../theme/app_theme.dart';
-// Penutup Blok //
+//......................................................//
 
 // No ke-2: STATEFUL WIDGET & INITIALIZATION            //
 //......................................................//
@@ -28,15 +36,24 @@ class _FreeT2SpeechScreenState extends ConsumerState<FreeT2SpeechScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isPlaying = false;
   
-  // ✅ PERBAIKAN: Tracker untuk mencegah unduhan ganda yang tidak disengaja
+  // Tracker untuk mencegah unduhan ganda yang tidak disengaja
   bool _isDownloaded = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final viewModel = ref.read(freeT2SpeechViewModelProvider.notifier);
-      viewModel.textController.addListener(() => setState(() {}));
+      if (mounted) {
+        final viewModel = ref.read(freeT2SpeechViewModelProvider.notifier);
+        viewModel.textController.addListener(() => setState(() {}));
+
+        // --- [LOG AKTIVITAS: KUNJUNGAN DAILY FREE -> FREE T2SPEECH] ---
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'free_t2speech',
+          eventType: 'visit',
+        );
+        // --------------------------------------------------------------
+      }
     });
 
     _audioPlayer.onPlayerStateChanged.listen((PlayerState s) {
@@ -56,7 +73,7 @@ class _FreeT2SpeechScreenState extends ConsumerState<FreeT2SpeechScreen> {
     _audioPlayer.dispose();
     super.dispose();
   }
-// Penutup Blok //
+//......................................................//
 
 // No ke-3: LOGIC & REPORT FUNCTION                     //
 //......................................................//
@@ -148,12 +165,10 @@ class _FreeT2SpeechScreenState extends ConsumerState<FreeT2SpeechScreen> {
     String t(String en, String id) => isIndo ? id : en;
 
     ref.listen<FreeT2SpeechState>(freeT2SpeechViewModelProvider, (previous, next) {
-      // ✅ PERBAIKAN: Reset status unduhan jika audio baru digenerate
       if (next.generatedAudioBase64 != previous?.generatedAudioBase64) {
         _isDownloaded = false;
       }
 
-      // ✅ PERBAIKAN: Warna Error Merah, Teks Putih
       if (next.errorMessage != null && next.errorMessage != previous?.errorMessage) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -170,7 +185,6 @@ class _FreeT2SpeechScreenState extends ConsumerState<FreeT2SpeechScreen> {
         );
       }
       
-      // ✅ PERBAIKAN: Warna Sukses Hijau, Teks Putih
       if (next.successMessage != null && next.successMessage != previous?.successMessage) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -187,6 +201,15 @@ class _FreeT2SpeechScreenState extends ConsumerState<FreeT2SpeechScreen> {
           ),
         );
       }
+
+      // --- [LOG AKTIVITAS: KONVERSI SUKSES GENERATE FREE T2SPEECH] ---
+      if (previous?.isLoading == true && !next.isLoading && next.generatedAudioBase64 != null && next.generatedAudioBase64!.isNotEmpty) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'free_t2speech',
+          eventType: 'conversion',
+        );
+      }
+      // ---------------------------------------------------------------
     });
 
     final int textLength = viewModel.textController.text.length;
@@ -371,7 +394,7 @@ class _FreeT2SpeechScreenState extends ConsumerState<FreeT2SpeechScreen> {
       ),
     );
   }
-// Penutup Blok //
+//......................................................//
 
 // No ke-5: MODERN OUTPUT KARTU (AUDIO PLAYER)          //
 //......................................................//

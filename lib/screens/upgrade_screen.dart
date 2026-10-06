@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 
@@ -18,6 +19,7 @@ import '../models/app_config.dart';
 import '../providers/config_provider.dart';
 import '../providers/user_provider.dart'; 
 import '../services/payment_hybrid_service.dart';
+import '../services/firestore_service.dart';
 //.......................................................//
 
 // No ke-2: STATEFUL WIDGET & INITIALIZATION             //
@@ -90,6 +92,8 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
       });
 
       final paymentUrl = result.data['paymentUrl'] as String?;
+      final merchantOrderId = result.data['merchantOrderId'] as String?;
+
       if (paymentUrl == null) {
         throw Exception("Payment URL tidak diterima dari server.");
       }
@@ -103,6 +107,11 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
           webOnlyWindowName: '_blank', 
         )) {
         throw Exception('Tidak dapat membuka URL: $paymentUrl');
+      }
+
+      // [PELACAKAN TRANSAKSI SENTRAL REAL-TIME]
+      if (merchantOrderId != null && mounted) {
+        _showWaitingPaymentDialog(merchantOrderId);
       }
       
     } on FirebaseFunctionsException catch (e) {
@@ -122,6 +131,131 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  /// Dialog Realtime Pelacakan Koleksi 'transactions' di Firestore
+  void _showWaitingPaymentDialog(String orderId) {
+    final currentLocale = ref.read(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogCtx) {
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: FirestoreService().streamTransactionStatus(orderId),
+          builder: (context, snapshot) {
+            final data = snapshot.data?.data();
+            final status = data?['status'] as String? ?? 'PENDING';
+
+            // 1. Status SUKSES
+            if (status == 'SUCCESS') {
+              return AlertDialog(
+                backgroundColor: const Color(0xFF1E1E1E),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 12),
+                    const Icon(Icons.check_circle_outline, color: Colors.greenAccent, size: 64),
+                    const SizedBox(height: 16),
+                    Text(
+                      t('Payment Successful!', 'Pembayaran Berhasil!'),
+                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      t('Your account tier and tokens have been updated.', 'Tier akun dan token Anda telah berhasil diperbarui.'),
+                      style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.greenAccent,
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => Navigator.of(dialogCtx).pop(),
+                      child: Text(t('Done', 'Selesai'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            // 2. Status GAGAL
+            if (status == 'FAILED') {
+              return AlertDialog(
+                backgroundColor: const Color(0xFF1E1E1E),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 12),
+                    const Icon(Icons.error_outline, color: Colors.redAccent, size: 64),
+                    const SizedBox(height: 16),
+                    Text(
+                      t('Payment Failed or Cancelled', 'Pembayaran Gagal / Dibatalkan'),
+                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () => Navigator.of(dialogCtx).pop(),
+                      child: Text(t('Close', 'Tutup')),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            // 3. Status PENDING (Menunggu Pelunasan)
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E1E1E),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 12),
+                  const CircularProgressIndicator(color: Colors.blueAccent),
+                  const SizedBox(height: 20),
+                  Text(
+                    t('Waiting for Payment...', 'Menunggu Pembayaran...'),
+                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    t('Please complete the payment in the opened browser window.', 'Silakan selesaikan pembayaran di jendela browser yang terbuka.'),
+                    style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Order ID: $orderId',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogCtx).pop(),
+                    child: Text(t('Close Window', 'Tutup Jendela Ini'), style: TextStyle(color: Colors.grey.shade400)),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _handlePaymentAndroid(String packageId) async {
@@ -228,7 +362,8 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
   String _getDisplayPrice({
     required String packageId, 
     required int dbAmount, 
-    required bool isIndo
+    required bool isIndo,
+    required double usdRate,
   }) {
     if (_isAndroidNative) {
       final googlePrice = PaymentHybridService().getPriceFromCache(packageId);
@@ -239,7 +374,8 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
     if (isIndo) {
       return NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0).format(dbAmount);
     } else {
-      double amountInUsd = dbAmount / 15500;
+      final safeUsdRate = usdRate > 0 ? usdRate : 15500.0;
+      double amountInUsd = dbAmount / safeUsdRate;
       return NumberFormat.currency(locale: 'en_US', symbol: '\$', decimalDigits: 2).format(amountInUsd);
     }
   }
@@ -276,6 +412,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
     required Color secondaryColor,
     required Gradient backgroundGradient,
     required bool isIndo, 
+    required double usdRate,
     String? badgeText,
   }) {
     String t(String en, String id) => isIndo ? id : en;
@@ -283,7 +420,8 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
     final displayPrice = _getDisplayPrice(
       packageId: packageId, 
       dbAmount: dbAmount, 
-      isIndo: isIndo
+      isIndo: isIndo,
+      usdRate: usdRate,
     );
 
     return Container(
@@ -493,6 +631,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
       body: appConfigAsync.when(
         data: (config) {
           final numberFormat = NumberFormat.decimalPattern(isIndo ? 'id_ID' : 'en_US');
+          final double liveUsdRate = config.usdRate > 0 ? config.usdRate : 15500.0;
 
           final basic = config.getPackage('basic_monthly');
           final standard = config.getPackage('standard_monthly');
@@ -513,7 +652,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
 
           String fmt(int val) {
              if(isIndo) return NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0).format(val);
-             return NumberFormat.currency(locale: 'en_US', symbol: '\$', decimalDigits: 2).format(val/15500);
+             return NumberFormat.currency(locale: 'en_US', symbol: '\$', decimalDigits: 2).format(val / liveUsdRate);
           }
 
           return SingleChildScrollView(
@@ -586,6 +725,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                     ],
                   ),
                   isIndo: isIndo,
+                  usdRate: liveUsdRate,
                 ),
 
                 _buildModernPlanCard(
@@ -610,6 +750,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                     ],
                   ),
                   isIndo: isIndo,
+                  usdRate: liveUsdRate,
                 ),
 
                 _buildModernPlanCard(
@@ -634,6 +775,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                     ],
                   ),
                   isIndo: isIndo,
+                  usdRate: liveUsdRate,
                 ),
                 
                 const SizedBox(height: 24),

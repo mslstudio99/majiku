@@ -2,7 +2,6 @@
 // NAMA FILE: GENERATOR_GAMBAR_THUMBNAIL_SCREEN.DART              //
 // DIREKTORI: lib/screens_naraku/generator_gambar_thumbnail_screen.dart //
 //================================================================//
-
 //No ke-1.........................................................//
 //IMPORT MODULE & DEPENDENCIES                                    //
 import 'dart:convert'; 
@@ -10,6 +9,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
+
+// [IMPORT SERVICE LOGGING USER CENTER]
+import '../services/firestore_service.dart';
 
 import '../screens/input_script_screen.dart';
 import '../screens_veo/input_script_veo_screen.dart';
@@ -32,17 +34,40 @@ import '../models/app_config.dart';
 //................................................................//
 
 //No ke-2.........................................................//
-//MAIN CLASS DECLARATION                                          //
-class GeneratorGambarThumbnailScreen extends ConsumerWidget {
+//MAIN CLASS & STATE DECLARATION (STATEFUL CONVERSION)             //
+class GeneratorGambarThumbnailScreen extends ConsumerStatefulWidget {
   const GeneratorGambarThumbnailScreen({super.key});
 
-  final int _maxPromptLength = 15000; 
+  @override
+  ConsumerState<GeneratorGambarThumbnailScreen> createState() =>
+      _GeneratorGambarThumbnailScreenState();
+}
+
+class _GeneratorGambarThumbnailScreenState
+    extends ConsumerState<GeneratorGambarThumbnailScreen> {
+  final int _maxPromptLength = 15000;
+
+  @override
+  void initState() {
+    super.initState();
+    // --- [LOG AKTIVITAS: KUNJUNGAN OTHER TOOLS -> THUMBNAIL] ---
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'other_tools',
+          subFeatureKey: 'thumbnail',
+          eventType: 'visit',
+        );
+      }
+    });
+    // -----------------------------------------------------------
+  }
 //................................................................//
 
 //No ke-3.........................................................//
 //MAIN BUILD METHOD & SCAFFOLD                                    //
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final state = ref.watch(generatorGambarThumbnailViewModelProvider);
     final viewModel = ref.read(generatorGambarThumbnailViewModelProvider.notifier);
     final AsyncValue<AppUser> userState = ref.watch(firestoreUserProvider);
@@ -64,6 +89,16 @@ class GeneratorGambarThumbnailScreen extends ConsumerWidget {
           ),
         );
       }
+
+      // --- [LOG AKTIVITAS: KONVERSI SUKSES GENERATE THUMBNAIL] ---
+      if (previous?.isLoading == true && !next.isLoading && next.generatedImageUrl.isNotEmpty) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'other_tools',
+          subFeatureKey: 'thumbnail',
+          eventType: 'conversion',
+        );
+      }
+      // -----------------------------------------------------------
     });
 
     return Scaffold(

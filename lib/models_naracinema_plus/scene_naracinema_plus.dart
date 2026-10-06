@@ -185,7 +185,7 @@ class SceneNaracinemaPlus {
         other.status == status &&
         other.errorDetail == errorDetail &&
         other.duration == duration &&
-        listEquals(other.subtitleChunks, subtitleChunks); // [EQUALITY SINKRON]
+        listEquals(other.subtitleChunks, subtitleChunks);
   }
 
   @override
@@ -200,7 +200,7 @@ class SceneNaracinemaPlus {
         status.hashCode ^
         errorDetail.hashCode ^
         duration.hashCode ^
-        Object.hashAll(subtitleChunks); // [HASHCODE SINKRON]
+        Object.hashAll(subtitleChunks);
   }
-//----------------------------------------------------------------//
 }
+//----------------------------------------------------------------//

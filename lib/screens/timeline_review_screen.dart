@@ -26,6 +26,7 @@ import '../view_model/timeline_view_model.dart';
 import 'visual_setting_screen.dart';
 import '../providers/visual_settings_provider.dart';
 import '../providers/user_provider.dart';
+import '../providers/config_provider.dart'; // [BARU]: Akses appLanguageProvider & config
 
 const List<String> kDefaultSceneMotionNames = [
   'rand_zoom_in_center',
@@ -95,7 +96,7 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
   
   // [STATE KONTROL RENDER]
   bool _isTriggeringRender = false;
-  bool _hasAutoTriggeredRender = false; // [FITUR BARU] Kunci untuk cegah infinite loop Auto-Render
+  bool _hasAutoTriggeredRender = false; // Kunci untuk cegah infinite loop Auto-Render
   static const int _renderTimeoutDuration = 3600;
   Timer? _uiRefreshTimer;
   
@@ -125,7 +126,8 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
             });
           }
         } else if (_isPlayingIndividual) {
-          if (!isPlaying) {
+          // [PERBAIKAN PAUSE INDIVIDUAL]: Tidak mereset _isPlayingIndividual jika hanya dalam kondisi pause
+          if (!isPlaying && state != PlayerState.paused) {
             setState(() {
               _isPlayingIndividual = false;
             });
@@ -219,16 +221,25 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
 //----------------------------------------------------------------------------------------------------//
 
 //No ke-3: TIMERS, UTILITIES & TIMEOUT HANDLER //
-//Fungsi utilitas untuk waktu, timer UI, dan penanganan timeout render. //
-  void _startUiRefreshTimer() {
+//Fungsi utilitas untuk waktu, timer UI terisolasi (Anti-Getar), dan timeout render. //
+  // [ANTI-GETAR]: ValueNotifier terisolasi agar countdown detik render tidak me-rebuild seluruh layar
+  final ValueNotifier<int> _renderSecondsNotifier = ValueNotifier<int>(3600);
+
+  void _startUiRefreshTimer(int initialSeconds) {
+    _renderSecondsNotifier.value = initialSeconds;
     if (_uiRefreshTimer != null && _uiRefreshTimer!.isActive) {
       return;
     }
     _uiRefreshTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        setState(() {});
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_renderSecondsNotifier.value > 0) {
+        _renderSecondsNotifier.value--;
       } else {
         timer.cancel();
+        _handleRenderTimeout();
       }
     });
   }
@@ -236,6 +247,7 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
   void _cancelUiRefreshTimer() {
     if (_uiRefreshTimer != null && _uiRefreshTimer!.isActive) {
       _uiRefreshTimer!.cancel();
+      _uiRefreshTimer = null;
     }
   }
 
@@ -247,21 +259,18 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
       final currentStatus = projectDoc?['status'];
       if (currentStatus == 'RENDER_START' || currentStatus == 'RENDERING') {
         logger.error(
-            "Render timeout! Project ${widget.projectId} stuck in RENDER_START for > 60 minutes (V6).");
+            "Render timeout! Project ${widget.projectId} stuck in RENDER_START for > 60 minutes.");
         await firestore.updateProject(
           widget.projectId,
           {
             'status': 'ERROR_RENDER',
-            'errorDetail': 'Render process timed out after 60 minutes (V6).',
+            'errorDetail': 'Render process timed out after 60 minutes.',
             'renderStartedAt': FieldValue.delete(),
           },
         );
-      } else {
-        logger.error(
-            "[DEBUG] Timeout check skipped — current status is $currentStatus, not RENDER_START.");
       }
     } catch (e) {
-      logger.error("Failed to set ERROR_RENDER status after timeout (V6): $e");
+      logger.error("Failed to set ERROR_RENDER status after timeout: $e");
     }
   }
 
@@ -370,7 +379,8 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
   void dispose() {
     _playbackTimer?.cancel();
     _motionController.dispose();
-    _uiRefreshTimer?.cancel();
+    _cancelUiRefreshTimer();
+    _renderSecondsNotifier.dispose();
     if (_narrationPlayer.state != PlayerState.stopped &&
         _narrationPlayer.state != PlayerState.disposed) {
       _narrationPlayer.stop();
@@ -726,49 +736,72 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
     );
   }
 
-  Widget _buildRenderingOverlay(int secondsRemaining, bool hasValidStartTime) {
+  // [ISOLASI RENDERING OVERLAY]: Menggunakan ValueListenableBuilder agar hitungan detik tidak menggetarkan seluruh halaman
+  Widget _buildRenderingOverlay(bool hasValidStartTime, bool isIndo) {
+    String t(String en, String id) => isIndo ? id : en;
+
     return Positioned.fill(
       child: AbsorbPointer(
         child: Container(
-          color: Colors.black.withOpacity(0.7),
+          color: Colors.black.withOpacity(0.75),
           child: Center(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
               decoration: BoxDecoration(
-                color: Colors.grey[900], // [UBAH] Warna latar pop-up jadi gelap elegan
-                borderRadius: BorderRadius.circular(12),
+                color: const Color(0xFF1E222A),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white12),
                 boxShadow: const [
                   BoxShadow(
-                    color: Colors.black54, // [UBAH] Bayangan disesuaikan agar cocok dengan latar gelap
-                    blurRadius: 10,
-                    offset: Offset(0, 4),
+                    color: Colors.black54,
+                    blurRadius: 16,
+                    offset: Offset(0, 6),
                   )
                 ],
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const CircularProgressIndicator(color: Colors.blueAccent), // [UBAH] Warna loading spinner
-                  const SizedBox(height: 16),
-                  const Text(
-                    "Rendering in minutes... You may safely leave this page",
+                  const CircularProgressIndicator(color: Colors.blueAccent, strokeWidth: 3),
+                  const SizedBox(height: 20),
+                  Text(
+                    t("Rendering in progress...", "Proses render sedang berjalan..."),
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white, // [UBAH] Teks utama jadi putih
+                      color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
+                  Text(
+                    t("You may safely leave this page.", "Anda dapat meninggalkan halaman ini dengan aman."),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 16),
                   if (hasValidStartTime)
-                    Text(
-                      "Auto Cancel in: ${_formatDuration(secondsRemaining)}",
-                      style: const TextStyle(fontSize: 14, color: Colors.white70), // [UBAH] Teks countdown jadi putih redup
+                    ValueListenableBuilder<int>(
+                      valueListenable: _renderSecondsNotifier,
+                      builder: (context, remainingSecs, _) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            "${t('Auto Cancel in:', 'Batal Otomatis dalam:')} ${_formatDuration(remainingSecs)}",
+                            style: const TextStyle(fontSize: 13, color: Colors.amberAccent, fontWeight: FontWeight.bold),
+                          ),
+                        );
+                      },
                     )
                   else
-                    const Text(
-                      "Menunggu respons backend...",
-                      style: TextStyle(fontSize: 14, color: Colors.white70), // [UBAH] Teks menunggu jadi putih redup
+                    Text(
+                      t("Waiting for backend response...", "Menunggu respons backend..."),
+                      style: const TextStyle(fontSize: 13, color: Colors.white70),
                     ),
                 ],
               ),
@@ -781,6 +814,11 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
 
   @override
   Widget build(BuildContext context) {
+    // KONEKSI BILINGUAL KE APP_LANGUAGE_PROVIDER
+    final currentLocale = ref.watch(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     final projectAsyncValue = ref.watch(projectStreamProvider(widget.projectId));
     final processedTimelineAsync =
         ref.watch(processedTimelineProvider(widget.projectId));
@@ -790,7 +828,7 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
     final bool isCalculating =
         processedTimelineAsync.asData?.value?.isCalculating ?? true;
 
-    // KATEGORI_UX_OTOMATIS (GATEKEEPER VALIDASI MUTLAK)
+    // GATEKEEPER VALIDASI MUTLAK
     final bool areAllScenesValid = processedTimelineAsync.maybeWhen(
       data: (timeline) {
         if (timeline.scenes.isEmpty) return false; 
@@ -811,14 +849,12 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
       orElse: () => false,
     );
 
-    // [MODIFIKASI: DETEKSI RENDER SUKSES LEBIH AWAL UNTUK MENGUNCI PLAY/REPLAY]
     final bool isRenderSuccessGlobal = projectData != null &&
         projectData.status == 'RENDER_COMPLETED' &&
         projectData.finalVideoUrl != null &&
         projectData.finalVideoUrl!.isNotEmpty;
 
-    // [FITUR BARU: AUTO-RENDER SMART CONTROLLER]
-    // Otomatis memicu render tanpa klik jika syarat terpenuhi
+    // AUTO-RENDER SMART CONTROLLER
     if (projectData != null &&
         projectData.status == 'CREATE_RENDER_PACKET' &&
         areAllScenesValid &&
@@ -828,8 +864,8 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
         setState(() {
-          _hasAutoTriggeredRender = true; // Kunci agar tidak loop
-          _isTriggeringRender = true;     // Tampilkan overlay loading hitam
+          _hasAutoTriggeredRender = true;
+          _isTriggeringRender = true;
         });
         
         try {
@@ -851,11 +887,11 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
           if (mounted) {
             setState(() {
               _isTriggeringRender = false;
-              _hasAutoTriggeredRender = false; // Buka kunci agar bisa coba manual
+              _hasAutoTriggeredRender = false;
             });
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('❌ Auto-Render failed: $e'),
+                content: Text(t('Auto-Render failed: $e', 'Auto-Render gagal: $e')),
                 backgroundColor: Colors.red,
               ),
             );
@@ -864,7 +900,6 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
       });
     }
 
-    // [MODIFIKASI KUNCI: JIKA RENDER SUKSES, TOMBOL PLAY & REPLAY MATI]
     final bool canPlayOrReplay = projectData != null && !isCalculating && areAllScenesValid && !isRenderSuccessGlobal;
 
     final double aspectRatioValue =
@@ -896,11 +931,11 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
       data: AppTheme.darkTheme,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Review Project'),
+          title: Text(t('Review Project', 'Tinjau Proyek')),
           actions: [
             IconButton(
               icon: const Icon(Icons.tune),
-              tooltip: 'Visual Settings',
+              tooltip: t('Visual Settings', 'Pengaturan Visual'),
               onPressed: () {
                 _stopSequencePlayback();
                 _cancelUiRefreshTimer();
@@ -919,13 +954,13 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
         body: projectAsyncValue.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, stack) =>
-              Center(child: Text('Error loading project: $error')),
+              Center(child: Text(t('Error loading project: $error', 'Gagal memuat proyek: $error'))),
           data: (project) {
             if (project == null) {
-              return const Center(
+              return Center(
                 child: Text(
-                  "Error: Proyek tidak ditemukan atau gagal dimuat.",
-                  style: TextStyle(color: Colors.red),
+                  t("Error: Project not found or failed to load.", "Error: Proyek tidak ditemukan atau gagal dimuat."),
+                  style: const TextStyle(color: Colors.red),
                 ),
               );
             }
@@ -965,8 +1000,8 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
             final bool isProjectRendering = (project.status == 'RENDER_START' ||
                 project.status == 'RENDERING' ||
                 _isTriggeringRender);
+
             bool hasValidStartTime = false;
-            int secondsRemainingForOverlay = _renderTimeoutDuration;
             if (isProjectRendering) {
               final Timestamp? startTime = project.renderStartedAt;
               if (startTime != null) {
@@ -974,14 +1009,13 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                 final int nowSeconds = Timestamp.now().seconds;
                 final int startSeconds = startTime.seconds;
                 final int elapsedSeconds = nowSeconds - startSeconds;
-                secondsRemainingForOverlay =
-                    (_renderTimeoutDuration - elapsedSeconds);
-                if (secondsRemainingForOverlay <= 0) {
+                final int remaining = _renderTimeoutDuration - elapsedSeconds;
+                if (remaining <= 0) {
                   _cancelUiRefreshTimer();
                   WidgetsBinding.instance
                       .addPostFrameCallback((_) => _handleRenderTimeout());
                 } else {
-                  _startUiRefreshTimer();
+                  _startUiRefreshTimer(remaining);
                 }
               } else {
                 _cancelUiRefreshTimer();
@@ -1219,9 +1253,9 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                         child: ElevatedButton.icon(
                           onPressed: () => _launchURL(finalVideoUrl),
                           icon: const Icon(Icons.download_for_offline),
-                          label: const Text('DOWNLOAD FINAL VIDEO'),
+                          label: Text(t('DOWNLOAD FINAL VIDEO', 'UNDUH VIDEO FINAL')),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green.shade700,
+                            backgroundColor: Colors.green.shade600,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 20, vertical: 12),
@@ -1235,19 +1269,19 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
 
                     Expanded(
                       child: processedTimelineAsync.when(
-                        loading: () => const Center(
+                        loading: () => Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              CircularProgressIndicator(),
-                              SizedBox(height: 12),
-                              Text("Calculating audio durations..."),
+                              const CircularProgressIndicator(),
+                              const SizedBox(height: 12),
+                              Text(t("Calculating audio durations...", "Menghitung durasi audio...")),
                             ],
                           ),
                         ),
                         error: (error, stack) => Center(
                             child:
-                                Text('Error loading timeline data: $error')),
+                                Text(t('Error loading timeline data: $error', 'Gagal memuat data timeline: $error'))),
                         data: (timelineData) {
                           _currentScenes = timelineData.scenes
                               .map((e) => e.originalScene)
@@ -1262,11 +1296,11 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                           if (scenes.isEmpty &&
                               project.status != 'PROCESSING_GENERATION' &&
                               project.status != 'PENDING_REFINEMENT') {
-                            return const Center(
-                                child: Text("No scenes generated yet."));
+                            return Center(
+                                child: Text(t("No scenes generated yet.", "Belum ada adegan yang dibuat.")));
                           } else if (scenes.isEmpty) {
-                            return const Center(
-                                child: Text("Generating scenes..."));
+                            return Center(
+                                child: Text(t("Generating scenes...", "Membuat adegan...")));
                           }
                           return Column(
                             children: [
@@ -1324,13 +1358,13 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                       margin: const EdgeInsets.symmetric(
                                           horizontal: 8, vertical: 4),
                                       color: isCurrentlyPlayingInSequence
-                                          ? Colors.lightBlue[50]
+                                          ? Colors.blue.withOpacity(0.15)
                                           : (isSelectedManually
-                                              ? Colors.grey[200]
-                                              : null), 
+                                              ? Colors.white.withOpacity(0.08)
+                                              : Colors.white.withOpacity(0.03)), 
                                       elevation:
                                           isCurrentlyPlayingInSequence
-                                              ? 4
+                                              ? 3
                                               : (isSelectedManually ? 2 : 1),
                                       child: InkWell(
                                         onTap: () {
@@ -1355,11 +1389,11 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                             children: [
                                               CircleAvatar(
                                                 radius: 12,
-                                                backgroundColor: Colors.grey[400],
+                                                backgroundColor: Colors.blueAccent.withOpacity(0.3),
                                                 child: Text(
                                                   '${index + 1}',
                                                   style: const TextStyle(
-                                                    color: Colors.black,
+                                                    color: Colors.white,
                                                     fontSize: 12,
                                                     fontWeight: FontWeight.bold
                                                   ),
@@ -1370,24 +1404,19 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                                 width: 80,
                                                 height: 60,
                                                 decoration: BoxDecoration(
-                                                  color: Colors.grey[300],
+                                                  color: Colors.black26,
                                                   borderRadius:
                                                       BorderRadius.circular(8),
                                                   border:
                                                       isCurrentlyPlayingInSequence
                                                           ? Border.all(
-                                                              color: Colors
-                                                                  .blueAccent,
+                                                              color: Colors.blueAccent,
                                                               width: 2)
-                                                          : (isSelectedManually
-                                                              ? Border.all(
-                                                                  color: Colors
-                                                                      .grey,
-                                                                  width: 1)
-                                                              : null),
+                                                          : Border.all(
+                                                              color: Colors.white12,
+                                                              width: 1),
                                                 ),
-                                                child: (scene.imageUrl
-                                                        .isNotEmpty)
+                                                child: (scene.imageUrl.isNotEmpty)
                                                     ? ClipRRect(
                                                         borderRadius:
                                                             BorderRadius
@@ -1400,10 +1429,8 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                                               (c, e, s) {
                                                             debugPrint("Scene ${sceneIndex + 1} Image Error: $e");
                                                             return const Icon(
-                                                                Icons
-                                                                    .error_outline,
-                                                                color: Colors
-                                                                    .red);
+                                                                Icons.error_outline,
+                                                                color: Colors.redAccent);
                                                           },
                                                         ),
                                                       )
@@ -1417,10 +1444,9 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                                                 height: 24,
                                                                 child:
                                                                     CircularProgressIndicator(
-                                                                        strokeWidth:
-                                                                            3.0),
+                                                                        strokeWidth: 3.0),
                                                               )
-                                                            : const Icon(Icons.image, color: Colors.grey),
+                                                            : const Icon(Icons.image_outlined, color: Colors.grey),
                                                       ),
                                               ),
                                               const SizedBox(width: 12),
@@ -1437,9 +1463,7 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                                         fontSize: 14,
                                                         fontWeight: FontWeight.w500,
-                                                        color: isCurrentlyPlayingInSequence || isSelectedManually
-                                                            ? Colors.black87
-                                                            : Theme.of(context).textTheme.bodyMedium?.color,
+                                                        color: Colors.white,
                                                       ),
                                                       maxLines: 2,
                                                       overflow:
@@ -1469,10 +1493,9 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                                               scene.errorDetail!,
                                                           child: Text(
                                                             scene.errorDetail!,
-                                                            style: TextStyle(
+                                                            style: const TextStyle(
                                                                 fontSize: 10,
-                                                                color: Colors
-                                                                    .red[700]),
+                                                                color: Colors.redAccent),
                                                             maxLines: 1,
                                                             overflow: TextOverflow
                                                                 .ellipsis,
@@ -1491,9 +1514,8 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                                   icon: Icon(Icons.refresh,
                                                       color: canRegenerate
                                                           ? Colors.blueAccent
-                                                          : Colors.grey[400]),
-                                                  tooltip:
-                                                      'Regenerate Asset (Image & Audio)',
+                                                          : Colors.grey[600]),
+                                                  tooltip: t('Regenerate Asset', 'Regenerasi Aset'),
                                                   onPressed: !canRegenerate
                                                       ? null
                                                       : () {
@@ -1503,13 +1525,31 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                                         },
                                                 ),
                                               ),
-                                              const SizedBox(width: 8),
+                                              const SizedBox(width: 4),
+                                              // Tombol Download Gambar Scene (Hijau Terang)
+                                              IconButton(
+                                                icon: Icon(
+                                                  Icons.download_for_offline_outlined,
+                                                  color: scene.imageUrl.isNotEmpty
+                                                      ? Colors.greenAccent.shade400
+                                                      : Colors.grey[700],
+                                                  size: 24,
+                                                ),
+                                                tooltip: scene.imageUrl.isNotEmpty
+                                                    ? t('Download Image Scene ${index + 1}', 'Unduh Gambar Adegan ${index + 1}')
+                                                    : t('Image not available', 'Gambar belum tersedia'),
+                                                onPressed: scene.imageUrl.isNotEmpty
+                                                    ? () => _launchURL(scene.imageUrl)
+                                                    : null,
+                                              ),
+                                              const SizedBox(width: 4),
+                                              // Tombol Bendera Lapor (Merah Tegas)
                                               IconButton(
                                                 icon: const Icon(Icons.flag_outlined, 
                                                   color: Colors.redAccent, 
                                                   size: 20
                                                 ),
-                                                tooltip: 'Lapor Konten Scene ${index + 1}',
+                                                tooltip: t('Report Scene ${index + 1}', 'Lapor Adegan ${index + 1}'),
                                                 onPressed: () => _showSceneReportDialog(scene),
                                               ),
                                             ],
@@ -1543,52 +1583,29 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                               ? Icons.pause
                                               : Icons.play_arrow)),
                                       label: Text(isCalculating
-                                          ? 'CALCULATING...'
+                                          ? t('CALCULATING...', 'MENGHITUNG...')
                                           : (_isPlayingSequence
-                                              ? 'PAUSE'
-                                              : 'PLAY ALL')),
+                                              ? t('PAUSE', 'JEDA')
+                                              : t('PLAY ALL', 'PUTAR SEMUA'))),
                                       style: ElevatedButton.styleFrom(
-                                              backgroundColor:
-                                                  _isPlayingSequence
-                                                      ? Colors.orangeAccent
-                                                      : Theme.of(context)
-                                                          .colorScheme
-                                                          .primary,
-                                              foregroundColor: Colors.white,
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 12),
-                                              textStyle: const TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold))
-                                          .copyWith(
-                                              backgroundColor: MaterialStateProperty
-                                                  .resolveWith<Color?>(
-                                                      (states) => states.contains(
-                                                              MaterialState.disabled)
-                                                          ? Colors.grey.shade400
-                                                          : (_isPlayingSequence
-                                                              ? Colors.orangeAccent
-                                                              : Theme.of(context)
-                                                                  .colorScheme
-                                                                  .primary)),
-                                              foregroundColor: MaterialStateProperty
-                                                  .resolveWith<Color?>(
-                                                      (states) => states.contains(
-                                                              MaterialState.disabled)
-                                                          ? Colors.grey.shade700
-                                                          : Colors.white),
+                                        backgroundColor: _isPlayingSequence
+                                            ? Colors.orangeAccent
+                                            : Colors.blueAccent,
+                                        foregroundColor: Colors.white,
+                                        disabledBackgroundColor: Colors.grey.shade800,
+                                        disabledForegroundColor: Colors.grey.shade500,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 12),
+                                        textStyle: const TextStyle(
+                                            fontSize: 15, fontWeight: FontWeight.bold),
                                       ),
                                     ),
                                     IconButton(
                                       icon: const Icon(Icons.replay),
                                       iconSize: 32,
-                                      tooltip: 'Replay from Beginning',
+                                      tooltip: t('Replay from Beginning', 'Putar Ulang dari Awal'),
                                       color: canPlayOrReplay
-                                          ? Theme.of(context)
-                                              .colorScheme
-                                              .secondary
+                                          ? Colors.cyanAccent
                                           : Colors.grey,
                                       onPressed: !canPlayOrReplay
                                           ? null
@@ -1601,29 +1618,14 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                       children: [
                                         ElevatedButton(
                                           style: ElevatedButton.styleFrom(
-                                                  backgroundColor:
-                                                      Colors.red.shade700,
-                                                  foregroundColor: Colors.white,
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                          horizontal: 20,
-                                                          vertical: 12),
-                                                  textStyle: const TextStyle(
-                                                      fontSize: 16,
-                                                      fontWeight: FontWeight.bold))
-                                              .copyWith(
-                                                  backgroundColor: MaterialStateProperty
-                                                      .resolveWith<Color?>(
-                                                          (states) => states.contains(
-                                                                  MaterialState.disabled)
-                                                              ? Colors.red.shade200
-                                                              : Colors.red.shade700),
-                                                  foregroundColor: MaterialStateProperty
-                                                      .resolveWith<Color?>(
-                                                          (states) => states.contains(
-                                                                  MaterialState.disabled)
-                                                              ? Colors.white70
-                                                              : Colors.white),
+                                            backgroundColor: Colors.redAccent.shade700,
+                                            foregroundColor: Colors.white,
+                                            disabledBackgroundColor: Colors.grey.shade800,
+                                            disabledForegroundColor: Colors.grey.shade600,
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 20, vertical: 12),
+                                            textStyle: const TextStyle(
+                                                fontSize: 16, fontWeight: FontWeight.bold),
                                           ),
                                           onPressed: !canRender
                                               ? null
@@ -1638,14 +1640,20 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                                     builder:
                                                         (BuildContext context) {
                                                       bool _isSaving = false;
-                                                      String _loadingMessage =
-                                                          "Saving render packet...";
+                                                      String _loadingMessage = t("Saving render packet...", "Menyimpan paket render...");
                                                       return StatefulBuilder(
                                                         builder: (context,
                                                             setDialogState) {
                                                           return AlertDialog(
-                                                            title: const Text(
-                                                                'Start Video Render?'),
+                                                            backgroundColor: const Color(0xFF1E222A),
+                                                            shape: RoundedRectangleBorder(
+                                                              borderRadius: BorderRadius.circular(16),
+                                                              side: const BorderSide(color: Colors.white12),
+                                                            ),
+                                                            title: Text(
+                                                              t('Start Video Render?', 'Mulai Render Video?'),
+                                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                                            ),
                                                             content: Column(
                                                               mainAxisSize:
                                                                   MainAxisSize.min,
@@ -1653,9 +1661,12 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                                                   CrossAxisAlignment
                                                                       .start,
                                                               children: [
-                                                                const Text(
-                                                                  "This will assemble all final data (scenes, timing, and styles) and send it to the render queue.\n\n"
-                                                                  "This action cannot be undone.",
+                                                                Text(
+                                                                  t(
+                                                                    "This will assemble all final data (scenes, timing, and styles) and send it to the render queue.\n\nThis action cannot be undone.",
+                                                                    "Ini akan merakit semua data akhir (adegan, waktu, dan gaya) lalu mengirimkannya ke antrean render.\n\nTindakan ini tidak dapat dibatalkan."
+                                                                  ),
+                                                                  style: const TextStyle(color: Colors.white70, fontSize: 14),
                                                                 ),
                                                                 if (_isSaving)
                                                                   Padding(
@@ -1667,126 +1678,93 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                                                       children: [
                                                                         const SizedBox(
                                                                           width: 20,
-                                                                          height:
-                                                                              20,
+                                                                          height: 20,
                                                                           child:
                                                                               CircularProgressIndicator(
-                                                                            strokeWidth:
-                                                                                3),
+                                                                            strokeWidth: 3,
+                                                                            color: Colors.blueAccent,
+                                                                          ),
                                                                         ),
-                                                                        const SizedBox(
-                                                                          width:
-                                                                              12),
+                                                                        const SizedBox(width: 12),
                                                                         Flexible(
                                                                           child: Text(
-                                                                              _loadingMessage)),
+                                                                            _loadingMessage,
+                                                                            style: const TextStyle(color: Colors.white70),
+                                                                          ),
+                                                                        ),
                                                                       ],
                                                                     ),
                                                                   ),
                                                               ],
                                                             ),
                                                             actions: <Widget>[
+                                                              // [WARNA KONTRAS]: Tombol Cancel Oranye Terang Jelas di Atas Background Gelap
                                                               TextButton(
-                                                                child: const Text(
-                                                                    'Cancel'),
+                                                                style: TextButton.styleFrom(
+                                                                  foregroundColor: Colors.orangeAccent,
+                                                                  textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                                                ),
+                                                                child: Text(t('Cancel', 'Batal')),
                                                                 onPressed: _isSaving
                                                                     ? null
                                                                     : () =>
-                                                                        Navigator.of(
-                                                                                context)
-                                                                            .pop(),
+                                                                        Navigator.of(context).pop(),
                                                               ),
-                                                              TextButton(
+                                                              ElevatedButton(
+                                                                style: ElevatedButton.styleFrom(
+                                                                  backgroundColor: Colors.redAccent.shade700,
+                                                                  foregroundColor: Colors.white,
+                                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                                ),
                                                                 child: Text(
                                                                   _isSaving
-                                                                      ? 'SAVING...'
-                                                                      : 'RENDER',
-                                                                  style: TextStyle(
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .bold,
-                                                                      color:
-                                                                          _isSaving
-                                                                              ? Colors
-                                                                                  .grey
-                                                                              : Colors
-                                                                                  .red),
+                                                                      ? t('SAVING...', 'MENYIMPAN...')
+                                                                      : t('RENDER', 'RENDER'),
+                                                                  style: const TextStyle(fontWeight: FontWeight.bold),
                                                                 ),
                                                                 onPressed: _isSaving
                                                                     ? null
                                                                     : () async {
                                                                         setDialogState(
                                                                           () {
-                                                                            _isSaving =
-                                                                                true;
-                                                                            _loadingMessage =
-                                                                                "Saving render packet...";
+                                                                            _isSaving = true;
+                                                                            _loadingMessage = t("Saving render packet...", "Menyimpan paket render...");
                                                                           },
                                                                         );
                                                                         try {
-                                                                          logger.info(
-                                                                              "Step 1/2: Preparing and saving full render packet for ${widget.projectId}...");
-                                                                          await prepareAndSaveRenderPacket(
-                                                                              ref,
-                                                                              widget
-                                                                                  .projectId);
+                                                                          logger.info("Step 1/2: Preparing and saving full render packet for ${widget.projectId}...");
+                                                                          await prepareAndSaveRenderPacket(ref, widget.projectId);
                                                                           setDialogState(
                                                                             () {
-                                                                              _loadingMessage =
-                                                                                  "Triggering backend render...";
+                                                                              _loadingMessage = t("Triggering backend render...", "Memicu backend render...");
                                                                             },
                                                                           );
-                                                                          await Future
-                                                                              .delayed(
-                                                                            const Duration(
-                                                                                milliseconds:
-                                                                                    200),
-                                                                          );
-                                                                          logger.info(
-                                                                              "Step 2/2: Updating status to RENDER_START for ${widget.projectId}...");
+                                                                          await Future.delayed(const Duration(milliseconds: 200));
+                                                                          logger.info("Step 2/2: Updating status to RENDER_START for ${widget.projectId}...");
                                                                           await ref
-                                                                              .read(
-                                                                                  firestoreServiceProvider)
+                                                                              .read(firestoreServiceProvider)
                                                                               .updateProject(
-                                                                                  widget
-                                                                                      .projectId,
+                                                                                  widget.projectId,
                                                                                   {
-                                                                                'status':
-                                                                                    'RENDER_START',
-                                                                                'renderStartedAt': FieldValue
-                                                                                    .serverTimestamp(),
-                                                                                'errorDetail': FieldValue
-                                                                                    .delete()
+                                                                                'status': 'RENDER_START',
+                                                                                'renderStartedAt': FieldValue.serverTimestamp(),
+                                                                                'errorDetail': FieldValue.delete()
                                                                               });
-                                                                          logger.info(
-                                                                              "Render trigger successful for ${widget.projectId}");
+                                                                          logger.info("Render trigger successful for ${widget.projectId}");
                                                                           if (mounted) {
-                                                                            Navigator.of(
-                                                                                    context)
-                                                                                .pop();
-                                                                            setState(
-                                                                              () {
-                                                                                _isTriggeringRender =
-                                                                                    true;
-                                                                              },
-                                                                            );
+                                                                            Navigator.of(context).pop();
+                                                                            setState(() {
+                                                                              _isTriggeringRender = true;
+                                                                            });
                                                                           }
                                                                         } catch (e) {
-                                                                          logger.error(
-                                                                              "Failed to prepare or trigger render for ${widget.projectId}",
-                                                                              e);
+                                                                          logger.error("Failed to prepare or trigger render for ${widget.projectId}", e);
                                                                           if (mounted) {
-                                                                            Navigator.of(
-                                                                                    context)
-                                                                                .pop();
-                                                                            ScaffoldMessenger.of(
-                                                                                    context)
-                                                                                .showSnackBar(
+                                                                            Navigator.of(context).pop();
+                                                                            ScaffoldMessenger.of(context).showSnackBar(
                                                                               SnackBar(
-                                                                                content: Text(
-                                                                                    '❌ Failed to send render packet: $e'),
-                                                                                backgroundColor:
-                                                                                    Colors.red),
+                                                                                content: Text(t('Failed to send render packet: $e', 'Gagal mengirim paket render: $e')),
+                                                                                backgroundColor: Colors.red),
                                                                             );
                                                                           }
                                                                         }
@@ -1799,7 +1777,7 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                                     },
                                                   );
                                                 },
-                                          child: const Text('RENDER'),
+                                          child: Text(t('RENDER', 'RENDER')),
                                         ),
                                         if (canRender && !_hasDismissedRenderPopup)
                                           Positioned(
@@ -1832,9 +1810,9 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                                                           )
                                                         ],
                                                       ),
-                                                      child: const Text(
-                                                        "✨ Finish & Export to MP4",
-                                                        style: TextStyle(
+                                                      child: Text(
+                                                        t("✨ Finish & Export to MP4", "✨ Siap Render & Ekspor Video"),
+                                                        style: const TextStyle(
                                                           color: Colors.white,
                                                           fontSize: 12,
                                                           fontWeight: FontWeight.bold,
@@ -1867,8 +1845,7 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                   ],
                 ),
                 if (isProjectRendering)
-                  _buildRenderingOverlay(
-                      secondsRemainingForOverlay, hasValidStartTime),
+                  _buildRenderingOverlay(hasValidStartTime, isIndo),
               ],
             );
           },
@@ -1879,17 +1856,17 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
 //----------------------------------------------------------------------------------------------------//
 
 //No ke-6: HELPERS, RENDER LOGIC (MANUAL) & STYLING //
-//Warna status, dialog regenerasi aset, dan logika RENDER MANUAL lama. //
+//Warna status, dialog regenerasi aset, dan logika kontrol Play/Pause/Resume audio tiap adegan. //
   Color _getStatusColor(String? status) {
     switch (status) {
       case 'COMPLETED':
-        return Colors.green.shade700;
+        return Colors.green.shade400;
       case 'ERROR':
       case 'ERROR_AUDIO':
       case 'ERROR_VISUALS':
       case 'ERROR_REFINEMENT':
       case 'ERROR_RENDER':
-        return Colors.red.shade700;
+        return Colors.redAccent;
       case 'PENDING_REGENERATION':
         return Colors.blueAccent;
       case 'GENERATING_VISUALS':
@@ -1898,31 +1875,61 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
       case 'PROCESSING_AUTO_RETRY':
       case 'GENERATING_THUMBNULL':
       case 'GENERATING_THUMBNAIL':
-        return Colors.purple.shade600;
+        return Colors.purpleAccent;
       case 'ASSETS_COMPLETE':
-        return Colors.blue.shade600;
+        return Colors.blueAccent;
       case 'RENDER_COMPLETED':
-        return Colors.green.shade700;
+        return Colors.greenAccent;
       default:
-        return Colors.grey.shade600;
+        return Colors.grey.shade400;
     }
   }
 
   void _showRegenerateDialog(Scene scene) {
+    final currentLocale = ref.read(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Regenerate Asset?'),
+          backgroundColor: const Color(0xFF1E222A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Colors.white12),
+          ),
+          title: Text(
+            t('Regenerate Asset?', 'Regenerasi Aset?'),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
           content: Text(
-              'This will re-create the image AND audio for scene ${scene.segmentIndex + 1}. Are you sure?'),
+            t(
+              'This will re-create the image AND audio for scene ${scene.segmentIndex + 1}. Are you sure?',
+              'Ini akan membuat ulang gambar DAN audio untuk adegan ${scene.segmentIndex + 1}. Apakah Anda yakin?'
+            ),
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
+          ),
           actions: <Widget>[
+            // [WARNA KONTRAS]: Tombol Cancel Oranye Terang
             TextButton(
-              child: const Text('Cancel'),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.orangeAccent,
+                textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              child: Text(t('Cancel', 'Batal')),
               onPressed: () => Navigator.of(context).pop(),
             ),
-            TextButton(
-              child: const Text('Regenerate'),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueAccent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text(
+                t('Regenerate', 'Regenerasi'),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               onPressed: () {
                 Navigator.of(context).pop();
                 ref
@@ -1937,6 +1944,10 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
   }
 
   void _triggerRender(String? aspectRatioString) {
+    final currentLocale = ref.read(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     final timelineDataAsync =
         ref.read(processedTimelineProvider(widget.projectId));
     final timelineData = timelineDataAsync.asData?.value;
@@ -1945,13 +1956,12 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
         .read(visualSettingsProvider(widget.projectId))
         .toJson(aspectRatioValue);
     if (timelineData == null || timelineData.isCalculating) {
-      logger.error(
-          "Render failed: Timeline data is not ready or still calculating.");
+      logger.error("Render failed: Timeline data is not ready or still calculating.");
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text(
-                'Error: Timeline data is not ready. Please wait and try again.'),
-            backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(t('Error: Timeline data is not ready. Please wait and try again.', 'Error: Data timeline belum siap. Silakan tunggu sebentar.')),
+          backgroundColor: Colors.red
+        ),
       );
       return;
     }
@@ -1964,45 +1974,67 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Start Video Render?'),
-          content: const Text(
-              'This will send the complete render packet to the backend to start the final video generation.'),
+          backgroundColor: const Color(0xFF1E222A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Colors.white12),
+          ),
+          title: Text(
+            t('Start Video Render?', 'Mulai Render Video?'),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            t(
+              'This will send the complete render packet to the backend to start final video generation.',
+              'Ini akan mengirimkan seluruh paket render ke backend untuk memulai perakitan video final.'
+            ),
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
+          ),
           actions: <Widget>[
+            // [WARNA KONTRAS]: Tombol Cancel Oranye Terang
             TextButton(
-              child: const Text('Cancel'),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.orangeAccent,
+                textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              child: Text(t('Cancel', 'Batal')),
               onPressed: () => Navigator.of(context).pop(),
             ),
-            TextButton(
-              child: const Text('RENDER',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold, color: Colors.red)),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent.shade700,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: Text(
+                t('RENDER', 'RENDER'),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               onPressed: () {
                 Navigator.of(context).pop();
                 try {
-                  logger.info(
-                      "Attempting update to RENDER_START for ${widget.projectId} with full render packet.");
+                  logger.info("Attempting update to RENDER_START for ${widget.projectId} with full render packet.");
                   ref
                       .read(firestoreServiceProvider)
                       .updateProject(widget.projectId,
                           {'renderPacket': renderPacket, 'status': 'RENDER_START'});
-                  logger.info(
-                      "Firestore update call finished for ${widget.projectId}");
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Render request sent!'),
-                          backgroundColor: Colors.green),
-                    );
-                  }
-                } catch (e) {
-                  logger.error(
-                      "Failed to trigger render for ${widget.projectId}", e);
+                  logger.info("Firestore update call finished for ${widget.projectId}");
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                          content:
-                              Text('Failed to send render request: $e'),
-                          backgroundColor: Colors.red),
+                        content: Text(t('Render request sent!', 'Permintaan render berhasil dikirim!')),
+                        backgroundColor: Colors.green
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  logger.error("Failed to trigger render for ${widget.projectId}", e);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(t('Failed to send render request: $e', 'Gagal mengirim permintaan render: $e')),
+                        backgroundColor: Colors.red
+                      ),
                     );
                   }
                 }
@@ -2014,11 +2046,16 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
     );
   }
 
+  // [RESPONS INSTAN PLAY / PAUSE / RESUME 1X KLIK & WARNA TERANG KONTRAS]
   Widget _buildAudioControlButton(Scene scene, int sceneIndex) {
-    final bool isThisSceneCurrentlyPlaying = (_isPlayingIndividual ||
-            (_isPlayingSequence && !_isPlayingIntroBgm)) &&
-        _currentlyPlayingSceneId == scene.id &&
-        _narrationPlayer.state == PlayerState.playing;
+    final bool isThisSceneIndividualTarget = _isPlayingIndividual && _currentlyPlayingSceneId == scene.id;
+    final bool isThisSceneSequenceTarget = _isPlayingSequence && !_isPlayingIntroBgm && _currentlyPlayingSceneId == scene.id;
+
+    final bool isThisScenePlaying = isThisSceneSequenceTarget ||
+        (isThisSceneIndividualTarget && _narrationPlayer.state != PlayerState.paused);
+
+    final bool isThisScenePaused = isThisSceneIndividualTarget && _narrationPlayer.state == PlayerState.paused;
+
     final bool canThisScenePlay = scene.ttsAudioUrl.isNotEmpty;
 
     if (!canThisScenePlay &&
@@ -2038,13 +2075,13 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
     } else if (!canThisScenePlay &&
         (scene.status == 'ERROR_AUDIO' || scene.status == 'ERROR')) {
       return IconButton(
-        icon: Icon(Icons.volume_off, color: Colors.red[400], size: 36),
+        icon: const Icon(Icons.volume_off, color: Colors.redAccent, size: 36),
         onPressed: null,
         tooltip: 'Audio failed to generate. Please regenerate.',
       );
     } else if (!canThisScenePlay) {
       return IconButton(
-        icon: Icon(Icons.volume_off, color: Colors.grey[400], size: 36),
+        icon: Icon(Icons.volume_off, color: Colors.grey[600], size: 36),
         onPressed: null,
         tooltip: 'No audio available or still pending',
       );
@@ -2052,26 +2089,36 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
 
     return IconButton(
       icon: Icon(
-        isThisSceneCurrentlyPlaying
+        isThisScenePlaying
             ? Icons.pause_circle_filled
             : Icons.play_circle_fill,
-        color: Theme.of(context).primaryColor,
+        color: isThisScenePaused
+            ? Colors.orangeAccent
+            : Colors.blueAccent,
         size: 36,
       ),
-      tooltip: isThisSceneCurrentlyPlaying
+      tooltip: isThisScenePlaying
           ? 'Pause Scene ${sceneIndex + 1}'
-          : 'Play Scene ${sceneIndex + 1}',
+          : (isThisScenePaused
+              ? 'Resume Scene ${sceneIndex + 1}'
+              : 'Play Scene ${sceneIndex + 1}'),
       onPressed: () {
         if (_isPlayingSequence) {
           _stopSequencePlayback(resetIndex: false);
         }
-        if (isThisSceneCurrentlyPlaying) {
+
+        if (isThisScenePlaying) {
           _narrationPlayer.pause();
+          setState(() {});
+        } else if (isThisScenePaused) {
+          _narrationPlayer.resume();
+          setState(() {});
         } else {
           _playbackTimer?.cancel();
           _updatePlaybackTime(0.0);
           _narrationPlayer.stop();
           _bgmPlayer.stop();
+          
           setState(() {
             _currentlyPlayingSceneId = scene.id;
             _isPlayingIndividual = true;
@@ -2079,9 +2126,9 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
             ref.read(selectedSceneProvider.notifier).state = scene;
             _currentImageUrl = scene.imageUrl;
           });
+
           _narrationPlayer.play(UrlSource(scene.ttsAudioUrl)).catchError((e) {
-            logger.error(
-                "Error playing individual audio for scene $sceneIndex: $e");
+            logger.error("Error playing individual audio for scene $sceneIndex: $e");
             if (mounted) {
               setState(() {
                 _currentlyPlayingSceneId = null;
@@ -2089,9 +2136,9 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
               });
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                    content: Text(
-                        'Failed to play audio for scene ${sceneIndex + 1}.'),
-                    backgroundColor: Colors.red),
+                  content: Text('Failed to play audio for scene ${sceneIndex + 1}.'),
+                  backgroundColor: Colors.red
+                ),
               );
             }
           });
@@ -2102,40 +2149,64 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
 //----------------------------------------------------------------------------------------------------//
 
 //No ke-7: REPORT SCENE LOGIC //
-//Logika pelaporan konten pada scene. //
+//Logika pelaporan konten pada scene dengan tombol kontras & bilingual. //
   void _showSceneReportDialog(Scene scene) {
+    final currentLocale = ref.read(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     final TextEditingController reasonController = TextEditingController();
     
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text("Lapor Scene ${scene.segmentIndex + 1}"),
+        backgroundColor: const Color(0xFF1E222A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Colors.white12),
+        ),
+        title: Text(
+          t("Report Scene ${scene.segmentIndex + 1}", "Lapor Adegan ${scene.segmentIndex + 1}"),
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Apakah gambar atau narasi scene ini melanggar kebijakan?",
-              style: TextStyle(fontSize: 14),
+            Text(
+              t(
+                "Does the visual or narration violate policy?",
+                "Apakah gambar atau narasi adegan ini melanggar kebijakan?"
+              ),
+              style: const TextStyle(fontSize: 14, color: Colors.white70),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             TextField(
               controller: reasonController,
-              decoration: const InputDecoration(
-                hintText: "Alasan (SARA, Kekerasan, dll)...",
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                hintText: t("Reason (Violence, Sensitive content, etc)...", "Alasan (SARA, Kekerasan, dll)..."),
+                border: const OutlineInputBorder(),
               ),
               maxLines: 3,
             ),
           ],
         ),
         actions: [
+          // [WARNA KONTRAS]: Tombol Cancel Oranye Terang
           TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.orangeAccent,
+              textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Batal"),
+            child: Text(t("Cancel", "Batal")),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent.shade700,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             onPressed: () {
               final user = ref.read(firestoreUserProvider).valueOrNull;
               final userId = user?.uid ?? 'anonymous'; 
@@ -2153,15 +2224,15 @@ class _TimelineReviewScreenState extends ConsumerState<TimelineReviewScreen>
                 if (mounted) {
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Laporan dikirim. Terima kasih."),
+                    SnackBar(
+                      content: Text(t("Report submitted. Thank you.", "Laporan dikirim. Terima kasih.")),
                       backgroundColor: Colors.green,
                     ),
                   );
                 }
               });
             },
-            child: const Text("Lapor", style: TextStyle(color: Colors.white)),
+            child: Text(t("Report", "Lapor"), style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),

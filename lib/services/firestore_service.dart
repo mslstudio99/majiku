@@ -1,6 +1,9 @@
+
+
 //..................................................//
 // LIB/SERVICES/FIRESTORE_SERVICE.DART              //
 //..................................................//
+
 
 //No ke-1...........................................//
 // IMPORT, SETUP KEAMANAN, DAN DEPENDENSI           //
@@ -16,22 +19,20 @@ import 'package:flutter/material.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
-import 'package:android_id/android_id.dart'; // [BARU] Khusus untuk Plat Nomor Mesin Murni
+import 'package:android_id/android_id.dart';
 
 // Import model Scene dan VideoProject
 import '../models/scene.dart';
 import '../models/video_project.dart';
-// Import model VisualSettings dari provider
+
+// Import & Export Provider Resmi (Mencegah Konflik Duplikasi)
 import '../providers/visual_settings_provider.dart';
+export '../providers/visual_settings_provider.dart' show firestoreServiceProvider;
 
 /*
-KATEGORI_ARSITEKTUR_BARU NO_URUT_15 (REVISI PARIPURNA 6.0 - STRICT ID + FORENSIC LOG)
+KATEGORI_ARSITEKTUR_BARU NO_URUT_15 (REVISI PARIPURNA 8.0 - ZERO COLLISION RE-EXPORT)
 Nama File: lib/services/firestore_service.dart
-Status: STABIL, ANTI-REGRESI, & ANTI-FARMING AKURAT
-Perubahan: 
-- Mencabut IP tracking agar tidak rancu dengan jaringan WiFi/CGNAT publik.
-- Memisahkan Hardware ID Mutlak (ANDROID_ID) dengan Spesifikasi Kosmetik (Merk HP).
-- Menambahkan 'totalRegistrations' untuk monitoring peternak akun.
+Status: STABIL, ANTI-REGRESI, BEBAS KONFLIK AMBIGUITAS
 */
 //..................................................//
 
@@ -99,9 +100,13 @@ class FirestoreService {
     return null;
   }
 
-  /// Logika Anti-Fraud (MASTER RECORD): isNewRegistration memblokir Race Condition,
-  /// Menggunakan STRICT HARDWARE ID sebagai indikator tunggal, Merk HP sebagai catatan.
-  Future<void> ensureUserDocumentExists({bool isNewRegistration = false}) async {
+  /// Logika Anti-Fraud (MASTER RECORD) + Integrasi Data User Center
+  Future<void> ensureUserDocumentExists({
+    bool isNewRegistration = false,
+    String? country,
+    String? city,
+    String? acquisitionSource,
+  }) async {
     final user = _auth.currentUser;
     if (user == null || user.email == null) {
       debugPrint("[UserInit] Gagal: User/Email null.");
@@ -114,26 +119,7 @@ class FirestoreService {
     try {
       final doc = await userRef.get();
       
-      // 1. Ambil Nilai Config Bonus Langsung Dari Database
-      // [PERBAIKAN] Fallback default diatur ke 500 sesuai instruksi
-      int configuredBonus = 500; 
-      try {
-        // [PERBAIKAN] Typo nama dokumen telah diperbaiki menjadi 'token_settings'
-        final configDoc = await _db.collection('config').doc('token_settings').get();
-        if (configDoc.exists) {
-          final data = configDoc.data();
-          if (data != null && data.containsKey('free_tokens')) {
-            configuredBonus = data['free_tokens'] ?? 500;
-          } else if (data != null && data.containsKey('costs')) {
-            final costsData = data['costs'] as Map<String, dynamic>;
-            configuredBonus = costsData['free_tokens'] ?? 500;
-          }
-        }
-      } catch (e) {
-        debugPrint("⚠️ FirestoreService: Gagal membaca config token_settings: $e");
-      }
-
-      // 2. Persiapan Data (Indikator Mutlak + Catatan Kosmetik)
+      // 1. Persiapan Data (Indikator Mutlak + Catatan Kosmetik)
       final String safeDeviceId = await _getStrictHardwareId() ?? "unknown_device_${user.uid}";
       final Map<String, dynamic> deviceSpecs = await _getDeviceSpecs();
       
@@ -150,27 +136,30 @@ class FirestoreService {
         debugPrint("⚠️ FRAUD: HardwareId $safeDeviceId sudah pernah diklaim.");
       }
 
-      // Jika fraud, bonus disetel paksa menjadi 0
-      final int finalBonus = isDeviceEligible ? configuredBonus : 0;
-
-      // 3. Eksekusi Penciptaan atau Pembaruan Data (Menggunakan ATOMIC BATCH)
+      // 2. Eksekusi Penciptaan atau Pembaruan Data (Menggunakan ATOMIC BATCH)
       final batch = _db.batch();
 
-      // LOGIKA ANTI RACE-CONDITION: Menimpa paksa walau UI curi start
+      // LOGIKA PENDAFTAR BARU
       if (!doc.exists || isNewRegistration) {
-        debugPrint("[UserInit] Eksekusi Paksa Akun: $userEmail. Bonus: $finalBonus TM.");
+        debugPrint("[UserInit] Pendaftaran Baru Akun: $userEmail. Menunggu verifikasi email.");
         
-        // Eksekusi Dokumen User
+        // Eksekusi Dokumen User (PENGAMAN KUNCI MATI: SALDO 0, BONUS DIBERIKAN BACKEND!)
         batch.set(userRef, {
           'uid': user.uid,
           'email': userEmail,
           'displayName': user.displayName ?? '',
           'userTier': 'free',
-          'tokenBalance': finalBonus, 
-          'hasReceivedWelcomeBonus': true, 
+          'tokenBalance': 0, // KUNCI MATI: Tidak ada lagi sinterklas lokal!
+          'hasReceivedWelcomeBonus': false, 
+          'isEmailVerified': user.emailVerified, 
           'isFraudDetected': !isDeviceEligible, 
           'createdAt': doc.exists ? (doc.data()?['createdAt'] ?? FieldValue.serverTimestamp()) : FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
+          // --- Data User Center & Profil ---
+          'country': country ?? 'Unknown',
+          'city': city ?? 'Unknown',
+          'acquisitionSource': acquisitionSource ?? 'Organic',
+          'deviceInfo': deviceSpecs,
         }, SetOptions(merge: true));
 
         // Eksekusi Master Record Perangkat (Catat ID Mutlak + Log Merk HP)
@@ -179,13 +168,12 @@ class FirestoreService {
             'hardwareId': safeDeviceId,
             'firstEmail': userEmail,
             'registeredEmails': [userEmail],
-            'totalRegistrations': 1, // Start dari 1
-            'hardwareDetail': deviceSpecs, // Hanya sebagai info/catatan
+            'totalRegistrations': 1,
+            'hardwareDetail': deviceSpecs,
             'createdAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
           });
         } else {
-          // Update Master: Tambahkan email nakal ke array dan naikkan counter
           batch.update(deviceRef, {
             'registeredEmails': FieldValue.arrayUnion([userEmail]),
             'totalRegistrations': FieldValue.increment(1),
@@ -194,35 +182,24 @@ class FirestoreService {
         }
 
       } else {
-        // Kasus Login Normal: Penyelamatan User Lama
+        // KASUS LOGIN NORMAL: Pembaruan lokasi dan waktu akses saja
         final data = doc.data()!;
-        if ((data['tokenBalance'] ?? 0) <= 0 && !(data['hasReceivedWelcomeBonus'] ?? false)) {
-          debugPrint("[UserInit] Menyelamatkan user lama $userEmail. Bonus: $finalBonus TM.");
-          
-          batch.update(userRef, {
-            'tokenBalance': finalBonus,
-            'hasReceivedWelcomeBonus': true,
-            'isFraudDetected': !isDeviceEligible,
+        Map<String, dynamic> updateData = {
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+
+        if (country != null) updateData['country'] = country;
+        if (city != null) updateData['city'] = city;
+        if (acquisitionSource != null) updateData['acquisitionSource'] = acquisitionSource;
+
+        batch.update(userRef, updateData);
+
+        // Update record perangkat jika fraud terdeteksi
+        if (!isDeviceEligible) {
+          batch.update(deviceRef, {
+            'registeredEmails': FieldValue.arrayUnion([userEmail]),
             'updatedAt': FieldValue.serverTimestamp(),
           });
-
-          if (isDeviceEligible) {
-            batch.set(deviceRef, {
-              'hardwareId': safeDeviceId,
-              'firstEmail': userEmail,
-              'registeredEmails': [userEmail],
-              'totalRegistrations': 1,
-              'hardwareDetail': deviceSpecs,
-              'createdAt': FieldValue.serverTimestamp(),
-              'updatedAt': FieldValue.serverTimestamp(),
-            });
-          } else {
-            batch.update(deviceRef, {
-              'registeredEmails': FieldValue.arrayUnion([userEmail]),
-              'totalRegistrations': FieldValue.increment(1),
-              'updatedAt': FieldValue.serverTimestamp(),
-            });
-          }
         }
       }
 
@@ -231,6 +208,82 @@ class FirestoreService {
 
     } catch (e) {
       debugPrint("❌ FirestoreService Error pada ensureUserDocumentExists: $e");
+    }
+  }
+
+  /// [REVISI PARIPURNA] Log aktivitas fitur + Rekap Global & Rekap Detail Per-Fitur di activitySummary
+  Future<void> logFeatureActivity({
+    required String featureKey,
+    String? subFeatureKey,       // Misal: 'kisah_horor', 't2image', dll.
+    String eventType = 'visit',  // 'visit' atau 'conversion'
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final now = DateTime.now();
+      final String dateKey = "${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+      
+      final featureDocRef = _db
+          .collection('users')
+          .doc(user.uid)
+          .collection('feature_activity_logs')
+          .doc(featureKey);
+
+      final Map<String, dynamic> updatePayload;
+
+      if (subFeatureKey != null && subFeatureKey.isNotEmpty) {
+        updatePayload = {
+          dateKey: {
+            subFeatureKey: {
+              'accessed_at': FieldValue.serverTimestamp(),
+              if (eventType == 'conversion') 'conversions': FieldValue.increment(1)
+              else 'visits': FieldValue.increment(1),
+            }
+          }
+        };
+      } else {
+        updatePayload = {
+          dateKey: {
+            'accessed_at': FieldValue.serverTimestamp(),
+            if (eventType == 'conversion') 'conversions': FieldValue.increment(1)
+            else 'visits': FieldValue.increment(1),
+          }
+        };
+      }
+
+      await featureDocRef.set(updatePayload, SetOptions(merge: true));
+
+      final Map<String, dynamic> masterUpdateData = {
+        'lastActiveAt': FieldValue.serverTimestamp(),
+      };
+
+      if (eventType == 'conversion') {
+        masterUpdateData['activitySummary.totalConversions'] = FieldValue.increment(1);
+        masterUpdateData['activitySummary.lastConversionAt'] = FieldValue.serverTimestamp();
+
+        if (subFeatureKey != null && subFeatureKey.isNotEmpty) {
+          masterUpdateData['activitySummary.features.$featureKey.totalConversions'] = FieldValue.increment(1);
+          masterUpdateData['activitySummary.features.$featureKey.$subFeatureKey.conversions'] = FieldValue.increment(1);
+        } else {
+          masterUpdateData['activitySummary.features.$featureKey.conversions'] = FieldValue.increment(1);
+        }
+      } else {
+        masterUpdateData['activitySummary.totalVisits'] = FieldValue.increment(1);
+        masterUpdateData['activitySummary.lastVisitAt'] = FieldValue.serverTimestamp();
+
+        if (subFeatureKey != null && subFeatureKey.isNotEmpty) {
+          masterUpdateData['activitySummary.features.$featureKey.totalVisits'] = FieldValue.increment(1);
+          masterUpdateData['activitySummary.features.$featureKey.$subFeatureKey.visits'] = FieldValue.increment(1);
+        } else {
+          masterUpdateData['activitySummary.features.$featureKey.visits'] = FieldValue.increment(1);
+        }
+      }
+
+      await _db.collection('users').doc(user.uid).update(masterUpdateData);
+      
+    } catch (e) {
+      debugPrint("⚠️ Gagal mencatat log aktivitas fitur & activitySummary: $e");
     }
   }
 //..................................................//
@@ -412,9 +465,11 @@ class FirestoreService {
     required String voice,
     required bool showSubtitles, 
     required bool useAssetOverlayEffects,
-    // --- [TAMBAHAN TERBARU] Parameter Opsional Deskripsi (Dengan Default Baru) ---
     String description = "Created @ majiku.net\nAuto Video Content & Film Maker",
-    // -------------------------------------------------------
+    bool showTitle = true, // [BARU]: Menerima status Toggle ON/OFF Judul (Default: ON)
+    bool showDescription = false, 
+    String costLevel = 'Standard',
+    int sentencesPerSegment = 1,
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -423,33 +478,50 @@ class FirestoreService {
     }
 
     try {
-      // --- [PERBAIKAN KUNCI]: Menyuntikkan 'description' ke VisualSettings ---
+      // Jika toggle Judul OFF, pastikan judul efektif untuk visualSettings dikosongkan
+      final String finalTitle = title.isNotEmpty ? title : "Untitled Project";
+      final String effectiveTitle = showTitle ? finalTitle : "";
+
+      // Jika toggle Deskripsi OFF, deskripsi yang dioper ke VisualSettings dikosongkan mutlak
+      final String effectiveDescription = showDescription ? description : "";
+
       final defaultVisualSettings = VisualSettings.defaultSettingsWithTitle(
-            title, 
-            projectDescription: description // <-- INI YANG MEMBAWA TEKS KE RENDERER
+            effectiveTitle, 
+            projectDescription: effectiveDescription 
           )
           .copyWith(
             showSubtitles: showSubtitles,
             useAssetOverlayEffects: useAssetOverlayEffects,
           );
-      // ----------------------------------------------------------------------
       
       final double aspectRatioValue = _calculateAspectRatioFromString(aspectRatio);
       
       final visualSettingsMap = defaultVisualSettings.toJson(aspectRatioValue);
 
-      debugPrint("addProject: Creating new project with title: $title (Overlay: $useAssetOverlayEffects)");
+      // Pastikan objek titleOverlay di visualSettingsMap ikut kosong jika toggle showTitle OFF
+      if (!showTitle && visualSettingsMap.containsKey('titleOverlay')) {
+        visualSettingsMap['titleOverlay']['text'] = "";
+      }
+
+      // Pastikan objek descriptionOverlay di visualSettingsMap ikut kosong jika toggle showDescription OFF
+      if (!showDescription && visualSettingsMap.containsKey('descriptionOverlay')) {
+        visualSettingsMap['descriptionOverlay']['text'] = "";
+      }
+
+      debugPrint("addProject: Creating new project with title: $finalTitle (showTitle: $showTitle, showDesc: $showDescription, Tier: $costLevel)");
       final docRef = await _db.collection('projects').add({
         'userId': user.uid,
-        'title': title.isNotEmpty ? title : "Untitled Project",
-        // --- [TAMBAHAN TERBARU] Menyimpan Field Deskripsi Baru & Fallback Baru ---
-        'description': description.isNotEmpty ? description : "Created @ majiku.net\nAuto Video Content & Film Maker",
-        // ---------------------------------------------------------
+        'title': finalTitle,
+        'description': effectiveDescription,
+        'showTitle': showTitle, // [BARU]: Disimpan ke Firestore agar dibaca oleh Cloud Run Render
+        'showDescription': showDescription, 
         'rawScript': rawScript,
         'imageStyle': imageStyle,
         'aspectRatio': aspectRatio,
         'language': language,
         'voice': voice,
+        'costLevel': costLevel,
+        'sentencesPerSegment': sentencesPerSegment,
         'status': 'PROCESSING_GENERATION',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -460,7 +532,7 @@ class FirestoreService {
         'errorDetail': null,
       });
 
-      debugPrint('✅ Project created with ID ${docRef.id}.');
+      debugPrint('✅ Project created with ID ${docRef.id}. Title Overlay: ${showTitle ? "ON" : "OFF"}, Description Overlay: ${showDescription ? "ON" : "OFF"}.');
       return docRef.id;
     } catch (e) {
       debugPrint("❌ Error adding project: $e");
@@ -478,6 +550,38 @@ class FirestoreService {
     }
     debugPrint("Invalid aspectRatio '$ratioString', falling back to 16/9.");
     return 16 / 9;
+  }
+//..................................................//
+
+//No ke-5...........................................//
+// PELACAKAN TRANSAKSI SENTRAL & RIWAYAT PEMBELIAN //
+  /// Mendengarkan status dokumen transaksi sentral di koleksi 'transactions' secara realtime.
+  /// Digunakan oleh dialog pemantau pembayaran (Web Duitku & Google Play).
+  Stream<DocumentSnapshot<Map<String, dynamic>>> streamTransactionStatus(String orderId) {
+    debugPrint("streamTransactionStatus: Memantau dokumen sentral transaksi $orderId");
+    return _db.collection('transactions').doc(orderId).snapshots();
+  }
+
+  /// Mengambil data dokumen transaksi sentral sekali baca (Future).
+  Future<DocumentSnapshot<Map<String, dynamic>>> getTransaction(String orderId) async {
+    debugPrint("getTransaction: Mengambil dokumen transaksi $orderId");
+    return await _db.collection('transactions').doc(orderId).get();
+  }
+
+  /// Mendengarkan riwayat transaksi user dari sub-koleksi pengguna secara realtime.
+  Stream<QuerySnapshot<Map<String, dynamic>>> getUserTransactionHistoryStream() {
+    final user = _auth.currentUser;
+    if (user == null) {
+      debugPrint("getUserTransactionHistoryStream: User belum login, stream kosong.");
+      return const Stream.empty();
+    }
+    debugPrint("getUserTransactionHistoryStream: Memantau riwayat transaksi user ${user.uid}");
+    return _db
+        .collection('users')
+        .doc(user.uid)
+        .collection('transaction_history_logs')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
   }
 }
 //..................................................//

@@ -4,6 +4,12 @@
 // DESKRIPSI: SMART CONTROLLER, NATIVE VIDEO TIMELINE, TEXT/SUBS  //
 //................................................................//
 
+//................................................................//
+// NAMA FILE: TIMELINE_REVIEW_STORINEMA_SCREEN.DART               //
+// PATH: LIB/SCREENS_STORINEMA/TIMELINE_REVIEW_STORINEMA_SCREEN.DART //
+// DESKRIPSI: SMART CONTROLLER, NATIVE VIDEO TIMELINE, TEXT/SUBS  //
+//................................................................//
+
 //No ke-1.........................................................//
 // IMPORTS, CONSTANTS & PROVIDERS                                 //
 import 'dart:async';
@@ -28,6 +34,7 @@ import '../providers_storinema/timeline_storinema_providers.dart';
 
 import 'visual_setting_storinema_screen.dart';
 import '../providers/user_provider.dart';
+import '../providers/config_provider.dart'; // [BARU]: Membaca konfigurasi tarif token Storinema
 
 final selectedSceneStorinemaProvider = StateProvider.autoDispose<SceneStorinema?>((ref) => null);
 //................................................................//
@@ -418,13 +425,28 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
     });
   }
 
-  // --- [SISTEM DOWNLOAD VMOTION: RINGAN & NATIVE] ---
+  // --- [SISTEM DOWNLOAD: DIALIHKAN KE TAB BARU SECARA PRESISI] ---
   Future<void> _launchURL(String urlString) async {
+    if (kIsWeb) {
+      try {
+        html.window.open(urlString, '_blank');
+        return;
+      } catch (_) {}
+    }
     final Uri url = Uri.parse(urlString);
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+    if (!await launchUrl(
+      url, 
+      mode: LaunchMode.externalApplication,
+      webOnlyWindowName: '_blank',
+    )) {
       if (mounted) {
+        final currentLocale = ref.read(appLanguageProvider);
+        final isIndo = currentLocale.languageCode == 'id';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open link: $urlString'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(isIndo ? 'Tidak dapat membuka link: $urlString' : 'Could not open link: $urlString'), 
+            backgroundColor: Colors.red
+          ),
         );
       }
     }
@@ -470,6 +492,10 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
   }
 
   Widget _buildRenderingOverlay(int secondsRemaining, bool hasValidStartTime, bool isWaitingForUrl) {
+    final currentLocale = ref.watch(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     return Positioned.fill(
       child: AbsorbPointer(
         child: Container(
@@ -486,9 +512,15 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
                 children: [
                   const CircularProgressIndicator(color: Colors.blueAccent), 
                   const SizedBox(height: 16),
-                  Text(isWaitingForUrl ? "Menyiapkan Link Download..." : "Rendering Final Video...", style: const TextStyle(fontSize: 16, color: Colors.white)),
+                  Text(
+                    isWaitingForUrl ? t("Preparing Download Link...", "Menyiapkan Link Download...") : t("Rendering Final Video...", "Rendering Final Video..."), 
+                    style: const TextStyle(fontSize: 16, color: Colors.white)
+                  ),
                   const SizedBox(height: 10),
-                  Text("Auto Cancel in: ${_formatDuration(secondsRemaining)}", style: const TextStyle(fontSize: 14, color: Colors.white70)),
+                  Text(
+                    "${t('Auto Cancel in:', 'Batal Otomatis dalam:')} ${_formatDuration(secondsRemaining)}", 
+                    style: const TextStyle(fontSize: 14, color: Colors.white70)
+                  ),
                 ],
               ),
             ),
@@ -500,6 +532,10 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
 
   @override
   Widget build(BuildContext context) {
+    final currentLocale = ref.watch(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     final projectAsyncValue = ref.watch(projectStorinemaStreamProvider(widget.projectId));
     final processedTimelineAsync = ref.watch(processedTimelineStorinemaProvider(widget.projectId));
     final visualSettings = ref.watch(visualSettingsStorinemaProvider(widget.projectId));
@@ -532,7 +568,17 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
         projectData.finalVideoUrl != null &&
         projectData.finalVideoUrl!.isNotEmpty;
 
-    if (projectData != null && projectData.status == 'ASSETS_COMPLETE' && areAllScenesValid && !_hasAutoTriggeredRender && !_isTriggeringRender) {
+    // [PENJAGA ANTI-LOOP AUTO-RENDER]: Render otomatis HANYA di awal saat project baru
+    final bool hasAlreadyRendered = projectData != null && 
+        projectData.finalVideoUrl != null && 
+        projectData.finalVideoUrl!.isNotEmpty;
+
+    if (projectData != null && 
+        projectData.status == 'ASSETS_COMPLETE' && 
+        !hasAlreadyRendered && 
+        areAllScenesValid && 
+        !_hasAutoTriggeredRender && 
+        !_isTriggeringRender) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
         setState(() { _hasAutoTriggeredRender = true; _isTriggeringRender = true; });
@@ -562,11 +608,11 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
       data: AppTheme.darkTheme,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Review Project (Video AI)'),
+          title: Text(t('Review Project (Storinema)', 'Tinjau Proyek (Storinema)')),
           actions: [
             IconButton(
               icon: const Icon(Icons.tune),
-              tooltip: 'Visual Settings',
+              tooltip: t('Visual Settings', 'Pengaturan Visual'),
               onPressed: () {
                 _stopSequencePlayback();
                 _cancelUiRefreshTimer();
@@ -578,9 +624,9 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
         ),
         body: projectAsyncValue.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, stack) => Center(child: Text('Error loading project: $error')),
+          error: (error, stack) => Center(child: Text(t('Error loading project: $error', 'Gagal memuat proyek: $error'))),
           data: (project) {
-            if (project == null) return const Center(child: Text("Error: Proyek gagal dimuat.", style: TextStyle(color: Colors.red)));
+            if (project == null) return Center(child: Text(t("Error: Failed to load project.", "Error: Proyek gagal dimuat."), style: const TextStyle(color: Colors.red)));
 
             if (_isTriggeringRender && (
                 project.status == 'RENDERING' || 
@@ -596,17 +642,6 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
             final bool isRenderSuccess = project.status == 'RENDER_COMPLETED' && project.finalVideoUrl != null && project.finalVideoUrl!.isNotEmpty;
             final bool isRenderComplete = isRenderSuccess;
             final String? finalVideoUrl = project.finalVideoUrl;
-            
-            final bool canRender;
-            if (isRenderSuccess) {
-              canRender = false;
-            } else if (project.status == 'ASSETS_COMPLETE' || project.status == 'CREATE_RENDER_PACKET' ||
-                project.status == 'ASSETS_NEED_REFINEMENT' || project.status == 'ERROR_RENDER' ||
-                project.status == 'RENDER_START' || project.status == 'RENDER_READY') {
-              canRender = areAllScenesValid; 
-            } else {
-              canRender = false;
-            }
             
             final bool isWaitingForUrl = project.status == 'RENDER_COMPLETED' && 
                                          (project.finalVideoUrl == null || project.finalVideoUrl!.isEmpty);
@@ -633,298 +668,384 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
                 } else _startUiRefreshTimer();
               } else _cancelUiRefreshTimer();
             } else _cancelUiRefreshTimer();
-            
-            return Stack(
-              children: [
-                Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                      child: Text(visualSettings.titleSettings.text, style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.bold), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-                    ),
 
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxHeight: 250),
-                          child: AspectRatio(
-                            aspectRatio: aspectRatioValue,
-                            child: Container(
-                              decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400, width: 2.0), color: Colors.black87),
-                              child: ClipRRect(
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    AnimatedSwitcher(
-                                      duration: Duration(milliseconds: (transitionDurationSeconds * 1000).round()),
-                                      transitionBuilder: (Widget child, Animation<double> animation) => FadeTransition(opacity: animation, child: child),
-                                      child: _buildVideoViewer(_currentMediaUrl, key: ValueKey<String?>(_currentMediaUrl)),
-                                    ),
-                                    AnimatedOpacity(
-                                      key: ValueKey('title_${_showTitleOverlay}'),
-                                      opacity: _showTitleOverlay ? 1.0 : 0.0,
-                                      duration: const Duration(milliseconds: 300),
-                                      child: Visibility(
-                                        visible: _showTitleOverlay,
-                                        maintainState: false, maintainAnimation: false,
-                                        child: Align(
-                                          alignment: Alignment(0.0, visualSettings.titleSettings.verticalAlignment),
-                                          child: FractionallySizedBox(
-                                            widthFactor: visualSettings.titleSettings.textBlockWidthFactor,
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                              decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(4)),
-                                              child: Text(visualSettings.titleSettings.text, style: _getTextStyle(visualSettings.titleSettings.baseFontSize, visualSettings.titleSettings.color), textAlign: TextAlign.center, maxLines: visualSettings.titleSettings.maxLines, overflow: TextOverflow.ellipsis),
+            // --- [STREAM BUILDER: MEMBACA MAP DATA FIRESTORE SECARA LANGSUNG & REALTIME] ---
+            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance.collection('projects_storinema').doc(widget.projectId).snapshots(),
+              builder: (context, projectSnap) {
+                final Map<String, dynamic>? projectMap = projectSnap.data?.data();
+                final bool needsReRender = projectMap?['needsReRender'] ?? false;
+
+                // LOGIKA TOMBOL RENDER (ON saat klip baru selesai & OFF setelah render selesai)
+                final bool canRender;
+                if (isProjectRendering) {
+                  canRender = false;
+                } else if (needsReRender) {
+                  canRender = areAllScenesValid;
+                } else if (project.status == 'ASSETS_COMPLETE' && (project.finalVideoUrl == null || project.finalVideoUrl!.isEmpty)) {
+                  canRender = areAllScenesValid;
+                } else if (project.status == 'ERROR_RENDER') {
+                  canRender = areAllScenesValid;
+                } else {
+                  canRender = false;
+                }
+
+                return Stack(
+                  children: [
+                    Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                          child: Text(visualSettings.titleSettings.text, style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.bold), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
+                        ),
+
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+                          child: Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxHeight: 250),
+                              child: AspectRatio(
+                                aspectRatio: aspectRatioValue,
+                                child: Container(
+                                  decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade400, width: 2.0), color: Colors.black87),
+                                  child: ClipRRect(
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        AnimatedSwitcher(
+                                          duration: Duration(milliseconds: (transitionDurationSeconds * 1000).round()),
+                                          transitionBuilder: (Widget child, Animation<double> animation) => FadeTransition(opacity: animation, child: child),
+                                          child: _buildVideoViewer(_currentMediaUrl, key: ValueKey<String?>(_currentMediaUrl)),
+                                        ),
+                                        AnimatedOpacity(
+                                          key: ValueKey('title_${_showTitleOverlay}'),
+                                          opacity: _showTitleOverlay ? 1.0 : 0.0,
+                                          duration: const Duration(milliseconds: 300),
+                                          child: Visibility(
+                                            visible: _showTitleOverlay,
+                                            maintainState: false, maintainAnimation: false,
+                                            child: Align(
+                                              alignment: Alignment(0.0, visualSettings.titleSettings.verticalAlignment),
+                                              child: FractionallySizedBox(
+                                                widthFactor: visualSettings.titleSettings.textBlockWidthFactor,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                  decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(4)),
+                                                  child: Text(visualSettings.titleSettings.text, style: _getTextStyle(visualSettings.titleSettings.baseFontSize, visualSettings.titleSettings.color), textAlign: TextAlign.center, maxLines: visualSettings.titleSettings.maxLines, overflow: TextOverflow.ellipsis),
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    ),
-                                    AnimatedOpacity(
-                                      key: ValueKey('desc_${_showDescriptionOverlay}'),
-                                      opacity: _showDescriptionOverlay ? 1.0 : 0.0,
-                                      duration: const Duration(milliseconds: 300),
-                                      child: Visibility(
-                                        visible: _showDescriptionOverlay,
-                                        maintainState: false, maintainAnimation: false,
-                                        child: Align(
-                                          alignment: Alignment(0.0, visualSettings.descriptionSettings.verticalAlignment),
-                                          child: FractionallySizedBox(
-                                            widthFactor: visualSettings.descriptionSettings.textBlockWidthFactor,
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                              decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(4)),
-                                              child: Text(visualSettings.descriptionSettings.text, style: _getTextStyle(visualSettings.descriptionSettings.baseFontSize, visualSettings.descriptionSettings.color), textAlign: TextAlign.center, maxLines: visualSettings.descriptionSettings.maxLines, overflow: TextOverflow.ellipsis),
+                                        AnimatedOpacity(
+                                          key: ValueKey('desc_${_showDescriptionOverlay}'),
+                                          opacity: _showDescriptionOverlay ? 1.0 : 0.0,
+                                          duration: const Duration(milliseconds: 300),
+                                          child: Visibility(
+                                            visible: _showDescriptionOverlay,
+                                            maintainState: false, maintainAnimation: false,
+                                            child: Align(
+                                              alignment: Alignment(0.0, visualSettings.descriptionSettings.verticalAlignment),
+                                              child: FractionallySizedBox(
+                                                widthFactor: visualSettings.descriptionSettings.textBlockWidthFactor,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                  decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(4)),
+                                                  child: Text(visualSettings.descriptionSettings.text, style: _getTextStyle(visualSettings.descriptionSettings.baseFontSize, visualSettings.descriptionSettings.color), textAlign: TextAlign.center, maxLines: visualSettings.descriptionSettings.maxLines, overflow: TextOverflow.ellipsis),
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    ),
-                                    Align(
-                                      alignment: Alignment(0.0, visualSettings.subtitleVerticalAlignment),
-                                      child: AnimatedOpacity(
-                                        opacity: _showSubtitleOverlay ? 1.0 : 0.0,
-                                        duration: const Duration(milliseconds: 200),
-                                        child: Visibility(
-                                          visible: _showSubtitleOverlay,
-                                          child: FractionallySizedBox(
-                                            widthFactor: visualSettings.subtitleBlockWidthFactor,
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                              decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(4)),
-                                              child: Text(_currentSubtitleText, style: TextStyle(fontSize: (visualSettings.subtitleBaseFontSize) * previewScaleFactor, color: Colors.white, shadows: const [Shadow(blurRadius: 3.0, color: Colors.black87, offset: Offset(1.5, 1.5))]), textAlign: TextAlign.center, maxLines: visualSettings.subtitleMaxLines, overflow: TextOverflow.ellipsis),
+                                        Align(
+                                          alignment: Alignment(0.0, visualSettings.subtitleVerticalAlignment),
+                                          child: AnimatedOpacity(
+                                            opacity: _showSubtitleOverlay ? 1.0 : 0.0,
+                                            duration: const Duration(milliseconds: 200),
+                                            child: Visibility(
+                                              visible: _showSubtitleOverlay,
+                                              child: FractionallySizedBox(
+                                                widthFactor: visualSettings.subtitleBlockWidthFactor,
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                                  decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(4)),
+                                                  child: Text(_currentSubtitleText, style: TextStyle(fontSize: (visualSettings.subtitleBaseFontSize) * previewScaleFactor, color: Colors.white, shadows: const [Shadow(blurRadius: 3.0, color: Colors.black87, offset: Offset(1.5, 1.5))]), textAlign: TextAlign.center, maxLines: visualSettings.subtitleMaxLines, overflow: TextOverflow.ellipsis),
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
+                                      ],
                                     ),
-                                  ],
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
 
-                    if (isRenderComplete && finalVideoUrl != null && finalVideoUrl.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
-                        child: ElevatedButton.icon(
-                          onPressed: () => _launchURL(finalVideoUrl), 
-                          icon: const Icon(Icons.download_for_offline),
-                          label: const Text('DOWNLOAD FINAL VIDEO'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green.shade700, 
-                            foregroundColor: Colors.white, 
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)
+                        if (isRenderComplete && finalVideoUrl != null && finalVideoUrl.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
+                            child: ElevatedButton.icon(
+                              onPressed: () => _launchURL(finalVideoUrl), 
+                              icon: const Icon(Icons.open_in_new),
+                              label: Text(t('DOWNLOAD FINAL VIDEO', 'UNDUH VIDEO FINAL')),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green.shade700, 
+                                foregroundColor: Colors.white, 
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)
+                              ),
+                            ),
+                          ),
+
+                        const Divider(height: 1, thickness: 1),
+
+                        Expanded(
+                          child: processedTimelineAsync.when(
+                            skipLoadingOnReload: true,
+                            loading: () => const Center(child: CircularProgressIndicator()),
+                            error: (error, stack) => Center(child: Text(t('Error loading timeline data: $error', 'Gagal memuat data timeline: $error'))),
+                            data: (timelineData) {
+                              _currentScenes = timelineData.scenes.map((e) => e.originalScene).toList();
+                              _currentProcessedScenes = timelineData.scenes;
+                              final scenes = _currentScenes;
+
+                              if (_currentMediaUrl == null && scenes.isNotEmpty) {
+                                 _currentMediaUrl = (scenes.first as dynamic).videoUrl; 
+                                 if (_currentMediaUrl != null && _currentMediaUrl!.isNotEmpty) {
+                                   WidgetsBinding.instance.addPostFrameCallback((_) {
+                                     if (mounted) _initializeFirstPreview(_currentMediaUrl!);
+                                   });
+                                 }
+                              }
+
+                              if (scenes.isEmpty) return Center(child: Text(t("Generating scenes...", "Membuat adegan...")));
+
+                              // --- [BANNER PERINGATAN SCENE ERROR] ---
+                              final bool hasErrorScenes = scenes.any((s) => s.status != null && s.status!.startsWith('ERROR'));
+                              final bool showWarningBanner = (project.status == 'ASSETS_NEED_REFINEMENT' || hasErrorScenes) && !_isTriggeringRender && !isProjectRendering;
+                              
+                              return Column(
+                                children: [
+                                  if (showWarningBanner)
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                      color: Colors.orange.shade800,
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 28),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(
+                                              t(
+                                                "Some scenes failed to process. Please tap the Regenerate button on the affected scene below.",
+                                                "Beberapa scene gagal diproses. Silakan tekan tombol Regenerate pada scene yang bermasalah di bawah ini."
+                                              ),
+                                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  Expanded(
+                                    child: ListView.builder(
+                                      itemCount: scenes.length,
+                                      itemBuilder: (context, index) {
+                                        final sceneIndex = index;
+                                        final scene = scenes[sceneIndex];
+                                        final isCurrentlyPlaying = _isPlayingSequence && !_isPlayingIntroBgm && _currentSequenceIndex == sceneIndex;
+                                        final bool isSelectedManually = ref.watch(selectedSceneStorinemaProvider)?.id == scene.id && !_isPlayingSequence;
+
+                                        final bool isSceneInError = scene.status != null && scene.status!.startsWith('ERROR'); 
+                                        final bool showRegenerateButton = isSceneInError;
+                                        final bool isProjectBusy = (project.status?.contains('GENERATING') ?? false) || 
+                                                                   (project.status == 'RENDER_READY') || 
+                                                                   (project.status == 'RENDER_START') || 
+                                                                   (project.status == 'RENDERING') ||
+                                                                   (scene.status == 'PENDING_REFINEMENT') ||
+                                                                   (scene.status == 'GENERATING_VIDEO');
+                                        final bool canRegenerate = showRegenerateButton && !isProjectBusy;
+                                        
+                                        final String cardVideoUrl = (scene as dynamic).videoUrl ?? '';
+                                        final String cardAudioUrl = (scene as dynamic).ttsAudioUrl ?? '';
+                                                
+                                        return Card(
+                                          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          color: isCurrentlyPlaying ? Colors.lightBlue[50] : (isSelectedManually ? Colors.grey[200] : null), 
+                                          elevation: isCurrentlyPlaying ? 4 : (isSelectedManually ? 2 : 1),
+                                          child: InkWell(
+                                            onTap: () {
+                                              if (_isPlayingSequence) _stopSequencePlayback(resetIndex: false);
+                                              ref.read(selectedSceneStorinemaProvider.notifier).state = scene;
+                                              setState(() {
+                                                _currentSequenceIndex = sceneIndex;
+                                                _currentMediaUrl = cardVideoUrl;
+                                              });
+                                            },
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(8.0),
+                                              child: Row(
+                                                children: [
+                                                  CircleAvatar(radius: 12, backgroundColor: Colors.grey[400], child: Text('${index + 1}', style: const TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold))),
+                                                  const SizedBox(width: 12),
+                                                  Container(
+                                                    width: 80, height: 60,
+                                                    decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(8)),
+                                                    child: Center(
+                                                      child: cardVideoUrl.isNotEmpty
+                                                        ? const Icon(Icons.movie_creation, color: Colors.blueAccent, size: 30)
+                                                        : const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 3.0)),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  _buildScenePlayButton(scene, sceneIndex, cardVideoUrl, cardAudioUrl),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Text(scene.segmentText ?? "", style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 14, color: isCurrentlyPlaying ? Colors.black87 : null), maxLines: 2, overflow: TextOverflow.ellipsis),
+                                                        const SizedBox(height: 4),
+                                                        Text(scene.status ?? "Unknown", style: TextStyle(fontSize: 12, color: _getStatusColor(scene.status), fontWeight: FontWeight.bold)),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  // --- [TOMBOL REGENERATE ORANYE KHUSUS ERROR SCENE] ---
+                                                  Visibility(
+                                                    visible: showRegenerateButton,
+                                                    child: Container(
+                                                      decoration: BoxDecoration(
+                                                        color: canRegenerate ? Colors.orange.withOpacity(0.2) : Colors.transparent,
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                      child: IconButton(
+                                                        tooltip: t('Regenerate AI Video (Error Recovery)', 'Regenerate Video AI (Pemulihan Error)'),
+                                                        icon: Icon(
+                                                          Icons.refresh, 
+                                                          color: canRegenerate ? Colors.deepOrange : Colors.grey[400], 
+                                                          size: 26, 
+                                                        ), 
+                                                        onPressed: !canRegenerate ? null : () { 
+                                                          _stopSequencePlayback(); 
+                                                          _showRegenerateDialog(scene); 
+                                                        }
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  // --- [TOMBOL DOWNLOAD HIJAU NEON MODERN (TAB BARU)] ---
+                                                  IconButton(
+                                                    padding: EdgeInsets.zero,
+                                                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                                    tooltip: t('Download Clip (New Tab)', 'Unduh Klip (Tab Baru)'),
+                                                    icon: Icon(
+                                                      Icons.download_rounded, 
+                                                      color: cardVideoUrl.isNotEmpty ? Colors.greenAccent.shade400 : Colors.grey[700], 
+                                                      size: 24
+                                                    ),
+                                                    onPressed: cardVideoUrl.isNotEmpty
+                                                        ? () => _launchURL(cardVideoUrl)
+                                                        : null,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  // --- [TOMBOL REGENERATE BIRU ELEGAN (BERBAYAR 1 SEGMEN)] ---
+                                                  IconButton(
+                                                    padding: EdgeInsets.zero,
+                                                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                                    tooltip: t('Regenerate Clip', 'Regenerate Klip'),
+                                                    icon: Icon(
+                                                      Icons.refresh_rounded, 
+                                                      color: isProjectBusy ? Colors.grey[700] : Colors.blueAccent, 
+                                                      size: 26
+                                                    ),
+                                                    onPressed: isProjectBusy ? null : () {
+                                                      _stopSequencePlayback();
+                                                      _showPaidRegenerateDialog(scene, project, projectMap);
+                                                    },
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  // --- [TOMBOL LAPOR MERAH (BENDERA)] ---
+                                                  IconButton(
+                                                    padding: EdgeInsets.zero,
+                                                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                                    tooltip: t('Report Scene', 'Lapor Scene'),
+                                                    icon: const Icon(Icons.flag_outlined, color: Colors.redAccent, size: 20),
+                                                    onPressed: () => _showSceneReportDialog(scene, cardVideoUrl),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                      children: [
+                                        ElevatedButton.icon(
+                                          onPressed: !canPlayOrReplay ? null : () { if (_isPlayingSequence) _pauseSequencePlayback(); else _startOrResumeSequencePlayback(); },
+                                          icon: Icon(isCalculating ? Icons.hourglass_top : (_isPlayingSequence ? Icons.pause : Icons.play_arrow)),
+                                          label: Text(isCalculating ? t('CALCULATING...', 'MENGHITUNG...') : (_isPlayingSequence ? t('PAUSE', 'JEDA') : t('PLAY ALL', 'PUTAR SEMUA'))),
+                                          style: ElevatedButton.styleFrom(backgroundColor: _isPlayingSequence ? Colors.orangeAccent : Theme.of(context).colorScheme.primary, foregroundColor: Colors.white),
+                                        ),
+                                        IconButton(icon: const Icon(Icons.replay), iconSize: 32, color: canPlayOrReplay ? Theme.of(context).colorScheme.secondary : Colors.grey, onPressed: !canPlayOrReplay ? null : _replaySequence),
+                                        ElevatedButton(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.red.shade700, 
+                                            foregroundColor: Colors.white,
+                                            disabledBackgroundColor: Colors.grey[800],
+                                            disabledForegroundColor: Colors.grey[600],
+                                          ),
+                                          onPressed: !canRender ? null : () {
+                                            setState(() => _hasDismissedRenderPopup = true);
+                                            _stopSequencePlayback();
+                                            showDialog(context: context, builder: (ctx) => AlertDialog(
+                                              title: Text(t('Start Video Render?', 'Mulai Render Video?')),
+                                              content: Text(t("This will assemble all final video assets.", "Ini akan merakit semua aset video final.")),
+                                              actions: [
+                                                TextButton(
+                                                  style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+                                                  child: Text(t('Cancel', 'Batal')), 
+                                                  onPressed: () => Navigator.pop(ctx)
+                                                ),
+                                                TextButton(
+                                                  child: Text(t('RENDER', 'RENDER'), style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)), 
+                                                  onPressed: () async {
+                                                    Navigator.pop(ctx);
+                                                    setState(() => _isTriggeringRender = true);
+                                                    await prepareAndSaveRenderStorinemaPacket(ref, widget.projectId);
+                                                    await ref.read(firestoreStorinemaServiceProvider).updateProject(widget.projectId, {
+                                                      'status': 'RENDER_READY', 
+                                                      'needsReRender': false,
+                                                      'renderReadyAt': FieldValue.serverTimestamp()
+                                                    });
+                                                  }
+                                                ),
+                                              ],
+                                            ));
+                                          },
+                                          child: Text(t('RENDER', 'RENDER')),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           ),
                         ),
-                      ),
-
-                    const Divider(height: 1, thickness: 1),
-
-                    Expanded(
-                      child: processedTimelineAsync.when(
-                        loading: () => const Center(child: CircularProgressIndicator()),
-                        error: (error, stack) => Center(child: Text('Error loading timeline data: $error')),
-                        data: (timelineData) {
-                          _currentScenes = timelineData.scenes.map((e) => e.originalScene).toList();
-                          _currentProcessedScenes = timelineData.scenes;
-                          final scenes = _currentScenes;
-
-                          if (_currentMediaUrl == null && scenes.isNotEmpty) {
-                             _currentMediaUrl = (scenes.first as dynamic).videoUrl; 
-                             if (_currentMediaUrl != null && _currentMediaUrl!.isNotEmpty) {
-                               WidgetsBinding.instance.addPostFrameCallback((_) {
-                                 if (mounted) _initializeFirstPreview(_currentMediaUrl!);
-                               });
-                             }
-                          }
-
-                          if (scenes.isEmpty) return const Center(child: Text("Generating scenes..."));
-
-                          // --- [SUNTIKAN BANNER ORANYE PINTAR] ---
-                          final bool hasErrorScenes = scenes.any((s) => s.status != null && s.status!.startsWith('ERROR'));
-                          final bool showWarningBanner = (project.status == 'ASSETS_NEED_REFINEMENT' || hasErrorScenes) && !_isTriggeringRender && !isProjectRendering;
-                          
-                          return Column(
-                            children: [
-                              if (showWarningBanner)
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                  color: Colors.orange.shade800, // Warna Oranye Sesuai Permintaan
-                                  child: const Row(
-                                    children: [
-                                      Icon(Icons.warning_amber_rounded, color: Colors.white, size: 28),
-                                      SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          "Beberapa scene gagal diproses. Silakan tekan tombol Regenerate (Oranye) pada scene yang bermasalah di bawah ini.",
-                                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              // ----------------------------------------
-                              Expanded(
-                                child: ListView.builder(
-                                  itemCount: scenes.length,
-                                  itemBuilder: (context, index) {
-                                    final sceneIndex = index;
-                                    final scene = scenes[sceneIndex];
-                                    final isCurrentlyPlaying = _isPlayingSequence && !_isPlayingIntroBgm && _currentSequenceIndex == sceneIndex;
-                                    final bool isSelectedManually = ref.watch(selectedSceneStorinemaProvider)?.id == scene.id && !_isPlayingSequence;
-
-                                    final bool isSceneInError = scene.status != null && scene.status!.startsWith('ERROR'); 
-                                    final bool showRegenerateButton = isSceneInError;
-                                    final bool isProjectBusy = (project.status?.contains('GENERATING') ?? false) || (project.status == 'RENDER_READY') || (project.status == 'RENDER_START') || (project.status == 'RENDERING');
-                                    final bool canRegenerate = showRegenerateButton && !isProjectBusy;
-                                    
-                                    final String cardVideoUrl = (scene as dynamic).videoUrl ?? '';
-                                    final String cardAudioUrl = (scene as dynamic).ttsAudioUrl ?? '';
-                                            
-                                    return Card(
-                                      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      color: isCurrentlyPlaying ? Colors.lightBlue[50] : (isSelectedManually ? Colors.grey[200] : null), 
-                                      elevation: isCurrentlyPlaying ? 4 : (isSelectedManually ? 2 : 1),
-                                      child: InkWell(
-                                        onTap: () {
-                                          if (_isPlayingSequence) _stopSequencePlayback(resetIndex: false);
-                                          ref.read(selectedSceneStorinemaProvider.notifier).state = scene;
-                                          setState(() {
-                                            _currentSequenceIndex = sceneIndex;
-                                            _currentMediaUrl = cardVideoUrl;
-                                          });
-                                        },
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(8.0),
-                                          child: Row(
-                                            children: [
-                                              CircleAvatar(radius: 12, backgroundColor: Colors.grey[400], child: Text('${index + 1}', style: const TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold))),
-                                              const SizedBox(width: 12),
-                                              Container(
-                                                width: 80, height: 60,
-                                                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(8)),
-                                                child: Center(
-                                                  child: cardVideoUrl.isNotEmpty
-                                                    ? const Icon(Icons.movie_creation, color: Colors.blueAccent, size: 30)
-                                                    : const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 3.0)),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12),
-                                              _buildScenePlayButton(scene, sceneIndex, cardVideoUrl, cardAudioUrl),
-                                              const SizedBox(width: 12),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(scene.segmentText ?? "", style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 14, color: isCurrentlyPlaying ? Colors.black87 : null), maxLines: 2, overflow: TextOverflow.ellipsis),
-                                                    const SizedBox(height: 4),
-                                                    Text(scene.status ?? "Unknown", style: TextStyle(fontSize: 12, color: _getStatusColor(scene.status), fontWeight: FontWeight.bold)),
-                                                  ],
-                                                ),
-                                              ),
-                                              Visibility(
-                                                visible: showRegenerateButton,
-                                                child: Container(
-                                                  decoration: BoxDecoration(
-                                                    color: canRegenerate ? Colors.orange.withOpacity(0.2) : Colors.transparent,
-                                                    shape: BoxShape.circle,
-                                                  ),
-                                                  child: IconButton(
-                                                    tooltip: 'Regenerate Video AI',
-                                                    icon: Icon(
-                                                      Icons.refresh, 
-                                                      color: canRegenerate ? Colors.deepOrange : Colors.grey[400], 
-                                                      size: 26, 
-                                                    ), 
-                                                    onPressed: !canRegenerate ? null : () { 
-                                                      _stopSequencePlayback(); 
-                                                      _showRegenerateDialog(scene); 
-                                                    }
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              IconButton(icon: const Icon(Icons.flag_outlined, color: Colors.redAccent, size: 20), onPressed: () => _showSceneReportDialog(scene, cardVideoUrl)),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    ElevatedButton.icon(
-                                      onPressed: !canPlayOrReplay ? null : () { if (_isPlayingSequence) _pauseSequencePlayback(); else _startOrResumeSequencePlayback(); },
-                                      icon: Icon(isCalculating ? Icons.hourglass_top : (_isPlayingSequence ? Icons.pause : Icons.play_arrow)),
-                                      label: Text(isCalculating ? 'CALCULATING...' : (_isPlayingSequence ? 'PAUSE' : 'PLAY ALL')),
-                                      style: ElevatedButton.styleFrom(backgroundColor: _isPlayingSequence ? Colors.orangeAccent : Theme.of(context).colorScheme.primary, foregroundColor: Colors.white),
-                                    ),
-                                    IconButton(icon: const Icon(Icons.replay), iconSize: 32, color: canPlayOrReplay ? Theme.of(context).colorScheme.secondary : Colors.grey, onPressed: !canPlayOrReplay ? null : _replaySequence),
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
-                                      onPressed: !canRender ? null : () {
-                                        setState(() => _hasDismissedRenderPopup = true);
-                                        _stopSequencePlayback();
-                                        showDialog(context: context, builder: (ctx) => AlertDialog(
-                                          title: const Text('Start Video Render?'),
-                                          content: const Text("This will assemble all final video assets."),
-                                          actions: [
-                                            TextButton(child: const Text('Cancel'), onPressed: () => Navigator.pop(ctx)),
-                                            TextButton(child: const Text('RENDER', style: TextStyle(color: Colors.red)), onPressed: () async {
-                                              Navigator.pop(ctx);
-                                              setState(() => _isTriggeringRender = true);
-                                              await prepareAndSaveRenderStorinemaPacket(ref, widget.projectId);
-                                              await ref.read(firestoreStorinemaServiceProvider).updateProject(widget.projectId, {'status': 'RENDER_READY', 'renderReadyAt': FieldValue.serverTimestamp()});
-                                            }),
-                                          ],
-                                        ));
-                                      },
-                                      child: const Text('RENDER'),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
+                      ],
                     ),
+                    if (isProjectRendering) _buildRenderingOverlay(secondsRemainingForOverlay, hasValidStartTime, isWaitingForUrl),
                   ],
-                ),
-                if (isProjectRendering) _buildRenderingOverlay(secondsRemainingForOverlay, hasValidStartTime, isWaitingForUrl),
-              ],
+                );
+              }
             );
           },
         ),
@@ -957,7 +1078,6 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
     }
   }
 
-  // [SUNTIKAN BARU]: Mencegah Layar Muter-Muter di Awal
   void _initializeFirstPreview(String url) {
     if (_videoController != null) return; 
     
@@ -970,32 +1090,211 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
       });
   }
 
-  void _showRegenerateDialog(SceneStorinema scene) {
+  // --- [DIALOG REGENERATE KLIP BERBAYAR (1 SEGMEN TOKEN) - BILINGUAL & ANTI-CRASH] ---
+  void _showPaidRegenerateDialog(SceneStorinema scene, dynamic project, [Map<String, dynamic>? projectMap]) {
+    final currentLocale = ref.read(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
+    final config = ref.read(appConfigProvider).valueOrNull;
+    final user = ref.read(firestoreUserProvider).valueOrNull;
+    final int userBalance = user?.tokenBalance ?? 0;
+
+    String costLevel = 'Standard';
+    String resolution = '720p';
+
+    if (projectMap != null) {
+      costLevel = projectMap['costLevel']?.toString() ?? projectMap['visualQuality']?.toString() ?? 'Standard';
+      resolution = projectMap['resolution']?.toString() ?? '720p';
+    } else {
+      try {
+        costLevel = (project as dynamic).costLevel?.toString() ?? (project as dynamic).visualQuality?.toString() ?? 'Standard';
+      } catch (_) {
+        costLevel = 'Standard';
+      }
+      try {
+        resolution = (project as dynamic).resolution?.toString() ?? '720p';
+      } catch (_) {
+        resolution = '720p';
+      }
+    }
+
+    int costPerScene = 0;
+    if (config != null) {
+      final sCosts = config.costs.storinemaCosts;
+      if (costLevel == 'High') {
+        costPerScene = resolution == '1080p' ? sCosts.highPerSegment1080p : sCosts.highPerSegment720p;
+      } else if (costLevel == 'Good') {
+        costPerScene = resolution == '1080p' ? sCosts.goodPerSegment1080p : sCosts.goodPerSegment720p;
+      } else {
+        costPerScene = resolution == '1080p' ? sCosts.standardPerSegment1080p : sCosts.standardPerSegment720p;
+      }
+    } else {
+      if (costLevel == 'High') {
+        costPerScene = resolution == '1080p' ? 4500 : 4400;
+      } else if (costLevel == 'Good') {
+        costPerScene = resolution == '1080p' ? 2200 : 2000;
+      } else {
+        costPerScene = resolution == '1080p' ? 1870 : 720;
+      }
+    }
+
+    final bool hasEnoughTokens = userBalance >= costPerScene;
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Regenerate AI Video?'),
+        title: Row(
+          children: [
+            const Icon(Icons.refresh_rounded, color: Colors.blueAccent),
+            const SizedBox(width: 8),
+            Text(t('Regenerate Clip ${scene.segmentIndex + 1}?', 'Regenerate Klip ${scene.segmentIndex + 1}?')),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Re-create Video AI for scene ${scene.segmentIndex + 1}?'),
-            const SizedBox(height: 12),
-            const Text(
-              'Catatan Anti-Gagal: Elemen sensitif otomatis dirubah ke representasi implisit, sambil tetap mempertahankan ciri fisik karakter, waktu, dan tempat.',
-              style: TextStyle(fontSize: 12, color: Colors.orange, fontStyle: FontStyle.italic),
+            Text(
+              t(
+                'Do you want to re-create Video AI for clip ${scene.segmentIndex + 1}?',
+                'Apakah Anda ingin membuat ulang Video AI untuk klip ke-${scene.segmentIndex + 1}?'
+              ),
+              style: const TextStyle(fontSize: 14, color: Colors.white70),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: hasEnoughTokens ? Colors.blue.withOpacity(0.08) : Colors.red.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: hasEnoughTokens ? Colors.blueAccent.withOpacity(0.3) : Colors.redAccent.withOpacity(0.3),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.token, size: 16, color: hasEnoughTokens ? Colors.amber : Colors.redAccent),
+                      const SizedBox(width: 6),
+                      Text(
+                        t('Cost: $costPerScene Tokens (1 Clip)', 'Biaya: $costPerScene Token (1 Klip)'),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: hasEnoughTokens ? Colors.white : Colors.redAccent,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    t('Your Token Balance: $userBalance Tokens', 'Saldo Token Anda: $userBalance Token'),
+                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                  ),
+                  if (!hasEnoughTokens) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      t(
+                        'Insufficient token balance to regenerate this clip. Please top up your tokens.',
+                        'Saldo token tidak cukup untuk regenerasi klip ini. Silakan top up token terlebih dahulu.'
+                      ),
+                      style: const TextStyle(fontSize: 11, color: Colors.redAccent, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ],
         ),
         actions: [
-          TextButton(child: const Text('Cancel'), onPressed: () => Navigator.pop(ctx)),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: Colors.deepOrange), // [PERBAIKAN]: Mengubah warna teks tombol aksi menjadi Oranye agar jelas & senada
-            child: const Text('Regenerate (Pruned)'), 
+            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(t('Cancel', 'Batal')),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blueAccent,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: Colors.grey[800],
+            ),
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: Text(t('Regenerate Clip', 'Regenerate Klip')),
+            onPressed: !hasEnoughTokens
+                ? null
+                : () async {
+                    Navigator.pop(ctx);
+                    _stopSequencePlayback();
+
+                    try {
+                      await FirebaseFirestore.instance
+                          .collection('projects_storinema')
+                          .doc(widget.projectId)
+                          .update({
+                            'needsReRender': true,
+                          });
+                    } catch (e) {
+                      logger.error("Failed to update needsReRender: $e");
+                    }
+
+                    ref.read(firestoreStorinemaServiceProvider).requestVideoRegeneration(
+                      widget.projectId,
+                      scene.id,
+                    );
+
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(t(
+                            'Regenerating Clip ${scene.segmentIndex + 1} started (Cost: $costPerScene tokens)...',
+                            'Memulai regenerasi Klip ${scene.segmentIndex + 1} (Biaya: $costPerScene token)...'
+                          )),
+                          backgroundColor: Colors.blueAccent,
+                        ),
+                      );
+                    }
+                  },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showRegenerateDialog(SceneStorinema scene) {
+    final currentLocale = ref.read(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t('Regenerate AI Video?', 'Regenerate Video AI?')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(t('Re-create Video AI for scene ${scene.segmentIndex + 1}?', 'Buat ulang Video AI untuk scene ${scene.segmentIndex + 1}?')),
+            const SizedBox(height: 12),
+            Text(
+              t(
+                'Safety Note: Sensitive elements will be automatically converted to implicit representation while preserving physical traits, time, and setting.',
+                'Catatan Anti-Gagal: Elemen sensitif otomatis dirubah ke representasi implisit, sambil tetap mempertahankan ciri fisik karakter, waktu, dan tempat.'
+              ),
+              style: const TextStyle(fontSize: 12, color: Colors.orange, fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(child: Text(t('Cancel', 'Batal')), onPressed: () => Navigator.pop(ctx)),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.deepOrange),
+            child: Text(t('Regenerate (Pruned)', 'Regenerate (Pruned)')), 
             onPressed: () async {
               Navigator.pop(ctx);
               
-              // --- [TRIGGER BACKEND UNTUK AI AUTO-HEALING PINTAR] ---
               String promptToPrune = scene.refinedPrompt ?? scene.rawPrompt ?? "";
               
               if (promptToPrune.isNotEmpty) {
@@ -1009,11 +1308,17 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
                         'status': 'PENDING_REFINEMENT',
                         'errorDetail': FieldValue.delete(), 
                       });
+
+                  await FirebaseFirestore.instance
+                      .collection('projects_storinema')
+                      .doc(widget.projectId)
+                      .update({
+                        'needsReRender': true,
+                      });
                 } catch (e) {
-                  logger.error("Gagal melakukan trigger refinement ke Firestore: $e");
+                  logger.error("Failed to trigger refinement: $e");
                 }
               }
-              // --- [AKHIR TRIGGER BACKEND] ---
 
               ref.read(firestoreStorinemaServiceProvider).requestVideoRegeneration(widget.projectId, scene.id);
             }
@@ -1071,7 +1376,7 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
               }
             }).catchError((e) {
               logger.error("Error manual play: $e");
-              if (mounted) setState(() {}); // Menghentikan loading muter jika error
+              if (mounted) setState(() {});
             });
         }
       },
@@ -1080,23 +1385,38 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
 //................................................................//
 
 //No ke-7.........................................................//
-// REPORT SCENE LOGIC                                             //
+// REPORT SCENE LOGIC (BILINGUAL / ENGLISH)                       //
   void _showSceneReportDialog(SceneStorinema scene, String videoUrl) {
+    final currentLocale = ref.read(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     final TextEditingController reasonController = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text("Lapor Scene ${scene.segmentIndex + 1}"),
+        title: Text(t("Report Scene ${scene.segmentIndex + 1}", "Lapor Scene ${scene.segmentIndex + 1}")),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Apakah video AI ini melanggar kebijakan?", style: TextStyle(fontSize: 14)),
-            TextField(controller: reasonController, maxLines: 3),
+            Text(
+              t("Does this AI video violate safety or content policies?", "Apakah video AI ini melanggar kebijakan keamanan atau konten?"), 
+              style: const TextStyle(fontSize: 14)
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: reasonController, 
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: t("Enter report reason...", "Masukkan alasan pelaporan..."),
+                border: const OutlineInputBorder(),
+              ),
+            ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Batal")),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(t("Cancel", "Batal"))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () {
@@ -1111,7 +1431,7 @@ class _TimelineReviewStorinemaScreenState extends ConsumerState<TimelineReviewSt
                 'userId': userId,
               }).then((_) { if (mounted) Navigator.pop(ctx); });
             },
-            child: const Text("Lapor"),
+            child: Text(t("Report", "Lapor")),
           ),
         ],
       ),

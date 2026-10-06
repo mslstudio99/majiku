@@ -1,10 +1,11 @@
-//......................................................//
-// LIB/SCREENS/OTHER_TOOLS_HISTORY_SCREEN.DART          //
-// LAYAR HISTORI OTHER TOOLS (FITUR SEKUNDER)           //
-//......................................................//
+//================================================================//
+// LIB/SCREENS/OTHER_TOOLS_HISTORY_SCREEN.DART                    //
+// LAYAR HISTORI OTHER TOOLS (FITUR SEKUNDER MAJIKU)              //
+// GRID MENU RIWAYAT NARAKU AI SUITE TERMASUK TEXT TO SPEECH      //
+//================================================================//
 
-// No ke-1 - IMPOR DEPENDENSI & LAYAR TERKAIT           //
-// Mengimpor library dan layar histori yang dipindahkan //
+//No ke-1: IMPOR DEPENDENSI & LAYAR HISTORI                       //
+//IMPORT MATERIAL, THEME & DAFTAR LAYAR RIWAYAT NARAKU            //
 import 'package:flutter/material.dart';
 
 // --- Impor Layar Histori Naraku ---
@@ -12,13 +13,15 @@ import '../screens_naraku/history_t2image_screen.dart';
 import '../screens_naraku/history_t2video_screen.dart';
 import '../screens_naraku/history_image2video_screen.dart';
 import '../screens_naraku/history_t2video-plus_screen.dart';
+import '../screens_naraku/history_t2speech_screen.dart'; // [BARU] Layar Histori T2Speech
 
 // --- Impor Tema ---
 import '../theme/app_theme.dart';
-// Penutup Blok //
+// END OF BLOK 1 //
+//================================================================//
 
-// No ke-2 - WIDGET OTHER TOOLS HISTORY SCREEN          //
-// Layar Stateless untuk menampung grid histori tambahan//
+//No ke-2: WIDGET OTHER TOOLS HISTORY SCREEN & LAYOUT DASAR       //
+//SCAFFOLD, GRADIENT BACKGROUND & SCROLL CONTAINER RIWAYAT        //
 class OtherToolsHistoryScreen extends StatelessWidget {
   const OtherToolsHistoryScreen({super.key});
 
@@ -56,16 +59,18 @@ class OtherToolsHistoryScreen extends StatelessWidget {
       ),
     );
   }
-// Penutup Blok //
+// END OF BLOK 2 //
+//================================================================//
 
-// No ke-3 - BUILDER WIDGET & KOMPONEN GRID             //
-// Merender Layout Grid dan Tombol Identik              //
+//No ke-3: BUILDER WIDGET & KOMPONEN GRID RIWAYAT                 //
+//GRID VIEW ITEMS HISTORI DENGAN FORMAT & UKURAN IKON IDENTIK     //
   Widget _buildOtherHistoryGrid(BuildContext context) {
     final List<Map<String, dynamic>> historyItems = [
       {'img': 't2image.png', 'title': 'T2IMAGE', 'action': () => _navigateTo(context, HistoryT2ImageScreen())},
       {'img': 't2video.png', 'title': 'T2VIDEO', 'action': () => _navigateTo(context, HistoryT2VideoScreen())},
       {'img': 'i2video.png', 'title': 'I2VIDEO', 'action': () => _navigateTo(context, HistoryImage2VideoScreen())}, 
       {'img': 't2videoplus.png', 'title': 'T2VIDEO+', 'action': () => _navigateTo(context, HistoryT2videoPlusScreen())},
+      {'img': 't2speech.png', 'title': 'T2SPEECH', 'action': () => _navigateTo(context, const HistoryT2SpeechScreen())},
     ];
 
     return GridView.builder(
@@ -92,11 +97,11 @@ class OtherToolsHistoryScreen extends StatelessWidget {
     );
   }
 
-  // Komponen identik dengan ProjectDashboardScreen
+  // Komponen identik dengan ProjectDashboardScreen dilengkapi fallback anti-error
   Widget _buildImageButton({
     required String imagePath, 
     required String title, 
-    required VoidCallback onTap,
+    required VoidCallback onTap, 
     required bool isActive, 
   }) {
     return Container(
@@ -130,7 +135,22 @@ class OtherToolsHistoryScreen extends StatelessWidget {
                   heightFactor: 0.85,
                   child: Opacity(
                     opacity: isActive ? 1.0 : 0.3, 
-                    child: Image.asset(imagePath, fit: BoxFit.contain),
+                    child: Image.asset(
+                      imagePath, 
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        // Fallback cerdas: jika t2speech.png belum ter-cache browser, tampilkan freet2speech.png atau icon
+                        return Image.asset(
+                          'assets/tombol-dashboard/freet2speech.png',
+                          fit: BoxFit.contain,
+                          errorBuilder: (ctx, err, st) => const Icon(
+                            Icons.record_voice_over_rounded,
+                            color: Colors.amber,
+                            size: 38,
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -153,5 +173,5 @@ class OtherToolsHistoryScreen extends StatelessWidget {
       ),
     );
   }
-}
-// Penutup Blok //
+ }
+// END OF BLOK 3 //

@@ -1,3 +1,8 @@
+///......................................................//
+// LIB/SCREENS_DAILY_FREE/FREE_T2IMAGE_SCREEN.DART      //
+// FITUR DAILY FREE - GENERATOR T2IMAGE                 //
+//......................................................//
+
 // No ke-1: IMPORT & SETUP                              //
 //......................................................//
 import 'package:flutter/material.dart';
@@ -6,11 +11,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart'; 
 
+// [IMPORT SERVICE LOGGING USER CENTER]
+import '../services/firestore_service.dart';
+
 import '../view_model_daily_free/free_t2image_view_model.dart';
 import '../providers/user_provider.dart'; 
 import '../providers/config_provider.dart'; 
 import '../theme/app_theme.dart';
-// Penutup Blok //
+//......................................................//
 
 // No ke-2: STATEFUL WIDGET & INITIALIZATION            //
 //......................................................//
@@ -25,15 +33,24 @@ class _FreeT2ImageScreenState extends ConsumerState<FreeT2ImageScreen> {
   final int _maxPromptLength = 1000;
   final _formKey = GlobalKey<FormState>();
 
-  // ✅ PERBAIKAN: Tracker untuk mencegah unduhan ganda
+  // Tracker untuk mencegah unduhan ganda
   bool _isDownloaded = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final viewModel = ref.read(freeT2ImageViewModelProvider.notifier);
-      viewModel.promptController.addListener(() => setState(() {}));
+      if (mounted) {
+        final viewModel = ref.read(freeT2ImageViewModelProvider.notifier);
+        viewModel.promptController.addListener(() => setState(() {}));
+
+        // --- [LOG AKTIVITAS: KUNJUNGAN DAILY FREE -> FREE T2IMAGE] ---
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'free_t2image',
+          eventType: 'visit',
+        );
+        // -------------------------------------------------------------
+      }
     });
   }
 
@@ -41,7 +58,7 @@ class _FreeT2ImageScreenState extends ConsumerState<FreeT2ImageScreen> {
   void dispose() {
     super.dispose();
   }
-// Penutup Blok //
+//......................................................//
 
 // No ke-3: LOGIC & REPORT FUNCTION                     //
 //......................................................//
@@ -134,12 +151,10 @@ class _FreeT2ImageScreenState extends ConsumerState<FreeT2ImageScreen> {
     String t(String en, String id) => isIndo ? id : en;
 
     ref.listen<FreeT2ImageState>(freeT2ImageViewModelProvider, (previous, next) {
-      // ✅ PERBAIKAN: Reset status unduhan jika gambar baru digenerate
       if (next.generatedImageData != previous?.generatedImageData) {
         _isDownloaded = false;
       }
 
-      // ✅ PERBAIKAN: Warna Error Merah Mutlak
       if (next.errorMessage != null && next.errorMessage != previous?.errorMessage) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -156,7 +171,6 @@ class _FreeT2ImageScreenState extends ConsumerState<FreeT2ImageScreen> {
         );
       }
       
-      // ✅ PERBAIKAN: Warna Sukses Hijau Mutlak
       if (next.successMessage != null && next.successMessage != previous?.successMessage) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -173,6 +187,15 @@ class _FreeT2ImageScreenState extends ConsumerState<FreeT2ImageScreen> {
           ),
         );
       }
+
+      // --- [LOG AKTIVITAS: KONVERSI SUKSES GENERATE FREE T2IMAGE] ---
+      if (previous?.isLoading == true && !next.isLoading && next.generatedImageData != null) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'free_t2image',
+          eventType: 'conversion',
+        );
+      }
+      // --------------------------------------------------------------
     });
 
     final int textLength = viewModel.promptController.text.trim().length;
@@ -307,7 +330,7 @@ class _FreeT2ImageScreenState extends ConsumerState<FreeT2ImageScreen> {
       ),
     );
   }
-// Penutup Blok //
+//......................................................//
 
 // No ke-5: MODERN OUTPUT KARTU                       //
 //......................................................//

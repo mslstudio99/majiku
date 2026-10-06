@@ -257,8 +257,11 @@ class FirestoreStorinemaService {
     required String voice,         
     required bool showSubtitles,   
     required String resolution,    
-    required String visualQuality, 
-    required String description, // [SUNTIKAN BARU] Menerima data deskripsi overlay dari UI
+    required String costLevel,     // Menerima 'High', 'Good', atau 'Standard'
+    String? visualQuality,         // [BACKWARD COMPATIBILITY]
+    required String description, 
+    required bool showDescription, // Menerima status ON/OFF Deskripsi Overlay
+    bool showTitle = true,         // [BARU]: Menerima status ON/OFF Judul Overlay (Default: ON)
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -267,15 +270,31 @@ class FirestoreStorinemaService {
     }
 
     try {
-      final defaultVisualSettings = VisualSettingsStorinema.defaultSettingsWithTitle(title);
+      final finalTitle = title.isNotEmpty ? title : "Untitled Storinema Project";
+      
+      // Jika toggle OFF, teks yang di-passing ke VisualSettings adalah string kosong ""
+      final String effectiveDescription = showDescription ? description : "";
+      final String effectiveTitle = showTitle ? finalTitle : "";
+
+      final defaultVisualSettings = VisualSettingsStorinema.defaultSettingsWithTitle(finalTitle);
       final double aspectRatioValue = _calculateAspectRatioFromString(aspectRatio);
       final visualSettingsMap = defaultVisualSettings.toJson(aspectRatioValue);
 
-      debugPrint("addProject (STORINEMA): Creating new project for user ${user.uid} with title: $title");
+      // Sinkronkan titleOverlay text dengan toggle showTitle
+      if (visualSettingsMap.containsKey('titleOverlay')) {
+        visualSettingsMap['titleOverlay']['text'] = effectiveTitle;
+      }
+
+      // Sinkronkan descriptionOverlay text dengan toggle showDescription
+      if (visualSettingsMap.containsKey('descriptionOverlay')) {
+        visualSettingsMap['descriptionOverlay']['text'] = effectiveDescription;
+      }
+
+      debugPrint("addProject (STORINEMA): Creating new project for user ${user.uid} with title: $finalTitle (showTitle: $showTitle, showDescription: $showDescription, costLevel: $costLevel)");
       
       final docRef = await _db.collection('projects_storinema').add({
         'userId': user.uid,
-        'title': title.isNotEmpty ? title : "Untitled Storinema Project",
+        'title': finalTitle,
         'rawScript': rawScript,
         'imageStyle': imageStyle,
         'aspectRatio': aspectRatio,
@@ -283,8 +302,11 @@ class FirestoreStorinemaService {
         'voice': voice,                 
         'showSubtitles': showSubtitles, 
         'resolution': resolution,       
-        'visualQuality': visualQuality, 
-        'description': description, // [SUNTIKAN BARU] Menyimpan deskripsi overlay ke Firestore
+        'costLevel': costLevel,                   
+        'visualQuality': visualQuality ?? costLevel, 
+        'description': effectiveDescription,
+        'showDescription': showDescription,       
+        'showTitle': showTitle, // [BARU]: Disimpan ke Firestore untuk Backend Gatekeeper & Cloud Run
         
         'status': 'PROCESSING_SCENE', 
         
@@ -294,12 +316,16 @@ class FirestoreStorinemaService {
         'expireAt': Timestamp.fromDate(DateTime.now().add(const Duration(hours: 24))),
 
         'visualSettings': visualSettingsMap,
+        // Inisialisasi renderPacket untuk Cloud Run Backend Engine
+        'renderPacket': {
+          'styleSettings': visualSettingsMap,
+        },
         'thumbnailImageUrl': null,
         'finalVideoUrl': null,
         'errorDetail': null,
       });
 
-      debugPrint('✅ Project (STORINEMA) created with ID ${docRef.id} and default visual settings. Backend auto-triggered.');
+      debugPrint('✅ Project (STORINEMA) created with ID ${docRef.id}. Title Overlay: ${showTitle ? "ON" : "OFF"}, Description Overlay: ${showDescription ? "ON" : "OFF"}.');
       return docRef.id;
 
     } catch (e) {

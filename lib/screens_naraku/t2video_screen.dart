@@ -3,11 +3,15 @@
 // [TUJUAN: Antarmuka T2Video dengan Loading Modern, Fix CORS, & Video Player] //
 
 // No ke-1: IMPORT & SETUP //
+//.......................................................//
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // [BARU] Import Services untuk HapticFeedback (Efek Getar Tombol)
+import 'package:flutter/services.dart'; // Import Services untuk HapticFeedback
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
-import 'package:video_player/video_player.dart'; // [BARU] Import Video Player
+import 'package:video_player/video_player.dart'; // Import Video Player
+
+// [IMPORT SERVICE LOGGING USER CENTER]
+import '../services/firestore_service.dart';
 
 // [IMPORT NAVIGASI MASTER]
 import '../screens/project_dashboard_screen.dart';
@@ -29,6 +33,7 @@ class T2VideoScreen extends ConsumerStatefulWidget {
 //.......................................................//
 
 // No ke-2: STATE & INITIALIZATION //
+//.......................................................//
 class _T2VideoScreenState extends ConsumerState<T2VideoScreen> {
   final int _maxPromptLength = 2000;
   final _formKey = GlobalKey<FormState>();
@@ -37,8 +42,18 @@ class _T2VideoScreenState extends ConsumerState<T2VideoScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final viewModel = ref.read(t2VideoViewModelProvider.notifier);
-      viewModel.narrativeController.addListener(_onTextChanged);
+      if (mounted) {
+        final viewModel = ref.read(t2VideoViewModelProvider.notifier);
+        viewModel.narrativeController.addListener(_onTextChanged);
+
+        // --- [LOG AKTIVITAS: KUNJUNGAN OTHER TOOLS -> T2VIDEO] ---
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'other_tools',
+          subFeatureKey: 't2video',
+          eventType: 'visit',
+        );
+        // ---------------------------------------------------------
+      }
     });
   }
 
@@ -148,6 +163,16 @@ class _T2VideoScreenState extends ConsumerState<T2VideoScreen> {
           ),
         );
       }
+
+      // --- [LOG AKTIVITAS: KONVERSI SUKSES GENERATE T2VIDEO] ---
+      if (previous?.isLoading == true && !next.isLoading && next.generatedVideoUrl.isNotEmpty) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'other_tools',
+          subFeatureKey: 't2video',
+          eventType: 'conversion',
+        );
+      }
+      // ---------------------------------------------------------
     });
 
     final int textLength = viewModel.narrativeController.text.trim().length;

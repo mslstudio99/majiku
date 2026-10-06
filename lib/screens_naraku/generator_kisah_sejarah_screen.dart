@@ -10,6 +10,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
 
+// [IMPORT SERVICE LOGGING USER CENTER]
+import '../services/firestore_service.dart';
+
 // [IMPORT NAVIGASI KE 4 APLIKASI UTAMA]
 import '../screens/input_script_screen.dart'; // VMotion
 import '../screens_veo/input_script_veo_screen.dart'; // VFootage
@@ -36,17 +39,40 @@ import '../models/app_config.dart';
 //................................................................//
 
 //No ke-2.........................................................//
-// MAIN CLASS DEFINITION                                          //
-class GeneratorKisahSejarahScreen extends ConsumerWidget {
+// MAIN CLASS & STATE DECLARATION (STATEFUL CONVERSION)            //
+class GeneratorKisahSejarahScreen extends ConsumerStatefulWidget {
   const GeneratorKisahSejarahScreen({super.key});
 
+  @override
+  ConsumerState<GeneratorKisahSejarahScreen> createState() =>
+      _GeneratorKisahSejarahScreenState();
+}
+
+class _GeneratorKisahSejarahScreenState
+    extends ConsumerState<GeneratorKisahSejarahScreen> {
   final int _maxPromptLength = 200;
+
+  @override
+  void initState() {
+    super.initState();
+    // --- [LOG AKTIVITAS: KUNJUNGAN AUTO NARRATIVE -> KISAH SEJARAH] ---
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'auto_narrative',
+          subFeatureKey: 'kisah_sejarah',
+          eventType: 'visit',
+        );
+      }
+    });
+    // ------------------------------------------------------------------
+  }
 //................................................................//
 
 //No ke-3.........................................................//
 // MAIN BUILD METHOD & SCAFFOLD                                   //
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final state = ref.watch(generatorKisahSejarahViewModelProvider);
     final viewModel = ref.read(generatorKisahSejarahViewModelProvider.notifier);
     final AsyncValue<AppUser> userState = ref.watch(firestoreUserProvider);
@@ -68,6 +94,16 @@ class GeneratorKisahSejarahScreen extends ConsumerWidget {
           ),
         );
       }
+
+      // --- [LOG AKTIVITAS: KONVERSI SUKSES GENERATE KISAH SEJARAH] ---
+      if (previous?.isLoading == true && !next.isLoading && next.generatedStory.isNotEmpty) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'auto_narrative',
+          subFeatureKey: 'kisah_sejarah',
+          eventType: 'conversion',
+        );
+      }
+      // ---------------------------------------------------------------
     });
 
     return Scaffold(

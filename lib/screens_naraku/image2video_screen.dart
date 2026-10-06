@@ -6,13 +6,16 @@
 // No ke-1: IMPORT & SETUP //
 // ....................................................... //
 import 'dart:io'; 
-import 'package:flutter/foundation.dart'; // [BARU] Wajib untuk mendeteksi kIsWeb
+import 'package:flutter/foundation.dart'; // Wajib untuk mendeteksi kIsWeb
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'package:video_player/video_player.dart'; 
 import 'package:image_picker/image_picker.dart'; 
+
+// [IMPORT SERVICE LOGGING USER CENTER]
+import '../services/firestore_service.dart';
 
 // [IMPORT NAVIGASI MASTER]
 import '../screens/project_dashboard_screen.dart';
@@ -39,7 +42,7 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
   final int _maxPromptLength = 2000;
   final _formKey = GlobalKey<FormState>();
   
-  // [PERBAIKAN] Menggunakan XFile untuk dukungan mutlak Web & Mobile
+  // Menggunakan XFile untuk dukungan mutlak Web & Mobile
   XFile? _selectedImage;
   final ImagePicker _picker = ImagePicker();
 
@@ -47,8 +50,18 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final viewModel = ref.read(image2VideoViewModelProvider.notifier);
-      viewModel.narrativeController.addListener(_onTextChanged);
+      if (mounted) {
+        final viewModel = ref.read(image2VideoViewModelProvider.notifier);
+        viewModel.narrativeController.addListener(_onTextChanged);
+
+        // --- [LOG AKTIVITAS: KUNJUNGAN OTHER TOOLS -> IMAGE2VIDEO] ---
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'other_tools',
+          subFeatureKey: 'image2video',
+          eventType: 'visit',
+        );
+        // -------------------------------------------------------------
+      }
     });
   }
 
@@ -56,16 +69,16 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
     setState(() {}); 
   }
 
-  // [PERBAIKAN] Fungsi untuk memilih gambar dari galeri (mendukung Web/Mobile)
+  // Fungsi untuk memilih gambar dari galeri (mendukung Web/Mobile)
   Future<void> _pickImage() async {
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 85, // Kompresi ringan agar efisien
+        imageQuality: 85,
       );
       if (pickedFile != null) {
         setState(() {
-          _selectedImage = pickedFile; // [PERBAIKAN] Langsung menyimpan XFile
+          _selectedImage = pickedFile;
         });
       }
     } catch (e) {
@@ -183,6 +196,16 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
           ),
         );
       }
+
+      // --- [LOG AKTIVITAS: KONVERSI SUKSES GENERATE IMAGE2VIDEO] ---
+      if (previous?.isLoading == true && !next.isLoading && next.generatedVideoUrl.isNotEmpty) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'other_tools',
+          subFeatureKey: 'image2video',
+          eventType: 'conversion',
+        );
+      }
+      // -------------------------------------------------------------
     });
 
     // Validasi input bergantung pada Gambar, Teks opsional
@@ -218,9 +241,8 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
     });
 
     final bool hasSufficientFunds = currentBalance >= requiredTokens;
-    final bool isOutOfTokens = hasImage && !hasSufficientFunds; // Peringatan muncul jika sudah ada gambar tapi saldo kurang
+    final bool isOutOfTokens = hasImage && !hasSufficientFunds;
     final bool providersLoading = userAsync.isLoading || configAsync.isLoading;
-    // canSubmit diizinkan jika sudah ada gambar (teks tidak wajib)
     final bool canSubmit = hasImage && hasSufficientFunds && !state.isLoading && userReady && configReady;
 
     return Theme(
@@ -287,7 +309,7 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
                               child: GestureDetector(
                                 onTap: state.isLoading ? null : _pickImage,
                                 child: Container(
-                                  height: 200, // Menyamakan dengan perkiraan tinggi teks 8 baris
+                                  height: 200,
                                   decoration: BoxDecoration(
                                     color: Colors.black26,
                                     borderRadius: BorderRadius.circular(12),
@@ -302,7 +324,6 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
                                           child: Stack(
                                             fit: StackFit.expand,
                                             children: [
-                                              // [PERBAIKAN] Deteksi Platform Rendering Gambar (Aman untuk Web)
                                               kIsWeb 
                                                 ? Image.network(
                                                     _selectedImage!.path,
@@ -345,7 +366,7 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
                               flex: 3,
                               child: TextFormField(
                                 controller: viewModel.narrativeController,
-                                maxLines: 8, // Dipertahankan agar konsisten dengan tinggi gambar
+                                maxLines: 8,
                                 maxLength: _maxPromptLength,
                                 enabled: !state.isLoading,
                                 decoration: InputDecoration(

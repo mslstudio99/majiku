@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Service & Models
 import '../services_veo/firestore_veo_service.dart';
+import '../services/firestore_service.dart'; // [BARU] Akses logging Firestore User Center
 import '../models/app_config.dart'; 
 import '../models/app_user.dart'; 
 
@@ -31,6 +32,7 @@ Tujuan:
 - [UI] Layout Compact: Style & Aspect Ratio sejajar, Resolusi di bawahnya. Bahasa dihapus (Auto-detect di backend).
 - [NEW FEATURE] Pop up animasi peringatan token habis bergaya modern (Hijau/Putih).
 - [ANTI-REGRESI] Menjaga seluruh kalkulasi token Veo (footagePerScene) dan fungsi database.
+- [USER CENTER] Logging aktivitas fitur (visit & conversion) untuk 'auto_movie'.
 */
 //................................................................//
 
@@ -57,7 +59,7 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
   final _formKey = GlobalKey<FormState>();
 
   String _selectedStyle = 'Realistic';
-  String _selectedAspectRatio = '19:6';
+  String _selectedAspectRatio = '16:9'; // [PERBAIKAN BUG]: Mengubah 19:6 menjadi 16:9 agar cocok dengan list dropdown
   
   // [DATA BARU] Menggantikan Bahasa dengan Resolusi, Default 720p
   String _selectedResolution = '720p'; 
@@ -81,6 +83,17 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
     _scriptController.addListener(() {
       if (mounted) setState(() {});
     });
+
+    // --- [LOG AKTIVITAS FITUR: KUNJUNGAN HALAMAN (VISIT)] ---
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(firestoreServiceProvider).logFeatureActivity(
+          featureKey: 'auto_movie',
+          eventType: 'visit',
+        );
+      }
+    });
+    // --------------------------------------------------------
   }
 
   @override
@@ -106,6 +119,13 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
 
         if (mounted) {
           if (newProjectId != null && newProjectId.isNotEmpty) {
+            // --- [LOG AKTIVITAS FITUR: KONVERSI SUKSES (CONVERSION)] ---
+            ref.read(firestoreServiceProvider).logFeatureActivity(
+              featureKey: 'auto_movie',
+              eventType: 'conversion',
+            );
+            // -----------------------------------------------------------
+
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (context) => ProjectLoadingVeoScreen(
@@ -149,19 +169,19 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
     final userAsync = ref.watch(firestoreUserProvider);
     final configAsync = ref.watch(appConfigProvider);
 
-    // [PERBAIKAN ESTIMASI SEGMEN] - Kombinasi Tanda Baca & 200 Karakter
+    // [PERBAIKAN PRESISI SEGMEN: 1 KALIMAT = 1 ADEGAN (SINKRON DENGAN BACKEND)]
     final String textInput = _scriptController.text.trim();
     final int textLength = textInput.length;
     
     // 1. Hitung jumlah kalimat berdasarkan tanda baca (. ! ?)
     final int sentenceCount = RegExp(r'[.!?]+').allMatches(textInput).length;
     
-    // 2. Estimasi awal AI (Backend membagi 2 kalimat = 1 Segmen)
-    int estimatedScenes = (sentenceCount / 2).ceil();
+    // 2. Estimasi presisi AI (1 Kalimat = 1 Adegan / Segmen sesuai Backend)
+    int estimatedScenes = sentenceCount;
     
-    // 3. Fallback: Jika pengguna mengetik tanpa tanda baca, gunakan rasio 200 karakter/segmen
+    // 3. Fallback: Jika pengguna mengetik tanpa tanda baca, gunakan rasio 100 karakter/segmen
     if (estimatedScenes == 0 && textLength > 0) {
-      estimatedScenes = (textLength / 200).ceil();
+      estimatedScenes = (textLength / 100).ceil();
     }
     
     // 4. Pastikan minimal selalu 1 adegan selama ada teks
@@ -203,7 +223,7 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
       data: AppTheme.darkTheme,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('VFootage'),
+          title: const Text('VMovie'),
           actions: [
             Padding(
               padding: const EdgeInsets.only(right: 20.0),
@@ -293,7 +313,7 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
                         ),
                         const SizedBox(height: 24),
 
-                        // [MODIFIKASI] Row untuk Visual Style & Aspect Ratio sejajar
+                        // Row untuk Visual Style & Aspect Ratio sejajar
                         Row(
                           children: [
                             Expanded(
@@ -342,7 +362,7 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
                         ),
                         const SizedBox(height: 24),
 
-                        // [DATA BARU] Dropdown Resolusi di bawahnya
+                        // Dropdown Resolusi di bawahnya
                         DropdownButtonFormField<String>(
                           value: _selectedResolution,
                           decoration: InputDecoration(
@@ -409,7 +429,7 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
                 ),
               ),
 
-              // --- POP UP ANIMASI TOKEN HABIS ---
+              // --- POP UP ANIMASI TOKEN HABIS (BILINGUAL) ---
               AnimatedPositioned(
                 duration: const Duration(milliseconds: 400),
                 curve: Curves.easeOutBack,
@@ -436,11 +456,14 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
                       children: [
                         const Icon(Icons.info_outline_rounded, color: Colors.white, size: 24),
                         const SizedBox(width: 12),
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            "Out of tokens. Upgrade or add more via the dashboard!",
-                            style: TextStyle(
-                              color: Colors.white, // Teks Putih
+                            t(
+                              "Out of tokens. Upgrade or add more via the dashboard!",
+                              "Token habis. Isi ulang atau tingkatkan via dashboard!"
+                            ),
+                            style: const TextStyle(
+                              color: Colors.white, 
                               fontWeight: FontWeight.bold, 
                               fontSize: 14,
                             ),
