@@ -42,7 +42,7 @@ class InputScriptVeoScreen extends ConsumerStatefulWidget {
   final String initialTitle;
   final String initialScript;
 
-  InputScriptVeoScreen({
+  const InputScriptVeoScreen({
     super.key,
     this.initialTitle = '',
     this.initialScript = '',
@@ -59,12 +59,15 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
   final _formKey = GlobalKey<FormState>();
 
   String _selectedStyle = 'Realistic';
-  String _selectedAspectRatio = '16:9'; // [PERBAIKAN BUG]: Mengubah 19:6 menjadi 16:9 agar cocok dengan list dropdown
+  String _selectedAspectRatio = '16:9'; 
   
-  // [DATA BARU] Menggantikan Bahasa dengan Resolusi, Default 720p
+  // [DATA RESOLUSI & KUALITAS MODEL VEO 3.1]
   String _selectedResolution = '720p'; 
+  String _selectedQuality = 'Standard'; // Standard (Fast) vs High (Quality)
   bool _isLoading = false;
 
+  // [BARU]: State Tombol ON/OFF Project Title Overlay (Secara Default ON)
+  bool _showTitle = true;
 //................................................................//
 
 //No ke-3.........................................................//
@@ -108,13 +111,24 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
       setState(() => _isLoading = true);
 
       final firestoreService = ref.read(firestoreVeoServiceProvider);
+      final isIndo = ref.read(appLanguageProvider).languageCode == 'id';
+
+      // Jika toggle _showTitle bernilai false, gunakan input yang ada atau default judul proyek
+      final String effectiveTitle = _showTitle 
+          ? _titleController.text.trim() 
+          : (_titleController.text.trim().isNotEmpty 
+              ? _titleController.text.trim() 
+              : 'VMovie Project');
+
       try {
         final String? newProjectId = await firestoreService.addProject(
-          title: _titleController.text,
+          title: effectiveTitle,
           rawScript: _scriptController.text,
           imageStyle: _selectedStyle, 
           aspectRatio: _selectedAspectRatio,
-          resolution: _selectedResolution, // [MODIFIKASI] Lempar parameter resolusi
+          resolution: _selectedResolution, 
+          quality: _selectedQuality, // Meneruskan Quality (Standard/High)
+          showTitle: _showTitle, // [BARU] Meneruskan status ON/OFF Title Overlay
         );
 
         if (mounted) {
@@ -135,9 +149,14 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
             );
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text('Error: Failed to create project ID (VEO). Please try again.'),
-                  backgroundColor: Colors.red),
+              SnackBar(
+                content: Text(
+                  isIndo
+                      ? 'Error: Gagal membuat ID proyek (VEO). Silakan coba lagi.'
+                      : 'Error: Failed to create project ID (VEO). Please try again.',
+                ),
+                backgroundColor: Colors.red,
+              ),
             );
           }
         }
@@ -145,8 +164,13 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text('Error adding project (VEO): $e'),
-                backgroundColor: Colors.red),
+              content: Text(
+                isIndo
+                    ? 'Terjadi kesalahan saat menambah proyek (VEO): $e'
+                    : 'Error adding project (VEO): $e',
+              ),
+              backgroundColor: Colors.red,
+            ),
           );
         }
       } finally {
@@ -199,15 +223,25 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
       userReady = true;
     });
 
-    // [PERBAIKAN ANTI-REGRESI] Kalkulasi Token Veo Dinamis Sesuai Backend
+    // [KALKULASI HARGA DINAMIS VEO PER-SEGMEN (STANDARD & HIGH)]
     configAsync.whenData((config) {
-      int costPerSecond = config.costs.veoCosts.res720;
-      if (_selectedResolution == '1080p') {
-        costPerSecond = config.costs.veoCosts.res1080;
+      final veoCosts = config.costs.veoCosts;
+      
+      if (_selectedQuality == 'High') {
+        if (_selectedResolution == '1080p') {
+          costPerScene = veoCosts.highPerSegment1080p; // High 1080p (Fallback: 7500)
+        } else {
+          costPerScene = veoCosts.highPerSegment720p;  // High 720p (Fallback: 7200)
+        }
+      } else {
+        // Standard Quality (Default)
+        if (_selectedResolution == '1080p') {
+          costPerScene = veoCosts.standardPerSegment1080p; // Standard 1080p (Fallback: 3000)
+        } else {
+          costPerScene = veoCosts.standardPerSegment720p;  // Standard 720p (Fallback: 2700)
+        }
       }
       
-      // 1 adegan (scene) Veo mutlak berdurasi 8 detik
-      costPerScene = costPerSecond * 8;
       configReady = true;
     });
 
@@ -274,23 +308,60 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        TextFormField(
-                          controller: _titleController,
-                          maxLength: 40,
-                          decoration: InputDecoration(
-                            labelText: t('Project Title', 'Judul Proyek'),
-                            hintText: t('e.g., "My First Veo Video"', 'Cth: "Video Veo Pertamaku"'),
+                        // --- [1. TOGGLE ON/OFF PROJECT TITLE OVERLAY (DI ATAS BOX JUDUL)] ---
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.04),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _showTitle ? Colors.purple.withOpacity(0.5) : Colors.white12,
+                            ),
                           ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return t('Please enter a project title.', 'Mohon isi judul proyek.');
-                            }
-                            if (value.length > 40) {
-                              return t('Title cannot exceed 40 characters.', 'Judul maksimal 40 karakter.');
-                            }
-                            return null;
-                          },
+                          child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              t('Project Title Overlay', 'Judul Overlay Proyek'),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            ),
+                            subtitle: Text(
+                              _showTitle
+                                  ? t('Overlay title is ON (Default)', 'Judul overlay AKTIF (Default)')
+                                  : t('Overlay title is OFF', 'Judul overlay NONAKTIF'),
+                              style: TextStyle(
+                                color: _showTitle ? Colors.purpleAccent : Colors.grey,
+                                fontSize: 12,
+                              ),
+                            ),
+                            value: _showTitle,
+                            activeColor: Colors.purpleAccent,
+                            onChanged: (val) {
+                              setState(() => _showTitle = val);
+                            },
+                          ),
                         ),
+
+                        // Input judul hanya aktif dan wajib diisi jika toggle ON (Menghilang jika OFF)
+                        if (_showTitle) ...[
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _titleController,
+                            maxLength: 40,
+                            decoration: InputDecoration(
+                              labelText: t('Project Title', 'Judul Proyek'),
+                              hintText: t('e.g., "My First Veo Video"', 'Cth: "Video Veo Pertamaku"'),
+                            ),
+                            validator: (value) {
+                              if (_showTitle && (value == null || value.trim().isEmpty)) {
+                                return t('Please enter a project title.', 'Mohon isi judul proyek.');
+                              }
+                              if (value != null && value.length > 40) {
+                                return t('Title cannot exceed 40 characters.', 'Judul maksimal 40 karakter.');
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
                         const SizedBox(height: 24),
 
                         TextFormField(
@@ -362,27 +433,57 @@ class _InputScriptVeoScreenState extends ConsumerState<InputScriptVeoScreen> {
                         ),
                         const SizedBox(height: 24),
 
-                        // Dropdown Resolusi di bawahnya
-                        DropdownButtonFormField<String>(
-                          value: _selectedResolution,
-                          decoration: InputDecoration(
-                            labelText: t('Video Resolution', 'Resolusi Video'),
-                          ),
-                          items: const {
-                            '720p (Standard)': '720p',
-                            '1080p (High)': '1080p',
-                          }
-                              .entries
-                              .map((entry) => DropdownMenuItem(
-                                    value: entry.value,
-                                    child: Text(entry.key),
-                                  ))
-                              .toList(),
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _selectedResolution = value);
-                            }
-                          },
+                        // Row untuk Video Resolution & Quality sejajar
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: _selectedResolution,
+                                decoration: InputDecoration(
+                                  labelText: t('Video Resolution', 'Resolusi Video'),
+                                ),
+                                items: const {
+                                  '720p': '720p',
+                                  '1080p': '1080p',
+                                }
+                                    .entries
+                                    .map((entry) => DropdownMenuItem(
+                                          value: entry.value,
+                                          child: Text(entry.key),
+                                        ))
+                                    .toList(),
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() => _selectedResolution = value);
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: _selectedQuality,
+                                decoration: InputDecoration(
+                                  labelText: t('Quality', 'Kualitas Model'),
+                                ),
+                                items: const {
+                                  'Standard': 'Standard',
+                                  'High': 'High',
+                                }
+                                    .entries
+                                    .map((entry) => DropdownMenuItem(
+                                          value: entry.value,
+                                          child: Text(entry.key),
+                                        ))
+                                    .toList(),
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() => _selectedQuality = value);
+                                  }
+                                },
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 32),
 

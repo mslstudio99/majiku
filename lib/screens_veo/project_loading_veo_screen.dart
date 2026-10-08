@@ -93,7 +93,13 @@ int _getStageIndexFromStatus(String? status) {
     }
   }
 
-  if (status == "ASSETS_COMPLETE" || status == "RENDER_READY" || status == "RENDER_START" || status == "RENDERING" || status == "RENDER_COMPLETED") {
+  // [ANTI-STUCK]: Menambahkan ASSETS_NEED_REFINEMENT agar dianggap tahap selesai
+  if (status == "ASSETS_COMPLETE" || 
+      status == "ASSETS_NEED_REFINEMENT" || 
+      status == "RENDER_READY" || 
+      status == "RENDER_START" || 
+      status == "RENDERING" || 
+      status == "RENDER_COMPLETED") {
     return _loadingStages.length;
   }
   
@@ -330,8 +336,10 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
           });
         }
 
-        // --- SKENARIO 1: HAPPY PATH (SEMUA ASET SELESAI / RENDER SELESAI) ---
+        // --- SKENARIO 1: HAPPY PATH (SEMUA ASET SELESAI / REGENERATE SELESAI / RENDER SELESAI) ---
+        // [ANTI-STUCK]: Menambahkan ASSETS_NEED_REFINEMENT agar langsung meluncur ke Timeline
         if ((currentStatus == "ASSETS_COMPLETE" || 
+             currentStatus == "ASSETS_NEED_REFINEMENT" || 
              currentStatus == "RENDER_READY" || 
              currentStatus == "RENDER_START" || 
              currentStatus == "RENDERING" || 
@@ -340,7 +348,7 @@ class _ProjectLoadingVeoScreenState extends ConsumerState<ProjectLoadingVeoScree
           
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (_isMounted) {
-              debugPrint("🚀 [Loading Gatekeeper VEO] Aset/Render Selesai ($currentStatus). Meneruskan ke Timeline...");
+              debugPrint("🚀 [Loading Gatekeeper VEO] Aset Siap ($currentStatus). Meneruskan ke Timeline...");
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(
                   builder: (context) => TimelineReviewVeoScreen(projectId: widget.projectId),

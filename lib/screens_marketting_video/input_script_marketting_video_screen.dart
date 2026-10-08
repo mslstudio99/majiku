@@ -80,7 +80,7 @@ class _InputScriptMarkettingVideoScreenState extends ConsumerState<InputScriptMa
   String _selectedResolution = '720p'; 
 
   // [PERBAIKAN MUTLAK]: Default Kategori Kualitas ke 'Standard' (Veo 3.1 Fast)
-  String _selectedCostLevel = 'High';
+  String _selectedCostLevel = 'Standard';
 
   // ==========================================
   // OPSI SUARA (LENGKAP - TIDAK ADA YANG DIPOTONG)

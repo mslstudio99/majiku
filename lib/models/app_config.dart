@@ -221,20 +221,32 @@ class StorinemaCostConfig {
 //......................................................//
 
 // No ke-6 - VEO DYNAMIC COST CONFIG MODEL..............//
-// Model pemetaan harga per-detik khusus pipeline VEO...//
+// Model pemetaan harga per-segmen khusus pipeline VEO...//
 class VeoCostConfig {
-  final int res720;
-  final int res1080;
+  final int standardPerSegment720p;
+  final int standardPerSegment1080p;
+  final int highPerSegment720p;
+  final int highPerSegment1080p;
 
   VeoCostConfig({
-    required this.res720,
-    required this.res1080,
+    required this.standardPerSegment720p,
+    required this.standardPerSegment1080p,
+    required this.highPerSegment720p,
+    required this.highPerSegment1080p,
   });
+
+  // [GETTER ALIAS ANTI-REGRESI]: Menjamin kode lama yang memanggil res720/res1080 tetap jalan mulus
+  int get res720 => standardPerSegment720p;
+  int get res1080 => standardPerSegment1080p;
+  int get perSegment720p => standardPerSegment720p;
+  int get perSegment1080p => standardPerSegment1080p;
 
   factory VeoCostConfig.fallback() {
     return VeoCostConfig(
-      res720: 200,
-      res1080: 230,
+      standardPerSegment720p: 2700, // Standard 720p
+      standardPerSegment1080p: 3000, // Standard 1080p
+      highPerSegment720p: 7200,     // High 720p
+      highPerSegment1080p: 7500,    // High 1080p
     );
   }
 
@@ -243,8 +255,10 @@ class VeoCostConfig {
     final defaults = VeoCostConfig.fallback();
     
     return VeoCostConfig(
-      res720: map['res720'] as int? ?? defaults.res720,
-      res1080: map['res1080'] as int? ?? defaults.res1080,
+      standardPerSegment720p: (map['standard_720p_per_segment'] ?? map['720p_per_segment'] ?? map['standardPerSegment720p']) as int? ?? defaults.standardPerSegment720p,
+      standardPerSegment1080p: (map['standard_1080p_per_segment'] ?? map['1080p_per_segment'] ?? map['standardPerSegment1080p']) as int? ?? defaults.standardPerSegment1080p,
+      highPerSegment720p: (map['high_720p_per_segment'] ?? map['highPerSegment720p']) as int? ?? defaults.highPerSegment720p,
+      highPerSegment1080p: (map['high_1080p_per_segment'] ?? map['highPerSegment1080p']) as int? ?? defaults.highPerSegment1080p,
     );
   }
 }
@@ -370,6 +384,60 @@ class T2SpeechCostConfig {
 }
 //......................................................//
 
+//No ke-6E - NARAMOTION DYNAMIC COST CONFIG MODEL.........//
+// Model pemetaan harga dinamis per-segmen Nara Motion...//
+class NaramotionCostConfig {
+  final int motionStandardPerScene;
+  final int motionGoodPerScene;
+
+  NaramotionCostConfig({
+    required this.motionStandardPerScene,
+    required this.motionGoodPerScene,
+  });
+
+  // Getter alias untuk fleksibilitas pemanggilan
+  int get standard => motionStandardPerScene;
+  int get good => motionGoodPerScene;
+
+  factory NaramotionCostConfig.fallback() {
+    return NaramotionCostConfig(
+      motionStandardPerScene: 120, // Default Standard
+      motionGoodPerScene: 180,     // Default Good
+    );
+  }
+
+  factory NaramotionCostConfig.fromMap(
+    Map<String, dynamic>? map, {
+    int? fallbackStandard,
+    int? fallbackGood,
+  }) {
+    final defaults = NaramotionCostConfig.fallback();
+    if (map == null) {
+      return NaramotionCostConfig(
+        motionStandardPerScene: fallbackStandard ?? defaults.motionStandardPerScene,
+        motionGoodPerScene: fallbackGood ?? defaults.motionGoodPerScene,
+      );
+    }
+
+    return NaramotionCostConfig(
+      motionStandardPerScene: (map['motion_standard_per_scene'] ?? map['standard']) as int? ??
+          fallbackStandard ??
+          defaults.motionStandardPerScene,
+      motionGoodPerScene: (map['motion_good_per_scene'] ?? map['good']) as int? ??
+          fallbackGood ??
+          defaults.motionGoodPerScene,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'motion_standard_per_scene': motionStandardPerScene,
+      'motion_good_per_scene': motionGoodPerScene,
+    };
+  }
+}
+//......................................................//
+
 // No ke-7 - APP CONFIG MODEL..........................//
 // Model data level atas untuk dokumen config...........//
 class AppConfig {
@@ -428,8 +496,7 @@ class AppConfig {
 // Mengatur biaya token untuk setiap aksi di aplikasi.............//
 class Costs {
   final int freeTokens;
-  final int motionPerScene;
-  final int motionGoodPerScene; // [BARU] Biaya Motion Tier Good (Gemini 3.1 Flash Image)
+  final NaramotionCostConfig naramotionCosts; // [BARU] Map dinamis Nara Motion
   final int footagePerScene; 
   
   final int ideKontenPerClick;
@@ -454,8 +521,7 @@ class Costs {
 
   Costs({
     required this.freeTokens, 
-    required this.motionPerScene,
-    required this.motionGoodPerScene, // [BARU]
+    required this.naramotionCosts, // [BARU]
     required this.footagePerScene, 
     required this.ideKontenPerClick,
     required this.kontenUmumPerClick,
@@ -477,15 +543,17 @@ class Costs {
     required this.t2speechCosts,
   });
 
-  int get motion_per_scene => motionPerScene;
-  int get motion_good_per_scene => motionGoodPerScene; // [BARU] Getter alias
+  // [GETTER ALIAS ANTI-REGRESI]: Menjamin 100% kode pemanggil eksisting tetap berjalan tanpa error
+  int get motionPerScene => naramotionCosts.motionStandardPerScene;
+  int get motionGoodPerScene => naramotionCosts.motionGoodPerScene;
+  int get motion_per_scene => naramotionCosts.motionStandardPerScene;
+  int get motion_good_per_scene => naramotionCosts.motionGoodPerScene;
   int get footage_per_scene => footagePerScene; 
 
   factory Costs.fallback() {
     return Costs(
       freeTokens: 200, 
-      motionPerScene: 120,          // [PERBAIKAN] Default 120 (Standard)
-      motionGoodPerScene: 180,      // [BARU] Default 180 (Good)
+      naramotionCosts: NaramotionCostConfig.fallback(), // [BARU] Default: Standard 120, Good 180
       footagePerScene: 100, 
       ideKontenPerClick: 10,
       kontenUmumPerClick: 20,
@@ -511,11 +579,18 @@ class Costs {
   factory Costs.fromMap(Map<String, dynamic>? map) {
     if (map == null) return Costs.fallback();
     final defaults = Costs.fallback();
+
+    // [FALLBACK AMAN]: Membaca field lama jika map 'naramotion_costs' belum tersedia di DB
+    final fallbackStandard = (map['motion_per_scene'] ?? map['motionPerScene']) as int?;
+    final fallbackGood = (map['motion_good_per_scene'] ?? map['motionGoodPerScene']) as int?;
     
     return Costs(
       freeTokens: map['free_tokens'] as int? ?? defaults.freeTokens,
-      motionPerScene: (map['motion_per_scene'] ?? map['motionPerScene']) as int? ?? defaults.motionPerScene,
-      motionGoodPerScene: (map['motion_good_per_scene'] ?? map['motionGoodPerScene']) as int? ?? defaults.motionGoodPerScene, // [BARU]
+      naramotionCosts: NaramotionCostConfig.fromMap(
+        map['naramotion_costs'] as Map<String, dynamic>?,
+        fallbackStandard: fallbackStandard,
+        fallbackGood: fallbackGood,
+      ),
       footagePerScene: map['footage_per_scene'] as int? ?? defaults.footagePerScene,
       ideKontenPerClick: map['ide_konten_per_click'] as int? ?? defaults.ideKontenPerClick,
       kontenUmumPerClick: map['konten_umum_per_click'] as int? ?? defaults.kontenUmumPerClick,
@@ -540,6 +615,7 @@ class Costs {
 
   Map<String, dynamic> toJson() {
     return {
+      'naramotion_costs': naramotionCosts.toMap(),
       'motion_per_scene': motion_per_scene,
       'motion_good_per_scene': motion_good_per_scene,
       'footage_per_scene': footage_per_scene,

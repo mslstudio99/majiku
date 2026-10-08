@@ -259,7 +259,9 @@ class FirestoreVeoService {
     required String rawScript,
     required String imageStyle,
     required String aspectRatio,
-    required String resolution, // [MODIFIKASI] Menerima parameter resolusi
+    required String resolution, // Menerima parameter resolusi
+    String quality = 'Standard', // Menerima parameter quality (Standard / High)
+    bool showTitle = true, // [BARU] Menerima parameter status ON/OFF Title Overlay
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -277,8 +279,14 @@ class FirestoreVeoService {
       // 3. Konversi ke Map
       final visualSettingsMap = defaultVisualSettings.toJson(aspectRatioValue);
 
+      // [SINKRONISASI DUAL-LAYER]: Masukkan status showTitle ke dalam visualSettingsMap
+      visualSettingsMap['showTitle'] = showTitle;
+      if (visualSettingsMap['titleSettings'] is Map) {
+        (visualSettingsMap['titleSettings'] as Map<String, dynamic>)['show'] = showTitle;
+      }
+
       // 4. Tambahkan dokumen baru ke Firestore
-      debugPrint("addProject (VEO): Creating new project for user ${user.uid} with title: $title");
+      debugPrint("addProject (VEO): Creating new project for user ${user.uid} with title: $title, Quality: $quality, showTitle: $showTitle");
       
       final docRef = await _db.collection('projects_veo').add({
         'userId': user.uid,
@@ -286,7 +294,9 @@ class FirestoreVeoService {
         'rawScript': rawScript,
         'imageStyle': imageStyle,
         'aspectRatio': aspectRatio,
-        'resolution': resolution, // [MODIFIKASI] Menyimpan resolusi ke Firestore
+        'resolution': resolution, 
+        'quality': quality, // Menyimpan quality ke Firestore
+        'showTitle': showTitle, // [BARU] Menyimpan status ON/OFF Title Overlay
         
         'status': 'PROCESSING_SCENE', // Langsung memicu backend (VEO)
         
@@ -301,7 +311,7 @@ class FirestoreVeoService {
         'errorDetail': null,
       });
 
-      debugPrint('✅ Project (VEO) created with ID ${docRef.id} and resolution $resolution. Backend auto-triggered.');
+      debugPrint('✅ Project (VEO) created with ID ${docRef.id}, resolution $resolution, quality $quality, showTitle: $showTitle. Backend auto-triggered.');
       return docRef.id;
 
     } catch (e) {

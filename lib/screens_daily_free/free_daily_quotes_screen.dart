@@ -46,7 +46,11 @@ class _FreeDailyQuotesScreenState extends ConsumerState<FreeDailyQuotesScreen> {
   // State Toggle Bahasa Bilingual (ID vs EN)
   bool _isEnglishMode = false;
 
-  // [BARU]: Timer Periodik untuk Iklan
+  // [BARU]: Pelacak Scroll Pemicu Iklan (Scroll ke-3 awal, lalu setiap 10 scroll)
+  int _scrollCount = 0;
+  bool _hasShownFirstAd = false;
+
+  // Timer Periodik untuk Iklan (Fallback pembaca santai)
   Timer? _periodicAdTimer;
 
   final List<String> _canonicalCategories = [
@@ -86,8 +90,7 @@ class _FreeDailyQuotesScreenState extends ConsumerState<FreeDailyQuotesScreen> {
     });
     // -----------------------------------------------------------------
 
-    // 3. [BARU]: Timer Periodik 7 Menit untuk Pembaca Santai
-    // Memicu iklan jika pengguna diam/merenung membaca satu quote dalam waktu lama
+    // 3. Timer Periodik 7 Menit untuk Pembaca Santai (Tetap tunduk pada cooldown 2 menit)
     _periodicAdTimer = Timer.periodic(const Duration(minutes: 7), (timer) {
       if (mounted && !kIsWeb) {
         _triggerAdWithTracking();
@@ -97,7 +100,6 @@ class _FreeDailyQuotesScreenState extends ConsumerState<FreeDailyQuotesScreen> {
 
   @override
   void dispose() {
-    // Bersihkan semua controller dan timer untuk mencegah memory leak
     _periodicAdTimer?.cancel();
     _pageController.dispose();
     _searchController.dispose();
@@ -107,7 +109,7 @@ class _FreeDailyQuotesScreenState extends ConsumerState<FreeDailyQuotesScreen> {
 
 //No ke-4: LOGIKA FILTER, PENCARIAN & HELPER KATEGORI...//
 //.......................................................//
-  /// [BARU]: Pemicu Iklan berdasarkan Scroll dengan Pelacak Klik (Conversion) ke Firestore
+  /// Pemicu Iklan dengan Pelacak Klik (Conversion) ke Firestore
   void _triggerAdWithTracking() {
     AdService().showInterstitial(
       onAdClicked: () {
@@ -115,7 +117,7 @@ class _FreeDailyQuotesScreenState extends ConsumerState<FreeDailyQuotesScreen> {
           ref.read(firestoreServiceProvider).logFeatureActivity(
             featureKey: 'daily_free',
             subFeatureKey: 'daily_quotes',
-            eventType: 'conversion', // <--- Mencatat Klik Iklan AdMob ke Firestore!
+            eventType: 'conversion',
           );
         }
       },
@@ -273,11 +275,23 @@ class _FreeDailyQuotesScreenState extends ConsumerState<FreeDailyQuotesScreen> {
                           controller: _pageController,
                           scrollDirection: Axis.vertical,
                           itemCount: _displayedQuotes.length,
-                          // [LOGIKA SINKRON]: Pemicu Iklan Setiap 7 Scroll + Pelacak Klik
+                          // [LOGIKA BARU]: Scroll ke-3 untuk awal, lalu setiap 10 scroll
                           onPageChanged: (int index) {
-                            if ((index + 1) % 7 == 0) {
-                              if (!kIsWeb) {
+                            if (kIsWeb) return;
+
+                            _scrollCount++;
+                            if (!_hasShownFirstAd) {
+                              // Iklan pertama muncul tepat pada scroll ke-3
+                              if (_scrollCount >= 3) {
                                 _triggerAdWithTracking();
+                                _hasShownFirstAd = true;
+                                _scrollCount = 0; // Reset hitungan untuk siklus 10 scroll
+                              }
+                            } else {
+                              // Setelah itu, iklan muncul setiap 10 scroll
+                              if (_scrollCount >= 10) {
+                                _triggerAdWithTracking();
+                                _scrollCount = 0;
                               }
                             }
                           },

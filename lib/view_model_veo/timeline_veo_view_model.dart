@@ -1,35 +1,29 @@
-﻿// --- KATEGORI_ISOLASI_VEO: Path file: view_model_veo/timeline_veo_view_model.dart ---
-// --- KATEGORI_PEMBERSIHAN: Karakter non-ASCII (U+00A0) telah dihapus ---
+﻿//================================================================//
+// NAMA FILE: TIMELINE_VEO_VIEW_MODEL.DART                        //
+// DIREKTORI: LIB/VIEW_MODEL_VEO/                                 //
+// DESKRIPSI: VIEW MODEL PENGELOLA TIMELINE & RENDER PACKET VEO   //
+//================================================================//
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+//No ke-1.........................................................//
+// IMPORT DEPENDENSI & KONSTANTA GLOBAL                           //
+//................................................................//
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart'; // Diperlukan untuk @immutable
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// --- KATEGORI_PENGHAPUSAN_VEO (Audio/TTS): Hapus impor yang tidak relevan ---
-// import 'package:audioplayers/audioplayers.dart'; // <-- DIHAPUS
-// import 'dart:math'; // <-- DIHAPUS (Tidak diperlukan untuk .ceil() atau Random())
-// --- AKHIR PENGHAPUSAN ---
-
-// --- KATEGORI_ISOLASI_VEO: Impor diubah ke _veo ---
 import '../models_veo/scene_veo.dart';
 import '../models_veo/video_project_veo.dart';
 import '../services_veo/firestore_veo_service.dart';
 import '../providers_veo/visual_settings_veo_provider.dart';
-// --- AKHIR MODIFIKASI ---
 
-// --- KATEGORI_KONSTANTA_VEO: Durasi Tetap Scene (Berdasarkan Prompt 8s) ---
+// Durasi Tetap Scene VEO 3.1 (Default 8 Detik per Prompt Adegan)
 const double kDefaultSceneDuration = 8.0;
-// --- AKHIR KONSTANTA VEO ---
+//................................................................//
 
-
-// =========================================================================
-// === BAGIAN 1: PROVIDER BAHAN MENTAH (ISOLASI VEO) ===
-// =========================================================================
-
-// (Provider 'firestoreVeoServiceProvider' sekarang diimpor dari visual_settings_veo_provider.dart)
-
-// --- KATEGORI_ISOLASI_VEO: Provider diubah namanya dan tipe datanya ---
+//No ke-2.........................................................//
+// PROVIDER BAHAN MENTAH (STREAM PROVIDER)                        //
+//................................................................//
 final projectVeoStreamProvider = StreamProvider.family<VideoProjectVeo?, String>((ref, projectId) {
   final firestoreService = ref.watch(firestoreVeoServiceProvider);
   return firestoreService.getProjectStream(projectId).handleError((error, stackTrace) {
@@ -45,93 +39,53 @@ final scenesVeoStreamProvider = StreamProvider.family<List<SceneVeo>, String>((r
     return [];
   });
 });
-// --- AKHIR MODIFIKASI ---
+//................................................................//
 
-
-// =========================================================================
-// === BAGIAN 2: MODEL DATA "MATANG" (ISOLASI VEO) ===
-// =========================================================================
-
-// --- KATEGORI_PENGHAPUSAN_VEO: Hapus SubtitleChunkVeo class dan logicnya ---
-// (Class SubtitleChunkVeo DIHAPUS)
-// --- AKHIR PENGHAPUSAN ---
-
+//No ke-3.........................................................//
+// MODEL DATA MATANG (PROCESSED TIMELINE DATA)                    //
+//................................................................//
 /// Model data matang untuk SATU scene VEO.
 @immutable
-// --- KATEGORI_ISOLASI_VEO: Nama Class diubah ---
 class ProcessedSceneDataVeo {
-// --- AKHIR MODIFIKASI ---
-  // --- KATEGORI_ISOLASI_VEO: Tipe data diubah ---
   final SceneVeo originalScene;
-  // --- AKHIR MODIFIKASI ---
-  // --- KATEGORI_PENGHAPUSAN_VEO: Durasi Audio DIHAPUS (Gunakan Video Duration) ---
-  // final double actualAudioDuration; // <-- DIHAPUS
-  final double actualVideoDuration; // <-- DIGUNAKAN UNTUK DURASI SCENE
-  // --- AKHIR PENGHAPUSAN ---
+  final double actualVideoDuration;
   final double absoluteStartTime;
   final double absoluteEndTime;
 
-  // --- KATEGORI_PENGHAPUSAN_VEO: Hapus Subtitle Chunks ---
-  // final List<SubtitleChunkVeo> subtitleChunks; // <-- DIHAPUS
-  // --- AKHIR PENGHAPUSAN ---
-
-  // --- KATEGORI_ISOLASI_VEO: Konstruktor diubah ---
   const ProcessedSceneDataVeo({
-  // --- AKHIR MODIFIKASI ---
     required this.originalScene,
     required this.actualVideoDuration,
     required this.absoluteStartTime,
     required this.absoluteEndTime,
-    // required this.subtitleChunks, // <-- DIHAPUS
   });
 
-  /// Mengubah data matang ini menjadi JSON untuk "Paket Tugas Render".
+  /// Mengubah data adegan matang menjadi Map untuk Paket Render.
   Map<String, dynamic> toJson() {
     return {
       'sceneId': originalScene.id,
       'segmentText': originalScene.segmentText,
-      // --- KATEGORI_ISOLASI_VEO: Perubahan Semantik (videoUrl) ---
-      'videoUrl': originalScene.videoUrl, // <-- Menggantikan imageUrl
-      // --- KATEGORI_PENGHAPUSAN_VEO: Hapus TTS dan Durasi Audio/Subtitle ---
-      // 'ttsAudioUrl': originalScene.ttsAudioUrl, // <-- DIHAPUS
-      // 'actualAudioDuration': actualAudioDuration, // <-- DIHAPUS
-      // 'subtitleChunks': subtitleChunks.map((c) => c.toJson()).toList(), // <-- DIHAPUS
-      // --- AKHIR PENGHAPUSAN ---
+      'videoUrl': originalScene.videoUrl,
       'absoluteStartTime': absoluteStartTime,
       'absoluteEndTime': absoluteEndTime,
     };
   }
 }
 
+/// Model data matang untuk keseluruhan garis waktu (Timeline) VEO.
 @immutable
-// --- KATEGORI_ISOLASI_VEO: Nama Class diubah ---
 class ProcessedTimelineDataVeo {
-// --- AKHIR MODIFIKASI ---
-  // --- KATEGORI_PENGHAPUSAN_VEO: Hapus Durasi Intro ---
-  // final double introDuration; // <-- DIHAPUS
-  // --- AKHIR PENGHAPUSAN ---
-  // --- KATEGORI_ISOLASI_VEO: Tipe data diubah ---
   final List<ProcessedSceneDataVeo> scenes;
-  // --- AKHIR MODIFIKASI ---
   final double totalTimelineDuration;
-  // --- KATEGORI_PENGHAPUSAN_VEO: Hapus isCalculating (Tidak ada TTS measurement) ---
-  final bool isCalculating; // <-- Tetap true hanya saat scenesAsync loading
-  // --- AKHIR PENGHAPUSAN ---
+  final bool isCalculating;
 
-  // --- KATEGORI_ISOLASI_VEO: Konstruktor diubah ---
   const ProcessedTimelineDataVeo({
-  // --- AKHIR MODIFIKASI ---
-    // required this.introDuration, // <-- DIHAPUS
     required this.scenes,
     required this.totalTimelineDuration,
     required this.isCalculating,
   });
 
-  // --- KATEGORI_ISOLASI_VEO: Factory diubah ---
   factory ProcessedTimelineDataVeo.loading() {
     return const ProcessedTimelineDataVeo(
-    // --- AKHIR MODIFIKASI ---
-      // introDuration: 0.0, // <-- DIHAPUS
       scenes: [],
       totalTimelineDuration: 0.0,
       isCalculating: true,
@@ -140,95 +94,46 @@ class ProcessedTimelineDataVeo {
 
   Map<String, dynamic> toJson() {
     return {
-      // 'introDuration': introDuration, // <-- DIHAPUS
       'totalTimelineDuration': totalTimelineDuration,
       'scenes': scenes.map((scene) => scene.toJson()).toList(),
     };
   }
 }
+//................................................................//
 
-// =========================================================================
-// === BAGIAN 3: HELPER (LOGIKA DIHAPUS/DIROMBAK) ===
-// =========================================================================
-
-// --- KATEGORI_PENGHAPUSAN_VEO: Hapus _measureAudioDuration ---
-// (Fungsi _measureAudioDuration DIHAPUS)
-// --- AKHIR PENGHAPUSAN ---
-
-// --- KATEGORI_PENGHAPUSAN_VEO: Hapus _injectNewlines ---
-// (Fungsi _injectNewlines DIHAPUS)
-// --- AKHIR PENGHAPUSAN ---
-
-
-// =========================================================================
-// === BAGIAN 4: "PABRIK PROVIDER" TERPUSAT (ISOLASI VEO) ===
-// =========================================================================
-
-// --- KATEGORI_ISOLASI_VEO: Provider diubah namanya ---
+//No ke-4.........................................................//
+// PABRIK PROVIDER TERPUSAT (TIMELINE STREAM PROVIDER)            //
+//................................................................//
 final processedTimelineVeoProvider = StreamProvider.family<ProcessedTimelineDataVeo, String>((ref, projectId) async* {
-// --- AKHIR MODIFIKASI ---
-  
-  // 1. Tonton (watch) semua "Bahan Mentah" VEO
-  // --- KATEGORI_PENGHAPUSAN_VEO: Hapus semua referensi VisualSettings (karena sudah dihapus) ---
+  // 1. Monitor pengaturan visual & bahan mentah
   ref.watch(visualSettingsVeoProvider(projectId)); 
-  // --- AKHIR PENGHAPUSAN ---
   
   final scenesAsync = ref.watch(scenesVeoStreamProvider(projectId));
   final projectAsync = ref.watch(projectVeoStreamProvider(projectId));
 
-  // 2. Handle State Loading
-  final scenes = scenesAsync.asData?.value; // Tipe: List<SceneVeo>
-  final project = projectAsync.asData?.value; // Tipe: VideoProjectVeo
+  // 2. Tangani status pemuatan data
+  final scenes = scenesAsync.asData?.value;
+  final project = projectAsync.asData?.value;
 
   if (scenes == null || project == null) {
-    // --- KATEGORI_ISOLASI_VEO: Tipe data diubah ---
     yield ProcessedTimelineDataVeo.loading();
-    // --- AKHIR MODIFIKASI ---
     return;
   }
 
-// --- "PABRIK" VEO DIMULAI (Logika Penyederhanaan) ---
-  
-// --- KATEGORI_PENGHAPUSAN_VEO: Hapus isAnyAudioMissing ---
-// final bool isAnyAudioMissing = scenes.any((s) => s.ttsAudioUrl.isEmpty); // <-- DIHAPUS
-
-// 3. Eksekusi Pengukuran Durasi (Sederhana)
-  
-  // --- KATEGORI_PENGHAPUSAN_VEO: Hapus Logic Intro/TTS Measurement ---
-  // final double finalIntroDuration = 0.0; // <-- DIHAPUS
-  // (Semua measurement futures DIHAPUS)
-  // --- AKHIR PENGHAPUSAN ---
-
-
-  // 4. "Memasak" Data (SINKRON)
-  
-  // --- KATEGORI_ISOLASI_VEO: Tipe data diubah ---
+  // 3. Susun data adegan secara berurutan dan hitung garis waktu
   final List<ProcessedSceneDataVeo> processedScenes = [];
-  // --- AKHIR MODIFIKASI ---
-  double currentPlaybackTime = 0.0; // Mulai dari 0.0
-  double totalDuration = 0.0; // Mulai dari 0.0
+  double currentPlaybackTime = 0.0;
+  double totalDuration = 0.0;
 
   for (int i = 0; i < scenes.length; i++) {
-    final scene = scenes[i]; // Tipe: SceneVeo
-    
-    // --- KATEGORI_REFAKTOR_LOGIC: Durasi Scene Selalu Default ---
-    // Kita mengasumsikan durasi video VEO 3.1 adalah 8.0 detik per prompt.
-    // Jika Veo API mengirim durasi (scene.duration), kita akan menggunakannya, 
-    // jika tidak, kita gunakan fallback 8.0s.
+    final scene = scenes[i];
     final double sceneDuration = scene.duration ?? kDefaultSceneDuration;
 
-    // --- KATEGORI_PENGHAPUSAN_VEO: Hapus Logic Subtitle Chunking ---
-    // (Semua logika subtitle chunking DIHAPUS)
-    // --- AKHIR PENGHAPUSAN ---
-
-    // --- KATEGORI_ISOLASI_VEO: Tipe data diubah ---
     final processedScene = ProcessedSceneDataVeo(
-    // --- AKHIR MODIFIKASI ---
       originalScene: scene,
-      actualVideoDuration: sceneDuration, // <-- Menggunakan durasi scene
+      actualVideoDuration: sceneDuration,
       absoluteStartTime: currentPlaybackTime,
       absoluteEndTime: currentPlaybackTime + sceneDuration,
-      // subtitleChunks: [], // <-- DIHAPUS
     );
 
     processedScenes.add(processedScene);
@@ -236,69 +141,85 @@ final processedTimelineVeoProvider = StreamProvider.family<ProcessedTimelineData
     totalDuration += sceneDuration;
   }
 
-  // 5. "Yield" Data Matang
-  // --- KATEGORI_ISOLASI_VEO: Tipe data diubah ---
+  // 4. Salurkan hasil kalkulasi garis waktu ke UI
   yield ProcessedTimelineDataVeo(
-  // --- AKHIR MODIFIKASI ---
-    // introDuration: 0.0, // <-- DIHAPUS
     scenes: processedScenes,
     totalTimelineDuration: totalDuration,
-    isCalculating: false, // <-- Selalu false karena tidak ada measurement
+    isCalculating: false,
   );
-
 });
+//................................................................//
 
-// =========================================================================
-// === BAGIAN 5: FUNGSI "PERAKITAN" UTAMA (ISOLASI VEO) ===
-// =========================================================================
-
-// --- KATEGORI_ISOLASI_VEO: Fungsi diubah namanya ---
+//No ke-5.........................................................//
+// FUNGSI PERAKITAN UTAMA RENDER PACKET & HELPER                  //
+//................................................................//
 Future<void> prepareAndSaveRenderPacketVeo(WidgetRef ref, String projectId) async {
-// --- AKHIR MODIFIKASI ---
   debugPrint("prepareAndSaveRenderPacket (VEO): Memulai perakitan renderPacket untuk $projectId...");
   
   try {
-    // --- KATEGORI_ISOLASI_VEO: Dependensi diubah ---
     final firestoreService = ref.read(firestoreVeoServiceProvider);
     final visualSettings = ref.read(visualSettingsVeoProvider(projectId));
     final processedTimeline = await ref.read(processedTimelineVeoProvider(projectId).future);
     final project = await ref.read(projectVeoStreamProvider(projectId).future);
-    // --- AKHIR MODIFIKASI ---
 
-    // --- KATEGORI_PERBAIKAN_ARSITEKTUR (NULL_SAFETY): Perbaiki error null ---
     if (project == null) {
       debugPrint("❌ CRITICAL: Gagal menyimpan renderPacket (VEO) karena project null.");
       throw Exception("Project data is null. Cannot prepare render packet.");
     }
-    // --- AKHIR PERBAIKAN ---
 
-    // --- KATEGORI_PENGHAPUSAN_VEO: Hapus isCalculating check ---
     if (processedTimeline.scenes.isEmpty) {
       debugPrint("⚠️ prepareAndSaveRenderPacket (VEO): Timeline data is empty. Aborting.");
       throw Exception("Timeline data is empty.");
     }
-    // --- AKHIR PENGHAPUSAN ---
     
     final double aspectRatioValue = _calculateAspectRatioFromString(project.aspectRatio);
 
+    // Ambil dokumen Firestore untuk membaca konfigurasi showTitle secara akurat
+    final projectDoc = await firestoreService.getProject(projectId);
+    final Map<String, dynamic> projectData = projectDoc.data() ?? {};
+    final bool shouldShowTitle = projectData['showTitle'] ?? true;
+
+    final Map<String, dynamic> styleSettingsMap = visualSettings.toJson(aspectRatioValue);
+
+    // [SINKRONISASI STATUS ON/OFF JUDUL OVERLAY]
+    styleSettingsMap['showTitle'] = shouldShowTitle;
+    if (shouldShowTitle) {
+      final String projectTitle = project.title.isNotEmpty ? project.title : (projectData['title'] ?? '');
+      if (styleSettingsMap['title'] == null || styleSettingsMap['title'].toString().trim().isEmpty) {
+        styleSettingsMap['title'] = projectTitle;
+      }
+      if (styleSettingsMap['titleSettings'] is Map) {
+        final titleMap = styleSettingsMap['titleSettings'] as Map<String, dynamic>;
+        titleMap['show'] = true;
+        if (titleMap['text'] == null || titleMap['text'].toString().trim().isEmpty) {
+          titleMap['text'] = projectTitle;
+        }
+      }
+    } else {
+      styleSettingsMap['title'] = '';
+      if (styleSettingsMap['titleSettings'] is Map) {
+        final titleMap = styleSettingsMap['titleSettings'] as Map<String, dynamic>;
+        titleMap['show'] = false;
+        titleMap['text'] = '';
+      }
+    }
+
+    // Rakit paket akhir render
     final Map<String, dynamic> renderPacket = {
-      'styleSettings': visualSettings.toJson(aspectRatioValue),
+      'styleSettings': styleSettingsMap,
       'timingData': {
         'scenes': processedTimeline.toJson()['scenes'],
-        // --- KATEGORI_PENGHAPUSAN_VEO: Hapus Intro Duration ---
-        // 'introDuration': processedTimeline.introDuration, // <-- DIHAPUS
-        // --- AKHIR PENGHAPUSAN ---
         'totalTimelineDuration': processedTimeline.totalTimelineDuration,
       },
     };
 
-    // (Logika updateProject sudah benar, karena firestoreService adalah instance VEO)
+    // Simpan paket ke Firestore proyek VEO
     await firestoreService.updateProject(
       projectId,
       {'renderPacket': renderPacket},
     );
     
-    debugPrint("✅ prepareAndSaveRenderPacket (VEO): renderPacket lengkap berhasil disimpan ke Firestore untuk $projectId");
+    debugPrint("✅ prepareAndSaveRenderPacket (VEO): renderPacket lengkap berhasil disimpan ke Firestore untuk $projectId (showTitle: $shouldShowTitle)");
 
   } catch (e) {
     debugPrint("❌ CRITICAL: Gagal menyimpan renderPacket (VEO) ke Firestore: $e");
@@ -306,7 +227,7 @@ Future<void> prepareAndSaveRenderPacketVeo(WidgetRef ref, String projectId) asyn
   }
 }
 
-/// Helper (Dipertahankan)
+/// Helper untuk mengonversi string format '16:9' ke nilai double
 double _calculateAspectRatioFromString(String? ratioString) {
   if (ratioString == null || ratioString.isEmpty) {
     return 16 / 9;
@@ -322,3 +243,4 @@ double _calculateAspectRatioFromString(String? ratioString) {
   debugPrint("Invalid aspectRatio string '$ratioString' in timeline_veo_view_model, falling back to 16/9.");
   return 16 / 9;
 }
+//................................................................//

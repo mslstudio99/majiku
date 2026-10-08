@@ -1089,9 +1089,12 @@ class _TimelineReviewNaracinemaPlusScreenState extends ConsumerState<TimelineRev
                                     Navigator.pop(ctx);
                                     setState(() => _isTriggeringRender = true);
                                     await prepareAndSaveRenderNaracinemaPlusPacket(ref, widget.projectId);
+                                    
+                                    // [PERBAIKAN KRITIS]: Reset dan hapus link lama agar tombol download benar-benar memperbarui video
                                     await ref.read(firestoreNaracinemaPlusServiceProvider).updateProject(widget.projectId, {
                                       'status': 'RENDER_READY', 
                                       'needsReRender': false,
+                                      'finalVideoUrl': FieldValue.delete(), // <-- Hapus link lama seketika
                                       'renderReadyAt': FieldValue.serverTimestamp()
                                     });
                                   }

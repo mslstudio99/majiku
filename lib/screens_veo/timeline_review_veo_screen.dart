@@ -21,6 +21,7 @@ import '../view_model_veo/timeline_veo_view_model.dart';
 import 'visual_setting_veo_screen.dart';
 import '../providers_veo/visual_settings_veo_provider.dart';
 import '../providers/user_provider.dart';
+import '../providers/config_provider.dart'; // [BARU]: Membaca tarif token Veo (Standard & High)
 
 final firestoreVeoServiceProvider =
     Provider<FirestoreVeoService>((ref) => FirestoreVeoService());
@@ -65,6 +66,9 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
 
 //No ke-3: FUNGSI LIFECYCLE & TIMER...................................................................//
 //Sub-judul: Pengaturan siklus hidup widget dan penanganan timeout render backend.....................//
+  // [ISOLASI TIMER HITUNG MUNDUR]: Mencegah rebuild seluruh layar setiap 1 detik (Anti-Jitter/Anti-Getar)
+  final ValueNotifier<int> _renderCountdownNotifier = ValueNotifier<int>(3600);
+
   @override
   void initState() {
     super.initState();
@@ -74,19 +78,26 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
   void dispose() {
     _playbackTimer?.cancel();
     _uiRefreshTimer?.cancel();
+    _renderCountdownNotifier.dispose();
     _videoController?.dispose();
     super.dispose();
   }
 
-  void _startUiRefreshTimer() {
+  void _startUiRefreshTimer(int initialSeconds) {
+    _renderCountdownNotifier.value = initialSeconds;
     if (_uiRefreshTimer != null && _uiRefreshTimer!.isActive) {
       return;
     }
     _uiRefreshTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        setState(() {});
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_renderCountdownNotifier.value > 0) {
+        _renderCountdownNotifier.value--; // Murni memperbarui notifier tanpa memanggil setState()
       } else {
         timer.cancel();
+        _handleRenderTimeout();
       }
     });
   }
@@ -153,6 +164,10 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
   }
 
   void _startOrResumeSequencePlayback() async {
+    final currentLocale = ref.read(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     if (_currentSequenceIndex == -1) {
       _updatePlaybackTime(0.0);
     }
@@ -169,8 +184,8 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(timelineData == null
-              ? 'Timeline data not loaded yet.'
-              : 'Calculating... Please wait.'),
+              ? t('Timeline data not loaded yet.', 'Data timeline belum dimuat.')
+              : t('Calculating... Please wait.', 'Menghitung... Mohon tunggu.')),
           backgroundColor: Colors.orangeAccent,
         ),
       );
@@ -364,6 +379,10 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
   }
 
   Future<void> _playSingleVideo(int sceneIndex) async {
+    final currentLocale = ref.read(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     _stopSequencePlayback(resetIndex: false);
     
     setState(() {
@@ -381,7 +400,10 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
     final videoUrl = scene.videoUrl;
     if (videoUrl.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Video belum tersedia untuk diputar.')),
+        SnackBar(
+          content: Text(t('Video is not available to play yet.', 'Video belum tersedia untuk diputar.')),
+          backgroundColor: Colors.orangeAccent,
+        ),
       );
       return;
     }
@@ -401,7 +423,6 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
     }
   }
 //Akhir Blok 4........................................................................................//
-
 
 //No ke-5: WIDGET BANTUAN & UTILITAS..................................................................//
 //Sub-judul: Overlay Rendering Elegan Vmotion, Formatting Waktu, dan Kalkulasi Layout.................//
@@ -455,14 +476,18 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
   }
 
   Future<void> _launchURL(String urlString) async {
+    final currentLocale = ref.read(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     final Uri url = Uri.parse(urlString);
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       logger.error('Could not launch $urlString');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not open download link: $urlString'),
-            backgroundColor: Colors.red,
+            content: Text(t('Could not open download link: $urlString', 'Tidak dapat membuka tautan unduh: $urlString')),
+            backgroundColor: Colors.redAccent,
           ),
         );
       }
@@ -487,7 +512,6 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
   }
 
   Widget _buildVideoDisplay({Key? key}) {
-    // [MODIFIKASI] Agar video player tetap tampil meski play secara individual (_isPlayingSequence false)
     if (_videoController != null && _videoController!.value.isInitialized) {
       return VideoPlayer(_videoController!);
     }
@@ -499,20 +523,26 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
     );
   }
 
-  Widget _buildRenderingOverlay(int secondsRemaining, bool hasValidStartTime) {
+  // [PERBAIKAN ANTI-JITTER & BILINGUAL]: Menggunakan ValueListenableBuilder & teks bilingual
+  Widget _buildRenderingOverlay(bool hasValidStartTime) {
+    final currentLocale = ref.read(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     return Positioned.fill(
       child: AbsorbPointer(
         child: Container(
-          color: Colors.black.withOpacity(0.7),
+          color: Colors.black.withOpacity(0.75),
           child: Center(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
               decoration: BoxDecoration(
                 color: Colors.grey[900], 
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white12),
                 boxShadow: const [
                   BoxShadow(
-                    color: Colors.black54, 
+                    color: Colors.black87, 
                     blurRadius: 10,
                     offset: Offset(0, 4),
                   )
@@ -523,10 +553,10 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
                 children: [
                   const CircularProgressIndicator(color: Colors.blueAccent), 
                   const SizedBox(height: 16),
-                  const Text(
-                    "Rendering in minutes... You may safely leave this page",
+                  Text(
+                    t("Rendering in minutes... You may safely leave this page", "Sedang merender dalam beberapa menit... Anda dapat meninggalkan halaman ini"),
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: Colors.white, 
@@ -534,14 +564,19 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
                   ),
                   const SizedBox(height: 10),
                   if (hasValidStartTime)
-                    Text(
-                      "Auto Cancel in: ${_formatDuration(secondsRemaining)}",
-                      style: const TextStyle(fontSize: 14, color: Colors.white70), 
+                    ValueListenableBuilder<int>(
+                      valueListenable: _renderCountdownNotifier,
+                      builder: (context, secondsRemaining, _) {
+                        return Text(
+                          "${t('Auto Cancel in', 'Batal otomatis dalam')}: ${_formatDuration(secondsRemaining)}",
+                          style: const TextStyle(fontSize: 14, color: Colors.white70), 
+                        );
+                      },
                     )
                   else
-                    const Text(
-                      "Menunggu respons backend...",
-                      style: TextStyle(fontSize: 14, color: Colors.white70), 
+                    Text(
+                      t("Waiting for backend response...", "Menunggu respons backend..."),
+                      style: const TextStyle(fontSize: 14, color: Colors.white70), 
                     ),
                 ],
               ),
@@ -553,16 +588,176 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
   }
 //Akhir Blok 5........................................................................................//
 
-
-//====================================================================================================//
-// NAMA FILE: TIMELINE_REVIEW_VEO_SCREEN.DART                                                         //
-// DIREKTORI: lib/screens_veo/timeline_review_veo_screen.dart                                         //
-//====================================================================================================//
-
 //No ke-6: WIDGET UTAMA (METHOD BUILD)................................................................//
 //Sub-judul: Membangun struktur UI, Smart Controller Auto-Render, dan List Scene Timeline.............//
+  // --- [DIALOG REGENERATE KLIP BERBAYAR (1 SEGMEN TOKEN) - KONTRAST & ANTI-CRASH] ---
+  void _showPaidRegenerateDialog(SceneVeo scene, VideoProjectVeo project, [Map<String, dynamic>? projectMap]) {
+    final currentLocale = ref.read(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
+    final config = ref.read(appConfigProvider).valueOrNull;
+    final user = ref.read(firestoreUserProvider).valueOrNull;
+    final int userBalance = user?.tokenBalance ?? 0;
+
+    String quality = 'Standard';
+    String resolution = '720p';
+
+    if (projectMap != null) {
+      quality = projectMap['quality']?.toString() ?? 'Standard';
+      resolution = projectMap['resolution']?.toString() ?? '720p';
+    } else {
+      resolution = project.resolution.isNotEmpty ? project.resolution : '720p';
+    }
+
+    int costPerScene = 2700;
+    if (config != null) {
+      final vCosts = config.costs.veoCosts;
+      if (quality == 'High') {
+        costPerScene = resolution == '1080p' ? vCosts.highPerSegment1080p : vCosts.highPerSegment720p;
+      } else {
+        costPerScene = resolution == '1080p' ? vCosts.standardPerSegment1080p : vCosts.standardPerSegment720p;
+      }
+    } else {
+      if (quality == 'High') {
+        costPerScene = resolution == '1080p' ? 7500 : 7200;
+      } else {
+        costPerScene = resolution == '1080p' ? 3000 : 2700;
+      }
+    }
+
+    final bool hasEnoughTokens = userBalance >= costPerScene;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: Row(
+          children: [
+            const Icon(Icons.refresh_rounded, color: Colors.blueAccent),
+            const SizedBox(width: 8),
+            Text(t('Regenerate Clip ${scene.segmentIndex + 1}?', 'Regenerate Klip ${scene.segmentIndex + 1}?')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              t(
+                'Do you want to re-generate Veo AI Video for clip ${scene.segmentIndex + 1}?',
+                'Apakah Anda ingin membuat ulang Video AI Veo untuk klip ke-${scene.segmentIndex + 1}?'
+              ),
+              style: const TextStyle(fontSize: 14, color: Colors.white70),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: hasEnoughTokens ? Colors.blue.withOpacity(0.12) : Colors.red.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: hasEnoughTokens ? Colors.blueAccent.withOpacity(0.4) : Colors.redAccent.withOpacity(0.4),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.token, size: 16, color: hasEnoughTokens ? Colors.amber : Colors.redAccent),
+                      const SizedBox(width: 6),
+                      Text(
+                        t('Cost: $costPerScene Tokens (1 Clip)', 'Biaya: $costPerScene Token (1 Klip)'),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: hasEnoughTokens ? Colors.white : Colors.redAccent,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    t('Your Token Balance: $userBalance Tokens', 'Saldo Token Anda: $userBalance Token'),
+                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                  ),
+                  if (!hasEnoughTokens) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      t(
+                        'Insufficient token balance to regenerate this clip. Please top up your tokens.',
+                        'Saldo token tidak cukup untuk regenerasi klip ini. Silakan top up token terlebih dahulu.'
+                      ),
+                      style: const TextStyle(fontSize: 11, color: Colors.redAccent, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.white70),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(t('Cancel', 'Batal')),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blueAccent,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: Colors.grey[850],
+              disabledForegroundColor: Colors.grey[600],
+            ),
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: Text(t('Regenerate Clip', 'Regenerate Klip')),
+            onPressed: !hasEnoughTokens
+                ? null
+                : () async {
+                    Navigator.pop(ctx);
+                    _stopSequencePlayback();
+
+                    try {
+                      await FirebaseFirestore.instance
+                          .collection('projects_veo')
+                          .doc(widget.projectId)
+                          .update({
+                            'needsReRender': true,
+                          });
+                    } catch (e) {
+                      logger.error("Failed to update needsReRender: $e");
+                    }
+
+                    ref.read(firestoreVeoServiceProvider).requestVideoRegeneration(
+                      widget.projectId,
+                      scene.id,
+                    );
+
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(t(
+                            'Regenerating Clip ${scene.segmentIndex + 1} started (Cost: $costPerScene tokens)...',
+                            'Memulai regenerasi Klip ${scene.segmentIndex + 1} (Biaya: $costPerScene token)...'
+                          )),
+                          backgroundColor: Colors.blueAccent,
+                        ),
+                      );
+                    }
+                  },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final currentLocale = ref.watch(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     final projectAsyncValue =
         ref.watch(projectVeoStreamProvider(widget.projectId));
     final processedTimelineAsync =
@@ -628,11 +823,11 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
       data: AppTheme.darkTheme,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Review Project (Veo)'),
+          title: Text(t('Review Project (Veo)', 'Review Proyek (Veo)')),
           actions: [
             IconButton(
               icon: const Icon(Icons.tune),
-              tooltip: 'Visual Settings',
+              tooltip: t('Visual Settings', 'Pengaturan Visual'),
               onPressed: () {
                 _stopSequencePlayback();
                 _cancelUiRefreshTimer();
@@ -651,13 +846,13 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
         body: projectAsyncValue.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, stack) =>
-              Center(child: Text('Error loading project: $error')),
+              Center(child: Text('${t("Error loading project", "Gagal memuat proyek")}: $error')),
           data: (project) {
             if (project == null) {
-              return const Center(
+              return Center(
                 child: Text(
-                  "Error: Proyek tidak ditemukan atau gagal dimuat.",
-                  style: TextStyle(color: Colors.red),
+                  t("Error: Project not found or failed to load.", "Error: Proyek tidak ditemukan atau gagal dimuat."),
+                  style: const TextStyle(color: Colors.redAccent),
                 ),
               );
             }
@@ -668,864 +863,927 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
             // [SINKRONISASI UI]: Menampilkan Overlay MURNI membaca status dari Backend
             final bool isProjectRendering = !isRenderComplete && (
                 project.status == 'RENDER_READY' || 
-                project.status == 'RENDER_START' ||
+                project.status == 'RENDER_START' || 
                 project.status == 'RENDERING');
 
-            final bool canRender = areAllScenesValid && !isRenderComplete && !isProjectRendering;
-            
-            bool hasValidStartTime = false;
-            int secondsRemainingForOverlay = _renderTimeoutDuration;
-            
-            if (isProjectRendering) {
-              final Timestamp? startTime = project.renderStartedAt;
-              if (startTime != null) {
-                hasValidStartTime = true;
-                final int nowSeconds = Timestamp.now().seconds;
-                final int startSeconds = startTime.seconds;
-                final int elapsedSeconds = nowSeconds - startSeconds;
-                secondsRemainingForOverlay =
-                    (_renderTimeoutDuration - elapsedSeconds);
-                if (secondsRemainingForOverlay <= 0) {
-                  _cancelUiRefreshTimer();
-                  WidgetsBinding.instance
-                      .addPostFrameCallback((_) => _handleRenderTimeout());
-                } else {
-                  _startUiRefreshTimer();
-                }
-              } else {
-                _cancelUiRefreshTimer();
-              }
-            } else {
-              _cancelUiRefreshTimer();
-            }
-            
-            return Stack(
-              children: [
-                Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                      child: Text(
-                        visualSettings.titleSettings.text,
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineSmall
-                            ?.copyWith(color: Colors.white),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
+            // --- [STREAM BUILDER: MEMBACA FLAG needsReRender DARI FIRESTORE] ---
+            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance.collection('projects_veo').doc(widget.projectId).snapshots(),
+              builder: (context, projectSnap) {
+                final Map<String, dynamic>? projectMap = projectSnap.data?.data();
+                final bool needsReRender = projectMap?['needsReRender'] ?? false;
 
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 8.0, horizontal: 16.0),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxHeight: 250),
-                          child: AspectRatio(
-                            aspectRatio: aspectRatioValue,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: Colors.grey.shade400,
-                                  width: 2.0,
-                                ),
-                                color: Colors.black87,
-                              ),
-                              child: ClipRRect(
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    _buildVideoDisplay(
-                                      key: ValueKey<String?>(_videoController
-                                              ?.dataSource ??
-                                          'no_video'),
+                // LOGIKA TOMBOL RENDER: ON jika pertama kali siap atau setelah regenerasi klip manual
+                final bool canRender;
+                if (isProjectRendering) {
+                  canRender = false;
+                } else if (needsReRender) {
+                  canRender = areAllScenesValid;
+                } else if (project.status == 'ASSETS_COMPLETE' && (project.finalVideoUrl == null || project.finalVideoUrl!.isEmpty)) {
+                  canRender = areAllScenesValid;
+                } else if (project.status == 'ERROR_RENDER') {
+                  canRender = areAllScenesValid;
+                } else {
+                  canRender = false;
+                }
+
+                // [PERBAIKAN KUNCI SIBUK]: Proyek HANYA dianggap sibuk jika rendering Cloud Run sedang aktif berjalan
+                final bool isProjectActivelyRendering = (project.status == 'RENDER_START') || 
+                                                        (project.status == 'RENDERING');
+            
+                bool hasValidStartTime = false;
+                if (isProjectRendering) {
+                  final Timestamp? startTime = project.renderStartedAt;
+                  if (startTime != null) {
+                    hasValidStartTime = true;
+                    final int nowSeconds = Timestamp.now().seconds;
+                    final int startSeconds = startTime.seconds;
+                    final int elapsedSeconds = nowSeconds - startSeconds;
+                    final int secondsRemaining = (_renderTimeoutDuration - elapsedSeconds);
+                    if (secondsRemaining <= 0) {
+                      _cancelUiRefreshTimer();
+                      WidgetsBinding.instance
+                          .addPostFrameCallback((_) => _handleRenderTimeout());
+                    } else {
+                      // Mulai isolasi notifier tanpa memanggil setState()
+                      _startUiRefreshTimer(secondsRemaining);
+                    }
+                  } else {
+                    _cancelUiRefreshTimer();
+                  }
+                } else {
+                  _cancelUiRefreshTimer();
+                }
+                
+                return Stack(
+                  children: [
+                    Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                          child: Text(
+                            visualSettings.titleSettings.text,
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(color: Colors.white),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 8.0, horizontal: 16.0),
+                          child: Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxHeight: 250),
+                              child: AspectRatio(
+                                aspectRatio: aspectRatioValue,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                      color: Colors.grey.shade600,
+                                      width: 2.0,
                                     ),
-                                    AnimatedOpacity(
-                                      key: ValueKey(
-                                          'title_${_showTitleOverlay}_${visualSettings.titleSettings.text.hashCode}'),
-                                      opacity: _showTitleOverlay ? 1.0 : 0.0,
-                                      duration:
-                                          const Duration(milliseconds: 300),
-                                      child: Visibility(
-                                        visible: _showTitleOverlay,
-                                        maintainState: false,
-                                        maintainAnimation: false,
-                                        child: Align(
-                                          alignment: Alignment(
-                                              0.0,
-                                              visualSettings.titleSettings
-                                                  .verticalAlignment),
-                                          child: FractionallySizedBox(
-                                            widthFactor: visualSettings
-                                                .titleSettings
-                                                .textBlockWidthFactor,
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 6),
-                                              child: Text(
-                                                visualSettings
-                                                    .titleSettings.text,
-                                                style: _getTextStyle(
+                                    color: Colors.black87,
+                                  ),
+                                  child: ClipRRect(
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        _buildVideoDisplay(
+                                          key: ValueKey<String?>(_videoController
+                                                  ?.dataSource ??
+                                              'no_video'),
+                                        ),
+                                        AnimatedOpacity(
+                                          key: ValueKey(
+                                              'title_${_showTitleOverlay}_${visualSettings.titleSettings.text.hashCode}'),
+                                          opacity: _showTitleOverlay ? 1.0 : 0.0,
+                                          duration:
+                                              const Duration(milliseconds: 300),
+                                          child: Visibility(
+                                            visible: _showTitleOverlay,
+                                            maintainState: false,
+                                            maintainAnimation: false,
+                                            child: Align(
+                                              alignment: Alignment(
+                                                  0.0,
                                                   visualSettings.titleSettings
-                                                      .baseFontSize,
-                                                  visualSettings
-                                                      .titleSettings.color,
-                                                  weight: FontWeight.bold,
+                                                      .verticalAlignment),
+                                              child: FractionallySizedBox(
+                                                widthFactor: visualSettings
+                                                    .titleSettings
+                                                    .textBlockWidthFactor,
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                          horizontal: 12,
+                                                          vertical: 6),
+                                                  child: Text(
+                                                    visualSettings
+                                                        .titleSettings.text,
+                                                    style: _getTextStyle(
+                                                      visualSettings.titleSettings
+                                                          .baseFontSize,
+                                                      visualSettings
+                                                          .titleSettings.color,
+                                                      weight: FontWeight.bold,
+                                                    ),
+                                                    textAlign: TextAlign.center,
+                                                    maxLines: visualSettings
+                                                        .titleSettings.maxLines,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
                                                 ),
-                                                textAlign: TextAlign.center,
-                                                maxLines: visualSettings
-                                                    .titleSettings.maxLines,
-                                                overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    ),
-                                    AnimatedOpacity(
-                                      key: ValueKey(
-                                          'desc_${_showDescriptionOverlay}_${visualSettings.descriptionSettings.text.hashCode}'),
-                                      opacity:
-                                          _showDescriptionOverlay ? 1.0 : 0.0,
-                                      duration:
-                                          const Duration(milliseconds: 300),
-                                      child: Visibility(
-                                        visible: _showDescriptionOverlay,
-                                        maintainState: false,
-                                        maintainAnimation: false,
-                                        child: Align(
-                                          alignment: Alignment(
-                                              0.0,
-                                              visualSettings.descriptionSettings
-                                                  .verticalAlignment),
-                                          child: FractionallySizedBox(
-                                            widthFactor: visualSettings
-                                                .descriptionSettings
-                                                .textBlockWidthFactor,
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 12,
-                                                      vertical: 6),
-                                              child: Text(
-                                                visualSettings
-                                                    .descriptionSettings.text,
-                                                style: _getTextStyle(
-                                                  visualSettings
-                                                      .descriptionSettings
-                                                      .baseFontSize,
-                                                  visualSettings
-                                                      .descriptionSettings
-                                                      .color,
-                                                  weight: FontWeight.normal,
-                                                ),
-                                                textAlign: TextAlign.center,
-                                                maxLines: visualSettings
+                                        AnimatedOpacity(
+                                          key: ValueKey(
+                                              'desc_${_showDescriptionOverlay}_${visualSettings.descriptionSettings.text.hashCode}'),
+                                          opacity:
+                                              _showDescriptionOverlay ? 1.0 : 0.0,
+                                          duration:
+                                              const Duration(milliseconds: 300),
+                                          child: Visibility(
+                                            visible: _showDescriptionOverlay,
+                                            maintainState: false,
+                                            maintainAnimation: false,
+                                            child: Align(
+                                              alignment: Alignment(
+                                                  0.0,
+                                                  visualSettings.descriptionSettings
+                                                      .verticalAlignment),
+                                              child: FractionallySizedBox(
+                                                widthFactor: visualSettings
                                                     .descriptionSettings
-                                                    .maxLines,
-                                                overflow: TextOverflow.ellipsis,
+                                                    .textBlockWidthFactor,
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                          horizontal: 12,
+                                                          vertical: 6),
+                                                  child: Text(
+                                                    visualSettings
+                                                        .descriptionSettings.text,
+                                                    style: _getTextStyle(
+                                                      visualSettings
+                                                          .descriptionSettings
+                                                          .baseFontSize,
+                                                      visualSettings
+                                                          .descriptionSettings
+                                                          .color,
+                                                      weight: FontWeight.normal,
+                                                    ),
+                                                    textAlign: TextAlign.center,
+                                                    maxLines: visualSettings
+                                                        .descriptionSettings
+                                                        .maxLines,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
                                               ),
                                             ),
                                           ),
                                         ),
-                                      ),
+                                      ],
                                     ),
-                                  ],
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
 
-                    if (isRenderComplete &&
-                        finalVideoUrl != null &&
-                        finalVideoUrl.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 12.0, horizontal: 16.0),
-                        child: ElevatedButton.icon(
-                          onPressed: () => _launchURL(finalVideoUrl),
-                          icon: const Icon(Icons.download_for_offline),
-                          label: const Text('DOWNLOAD FINAL VIDEO'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green.shade700,
-                            foregroundColor: Colors.white,
+                        if (isRenderComplete &&
+                            finalVideoUrl != null &&
+                            finalVideoUrl.isNotEmpty)
+                          Padding(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 12),
-                            textStyle: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold),
+                                vertical: 12.0, horizontal: 16.0),
+                            child: ElevatedButton.icon(
+                              onPressed: () => _launchURL(finalVideoUrl),
+                              icon: const Icon(Icons.download_for_offline),
+                              label: Text(t('DOWNLOAD FINAL VIDEO', 'UNDUH FINAL VIDEO')),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green.shade600,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 20, vertical: 12),
+                                textStyle: const TextStyle(
+                                    fontSize: 16, fontWeight: FontWeight.bold),
+                                elevation: 3,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
 
-                    const Divider(height: 1, thickness: 1),
+                        const Divider(height: 1, thickness: 1),
 
-                    Expanded(
-                      child: processedTimelineAsync.when(
-                        loading: () => const Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              CircularProgressIndicator(),
-                              SizedBox(height: 12),
-                              Text("Loading Timeline..."),
-                            ],
-                          ),
-                        ),
-                        error: (error, stack) => Center(
-                            child: Text('Error loading timeline data: $error')),
-                        data: (timelineData) {
-                          _currentScenes = timelineData.scenes
-                              .map((e) => e.originalScene)
-                              .toList();
-                          _currentProcessedScenes = timelineData.scenes;
-                          final scenes = _currentScenes;
+                        Expanded(
+                          child: processedTimelineAsync.when(
+                            loading: () => Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const CircularProgressIndicator(),
+                                  const SizedBox(height: 12),
+                                  Text(t("Loading Timeline...", "Memuat Timeline...")),
+                                ],
+                              ),
+                            ),
+                            error: (error, stack) => Center(
+                                child: Text('${t("Error loading timeline data", "Gagal memuat data timeline")}: $error')),
+                            data: (timelineData) {
+                              _currentScenes = timelineData.scenes
+                                  .map((e) => e.originalScene)
+                                  .toList();
+                              _currentProcessedScenes = timelineData.scenes;
+                              final scenes = _currentScenes;
 
-                          if (scenes.isEmpty) {
-                            if (processedTimelineAsync.isLoading) {
-                              return const Center(
-                                  child: Text("Loading Timeline..."));
-                            }
-                            if (project.status == 'PROCESSING_SCENE' ||
-                                project.status == 'PROCESSING_REFINEMENT') {
-                              return const Center(
-                                  child: Text("Generating scenes..."));
-                            }
-                            return const Center(
-                                child: Text("No scenes found for this project."));
-                          }
-                          
-                          return Column(
-                            children: [
-                              Expanded(
-                                child: CustomScrollView(
-                                  slivers: [
-                                    SliverList(
-                                      delegate: SliverChildBuilderDelegate(
-                                        (context, index) {
-                                          final sceneIndex = index;
-                                          final scene = scenes[sceneIndex];
-                                          final isCurrentlyPlayingInSequence =
-                                              _isPlayingSequence &&
-                                                  _currentSequenceIndex == sceneIndex;
-                                          final bool isSelectedManually = ref
-                                                  .watch(selectedSceneVeoProvider)
-                                                  ?.id ==
-                                              scene.id &&
-                                              !_isPlayingSequence;
+                              if (scenes.isEmpty) {
+                                if (processedTimelineAsync.isLoading) {
+                                  return Center(
+                                      child: Text(t("Loading Timeline...", "Memuat Timeline...")));
+                                }
+                                if (project.status == 'PROCESSING_SCENE' ||
+                                    project.status == 'PROCESSING_REFINEMENT') {
+                                  return Center(
+                                      child: Text(t("Generating scenes...", "Membuat adegan...")));
+                                }
+                                return Center(
+                                    child: Text(t("No scenes found for this project.", "Tidak ada adegan ditemukan untuk proyek ini.")));
+                              }
+                              
+                              return Column(
+                                children: [
+                                  Expanded(
+                                    child: CustomScrollView(
+                                      slivers: [
+                                        SliverList(
+                                          delegate: SliverChildBuilderDelegate(
+                                            (context, index) {
+                                              final sceneIndex = index;
+                                              final scene = scenes[sceneIndex];
+                                              final isCurrentlyPlayingInSequence =
+                                                  _isPlayingSequence &&
+                                                      _currentSequenceIndex == sceneIndex;
+                                              final bool isSelectedManually = ref
+                                                      .watch(selectedSceneVeoProvider)
+                                                      ?.id ==
+                                                  scene.id &&
+                                                  !_isPlayingSequence;
 
-                                          final bool isSceneProcessing =
-                                              scene.status == 'QUEUED_FOR_REFINE' ||
-                                                  scene.status == 'IS_REFINING' ||
-                                                  scene.status == 'QUEUED_FOR_VIDEO' ||
-                                                  scene.status == 'GENERATING_VIDEO' ||
-                                                  scene.status == 'PENDING_REFINEMENT' ||
-                                                  false;
+                                              final bool isSceneProcessing =
+                                                  scene.status == 'QUEUED_FOR_REFINE' ||
+                                                      scene.status == 'IS_REFINING' ||
+                                                      scene.status == 'QUEUED_FOR_VIDEO' ||
+                                                      scene.status == 'GENERATING_VIDEO' ||
+                                                      scene.status == 'PENDING_REFINEMENT' ||
+                                                      false;
 
-                                          final bool isError = (scene.status ?? '').startsWith('ERROR');
-                                          final bool isThisScenePlaying = _currentSequenceIndex == sceneIndex &&
-                                              _videoController != null &&
-                                              _videoController!.value.isInitialized &&
-                                              _videoController!.value.isPlaying;
+                                              final bool isError = (scene.status ?? '').startsWith('ERROR');
+                                              final bool isThisScenePlaying = _currentSequenceIndex == sceneIndex &&
+                                                  _videoController != null &&
+                                                  _videoController!.value.isInitialized &&
+                                                  _videoController!.value.isPlaying;
 
-                                          return Card(
-                                            margin: const EdgeInsets.symmetric(
-                                                horizontal: 8, vertical: 4),
-                                            color: isCurrentlyPlayingInSequence
-                                                ? Colors.lightBlue[50]
-                                                : (isSelectedManually
-                                                    ? Colors.grey[200]
-                                                    : null),
-                                            elevation: isCurrentlyPlayingInSequence
-                                                ? 4
-                                                : (isSelectedManually ? 2 : 1),
-                                            child: InkWell(
-                                              onTap: () {
-                                                if (_isPlayingSequence) {
-                                                  _stopSequencePlayback(
-                                                      resetIndex: false);
-                                                }
-                                                ref
-                                                    .read(selectedSceneVeoProvider
-                                                        .notifier)
-                                                    .state = scene;
-                                              },
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(8.0),
-                                                child: Row(
-                                                  children: [
-                                                    Container(
-                                                      width: 32,
-                                                      alignment: Alignment.centerLeft,
-                                                      child: Text(
-                                                        "${index + 1}.",
-                                                        style: Theme.of(context)
-                                                            .textTheme
-                                                            .titleSmall
-                                                            ?.copyWith(
-                                                              color: Theme.of(context)
-                                                                  .colorScheme
-                                                                  .onSurface
-                                                                  .withOpacity(0.6),
-                                                              fontWeight: FontWeight.bold,
-                                                            ),
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 4),
-
-                                                    Container(
-                                                      width: 80,
-                                                      height: 60,
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.grey[300],
-                                                        borderRadius:
-                                                            BorderRadius.circular(8),
-                                                        border:
-                                                            isCurrentlyPlayingInSequence
-                                                                ? Border.all(
-                                                                    color: Colors
-                                                                        .blueAccent,
-                                                                    width: 2)
-                                                                : (isSelectedManually
-                                                                    ? Border.all(
-                                                                        color: Colors
-                                                                            .grey,
-                                                                        width: 1)
-                                                                    : null),
-                                                      ),
-                                                      child: isSceneProcessing
-                                                          ? const Center(
-                                                              child: SizedBox(
-                                                                width: 24,
-                                                                height: 24,
-                                                                child:
-                                                                    CircularProgressIndicator(
-                                                                        strokeWidth:
-                                                                            3.0),
-                                                              ),
-                                                            )
-                                                          : Stack(
-                                                              alignment: Alignment.center,
-                                                              children: [
-                                                                Positioned.fill(
-                                                                  child: _VideoThumbnailItem(
-                                                                      videoUrl: scene.videoUrl),
+                                              return Card(
+                                                margin: const EdgeInsets.symmetric(
+                                                    horizontal: 8, vertical: 4),
+                                                // [PERBAIKAN KONTRAS TEMA GELAP]: Menggunakan aksen gelap elegan agar teks tetap terbaca tajam
+                                                color: isCurrentlyPlayingInSequence
+                                                    ? Colors.blue.withOpacity(0.20)
+                                                    : (isSelectedManually
+                                                        ? Colors.white.withOpacity(0.08)
+                                                        : null),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(10),
+                                                  side: BorderSide(
+                                                    color: isCurrentlyPlayingInSequence
+                                                        ? Colors.blueAccent
+                                                        : (isSelectedManually
+                                                            ? Colors.white24
+                                                            : Colors.transparent),
+                                                    width: 1.5,
+                                                  ),
+                                                ),
+                                                elevation: isCurrentlyPlayingInSequence ? 4 : (isSelectedManually ? 2 : 1),
+                                                child: InkWell(
+                                                  borderRadius: BorderRadius.circular(10),
+                                                  onTap: () {
+                                                    if (_isPlayingSequence) {
+                                                      _stopSequencePlayback(
+                                                          resetIndex: false);
+                                                    }
+                                                    ref
+                                                        .read(selectedSceneVeoProvider
+                                                            .notifier)
+                                                        .state = scene;
+                                                  },
+                                                  child: Padding(
+                                                    padding: const EdgeInsets.all(8.0),
+                                                    child: Row(
+                                                      children: [
+                                                        Container(
+                                                          width: 32,
+                                                          alignment: Alignment.centerLeft,
+                                                          child: Text(
+                                                            "${index + 1}.",
+                                                            style: Theme.of(context)
+                                                                .textTheme
+                                                                .titleSmall
+                                                                ?.copyWith(
+                                                                  color: Theme.of(context)
+                                                                      .colorScheme
+                                                                      .onSurface
+                                                                      .withOpacity(0.7),
+                                                                  fontWeight: FontWeight.bold,
                                                                 ),
-                                                                if (scene.videoUrl.isNotEmpty)
-                                                                  Material(
-                                                                    color: Colors.transparent,
-                                                                    child: InkWell(
-                                                                      borderRadius: BorderRadius.circular(20),
-                                                                      onTap: () => _togglePlaySingleVideo(sceneIndex),
-                                                                      child: Container(
-                                                                        padding: const EdgeInsets.all(4),
-                                                                        decoration: const BoxDecoration(
-                                                                          color: Colors.black54,
-                                                                          shape: BoxShape.circle,
-                                                                        ),
-                                                                        child: Icon(
-                                                                          isThisScenePlaying
-                                                                              ? Icons.pause
-                                                                              : Icons.play_arrow,
-                                                                          color: Colors.white,
-                                                                          size: 22,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(width: 4),
+
+                                                        Container(
+                                                          width: 80,
+                                                          height: 60,
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.black45,
+                                                            borderRadius:
+                                                                BorderRadius.circular(8),
+                                                            border: Border.all(color: Colors.white12),
+                                                          ),
+                                                          child: isSceneProcessing
+                                                              ? const Center(
+                                                                  child: SizedBox(
+                                                                    width: 24,
+                                                                    height: 24,
+                                                                    child:
+                                                                        CircularProgressIndicator(
+                                                                            strokeWidth:
+                                                                                3.0),
+                                                                  ),
+                                                                )
+                                                              : Stack(
+                                                                  alignment: Alignment.center,
+                                                                  children: [
+                                                                    Positioned.fill(
+                                                                      child: _VideoThumbnailItem(
+                                                                          videoUrl: scene.videoUrl),
+                                                                    ),
+                                                                    if (scene.videoUrl.isNotEmpty)
+                                                                      Material(
+                                                                        color: Colors.transparent,
+                                                                        child: InkWell(
+                                                                          borderRadius: BorderRadius.circular(20),
+                                                                          onTap: () => _togglePlaySingleVideo(sceneIndex),
+                                                                          child: Container(
+                                                                            padding: const EdgeInsets.all(4),
+                                                                            decoration: const BoxDecoration(
+                                                                              color: Colors.black54,
+                                                                              shape: BoxShape.circle,
+                                                                            ),
+                                                                            child: Icon(
+                                                                              isThisScenePlaying
+                                                                                  ? Icons.pause
+                                                                                  : Icons.play_arrow,
+                                                                              color: Colors.white,
+                                                                              size: 22,
+                                                                            ),
+                                                                          ),
                                                                         ),
                                                                       ),
+                                                                  ],
+                                                                ),
+                                                        ),
+                                                        const SizedBox(width: 12),
+
+                                                        Expanded(
+                                                          child: Column(
+                                                            crossAxisAlignment:
+                                                                CrossAxisAlignment.start,
+                                                            children: [
+                                                              Text(
+                                                                scene.segmentText ?? "",
+                                                                style: const TextStyle(
+                                                                    fontSize: 14,
+                                                                    fontWeight:
+                                                                        FontWeight.w500),
+                                                                maxLines: 2,
+                                                                overflow:
+                                                                    TextOverflow.ellipsis,
+                                                              ),
+                                                              const SizedBox(height: 4),
+                                                              if (scene.errorDetail !=
+                                                                      null &&
+                                                                  scene.errorDetail!
+                                                                      .isNotEmpty)
+                                                                Padding(
+                                                                  padding: const EdgeInsets
+                                                                      .only(top: 2.0),
+                                                                  child: Tooltip(
+                                                                    message:
+                                                                        scene.errorDetail!,
+                                                                    child: Text(
+                                                                      scene.errorDetail!,
+                                                                      style: const TextStyle(
+                                                                          fontSize: 10,
+                                                                          color: Colors.redAccent),
+                                                                      maxLines: 1,
+                                                                      overflow: TextOverflow
+                                                                          .ellipsis,
                                                                     ),
                                                                   ),
-                                                              ],
-                                                            ),
-                                                    ),
-                                                    const SizedBox(width: 12),
-
-                                                    Expanded(
-                                                      child: Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment.start,
-                                                        children: [
-                                                          Text(
-                                                            scene.segmentText ?? "",
-                                                            style: const TextStyle(
-                                                                fontSize: 14,
-                                                                fontWeight:
-                                                                    FontWeight.w500),
-                                                            maxLines: 2,
-                                                            overflow:
-                                                                TextOverflow.ellipsis,
+                                                                ),
+                                                            ],
                                                           ),
-                                                          const SizedBox(height: 4),
-                                                          if (scene.errorDetail !=
-                                                                  null &&
-                                                              scene.errorDetail!
-                                                                  .isNotEmpty)
-                                                            Padding(
-                                                              padding: const EdgeInsets
-                                                                  .only(top: 2.0),
-                                                              child: Tooltip(
-                                                                message:
-                                                                    scene.errorDetail!,
-                                                                child: Text(
-                                                                  scene.errorDetail!,
-                                                                  style: TextStyle(
-                                                                      fontSize: 10,
-                                                                      color: Colors
-                                                                          .red[700]),
-                                                                  maxLines: 1,
-                                                                  overflow: TextOverflow
-                                                                      .ellipsis,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                        ],
-                                                      ),
-                                                    ),
+                                                        ),
 
-                                                    if (isError)
-                                                      IconButton(
-                                                        icon: Icon(Icons.edit, 
-                                                            color: Colors.orange[700]),
-                                                        tooltip: 'Edit Prompt & Retry',
-                                                        onPressed: () {
-                                                          final TextEditingController _promptController = TextEditingController(
-                                                            text: scene.refinedPrompt ?? scene.rawPrompt ?? ""
-                                                          );
+                                                        if (isError)
+                                                          IconButton(
+                                                            icon: Icon(Icons.edit, 
+                                                                color: Colors.orange[400]),
+                                                            tooltip: t('Edit Prompt & Retry', 'Edit Prompt & Buat Ulang'),
+                                                            onPressed: () {
+                                                              final TextEditingController _promptController = TextEditingController(
+                                                                text: scene.refinedPrompt ?? scene.rawPrompt ?? ""
+                                                              );
 
-                                                          showDialog(
-                                                            context: context,
-                                                            builder: (ctx) => AlertDialog(
-                                                              backgroundColor: Theme.of(context).cardColor,
-                                                              title: Text('Edit Prompt (Scene ${index + 1})'),
-                                                              content: Column(
-                                                                mainAxisSize: MainAxisSize.min,
-                                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                                children: [
-                                                                   Text(
-                                                                    'Generation failed. You can manually edit the prompt below to fix policy issues or improve quality.\n',
-                                                                    style: Theme.of(context).textTheme.bodyMedium
-                                                                   ),
-                                                                   TextField(
-                                                                     controller: _promptController,
-                                                                     maxLines: 5,
-                                                                     decoration: const InputDecoration(
-                                                                       border: OutlineInputBorder(),
-                                                                       hintText: "Enter revised prompt here...",
-                                                                       labelText: "Video Prompt",
-                                                                     ),
-                                                                   ),
-                                                                   const SizedBox(height: 8),
-                                                                   Text(
-                                                                    'Last Error: ${scene.errorDetail ?? "Unknown"}',
-                                                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.red),
-                                                                   ),
-                                                                ],
-                                                              ),
-                                                              actions: [
-                                                                TextButton(
-                                                                  child: const Text('Cancel'),
-                                                                  onPressed: () => Navigator.of(ctx).pop(),
-                                                                ),
-                                                                FilledButton(
-                                                                  style: FilledButton.styleFrom(
-                                                                    backgroundColor: Colors.blue.shade700,
+                                                              showDialog(
+                                                                context: context,
+                                                                builder: (ctx) => AlertDialog(
+                                                                  backgroundColor: Colors.grey[900],
+                                                                  title: Text(t('Edit Prompt (Scene ${index + 1})', 'Edit Prompt (Scene ${index + 1})')),
+                                                                  content: Column(
+                                                                    mainAxisSize: MainAxisSize.min,
+                                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                                    children: [
+                                                                       Text(
+                                                                        t(
+                                                                          'Generation failed. You can manually edit the prompt below to fix policy issues or improve quality.\n',
+                                                                          'Generasi gagal. Anda dapat mengedit prompt secara manual di bawah untuk memperbaiki kebijakan atau mutu visual.\n'
+                                                                        ),
+                                                                        style: Theme.of(context).textTheme.bodyMedium
+                                                                       ),
+                                                                       TextField(
+                                                                         controller: _promptController,
+                                                                         maxLines: 5,
+                                                                         decoration: InputDecoration(
+                                                                           border: const OutlineInputBorder(),
+                                                                           hintText: t("Enter revised prompt here...", "Masukkan prompt revisi di sini..."),
+                                                                           labelText: t("Video Prompt", "Prompt Video"),
+                                                                         ),
+                                                                       ),
+                                                                       const SizedBox(height: 8),
+                                                                       Text(
+                                                                        '${t("Last Error", "Error Terakhir")}: ${scene.errorDetail ?? "Unknown"}',
+                                                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.redAccent),
+                                                                       ),
+                                                                    ],
                                                                   ),
-                                                                  child: const Text('Save & Regenerate'),
-                                                                  onPressed: () {
-                                                                    final newPrompt = _promptController.text;
-                                                                    if (newPrompt.trim().isEmpty) {
-                                                                      ScaffoldMessenger.of(context).showSnackBar(
-                                                                        const SnackBar(content: Text("Prompt cannot be empty!"))
-                                                                      );
-                                                                      return;
-                                                                    }
+                                                                  actions: [
+                                                                    TextButton(
+                                                                      style: TextButton.styleFrom(foregroundColor: Colors.white70),
+                                                                      child: Text(t('Cancel', 'Batal')),
+                                                                      onPressed: () => Navigator.of(ctx).pop(),
+                                                                    ),
+                                                                    FilledButton(
+                                                                      style: FilledButton.styleFrom(
+                                                                        backgroundColor: Colors.blueAccent,
+                                                                        foregroundColor: Colors.white,
+                                                                      ),
+                                                                      child: Text(t('Save & Regenerate', 'Simpan & Regenerate')),
+                                                                      onPressed: () {
+                                                                        final newPrompt = _promptController.text;
+                                                                        if (newPrompt.trim().isEmpty) {
+                                                                          ScaffoldMessenger.of(context).showSnackBar(
+                                                                            SnackBar(content: Text(t("Prompt cannot be empty!", "Prompt tidak boleh kosong!")))
+                                                                          );
+                                                                          return;
+                                                                        }
 
-                                                                    ref.read(firestoreVeoServiceProvider)
-                                                                       .updateScenePromptAndRegenerate(
-                                                                          widget.projectId,
-                                                                          scene.id,
-                                                                          newPrompt 
-                                                                       );
-                                                                    Navigator.of(ctx).pop();
-                                                                  },
+                                                                        ref.read(firestoreVeoServiceProvider)
+                                                                           .updateScenePromptAndRegenerate(
+                                                                              widget.projectId,
+                                                                              scene.id,
+                                                                              newPrompt 
+                                                                           );
+                                                                        Navigator.of(ctx).pop();
+                                                                      },
+                                                                    ),
+                                                                  ],
                                                                 ),
-                                                              ],
+                                                              );
+                                                            },
+                                                          ),
+                                                        
+                                                        const SizedBox(width: 4),
+
+                                                        // --- [TOMBOL DOWNLOAD HIJAU NEON (KONTRAST TINGGI DI DARK THEME)] ---
+                                                        IconButton(
+                                                          padding: EdgeInsets.zero,
+                                                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                                          icon: Icon(
+                                                            Icons.download_rounded, 
+                                                            color: scene.videoUrl.isNotEmpty 
+                                                                ? Colors.greenAccent.shade400 
+                                                                : Colors.grey[700], 
+                                                            size: 24,
+                                                          ),
+                                                          tooltip: t('Download Video Scene ${index + 1}', 'Unduh Video Scene ${index + 1}'),
+                                                          onPressed: scene.videoUrl.isNotEmpty
+                                                              ? () => _launchURL(scene.videoUrl)
+                                                              : null,
+                                                        ),
+
+                                                        const SizedBox(width: 4),
+
+                                                        // --- [TOMBOL REGENERATE BIRU ELEGAN (BERBAYAR 1 SEGMEN) - RESPONSIF] ---
+                                                        Material(
+                                                          color: Colors.transparent,
+                                                          child: IconButton(
+                                                            padding: EdgeInsets.zero,
+                                                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                                            icon: Icon(
+                                                              Icons.refresh_rounded, 
+                                                              color: (isSceneProcessing || isProjectActivelyRendering)
+                                                                  ? Colors.grey[700] 
+                                                                  : Colors.blueAccent, 
+                                                              size: 26,
                                                             ),
-                                                          );
-                                                        },
-                                                      ),
-                                                    
-                                                    const SizedBox(width: 4),
-                                                    IconButton(
-                                                      icon: const Icon(Icons.download, 
-                                                          color: Colors.blueAccent, size: 20),
-                                                      tooltip: 'Download Video Scene ${index + 1}',
-                                                      onPressed: () {
-                                                        if (scene.videoUrl.isNotEmpty) {
-                                                          _launchURL(scene.videoUrl);
-                                                        } else {
-                                                          ScaffoldMessenger.of(context).showSnackBar(
-                                                            const SnackBar(content: Text('Video belum tersedia'))
-                                                          );
-                                                        }
-                                                      },
-                                                    ),
-                                                    IconButton(
-                                                      icon: const Icon(Icons.flag_outlined, 
-                                                        color: Colors.redAccent, 
-                                                        size: 20
-                                                      ),
-                                                      tooltip: 'Lapor Konten Scene ${index + 1}',
-                                                      onPressed: () => _showSceneReportDialog(scene, index),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                        childCount: scenes.length,
-                                      ),
-                                    ),
-
-                                    if (project.identifiedCharacters.isNotEmpty) ...[
-                                      SliverToBoxAdapter(
-                                        child: Padding(
-                                          padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 24.0, bottom: 8.0),
-                                          child: Text(
-                                            "Image character:",
-                                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-
-                                      SliverList(
-                                        delegate: SliverChildBuilderDelegate(
-                                          (context, index) {
-                                            final charMap = project.identifiedCharacters[index];
-                                            final String charName = charMap['name'] as String? ?? "Character ${index + 1}";
-                                            final String? imageUrl = (charMap['imageUri'] as String?) ??
-                                                (charMap['imageUrl'] as String?) ??
-                                                (charMap['gcsUri'] as String?);
-
-                                            if (imageUrl == null || imageUrl.isEmpty) {
-                                              return const SizedBox.shrink();
-                                            }
-
-                                            return Card(
-                                              margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                              elevation: 1,
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(8.0),
-                                                child: Row(
-                                                  children: [
-                                                    Container(
-                                                      width: 32,
-                                                      alignment: Alignment.centerLeft,
-                                                      child: Text(
-                                                        "${index + 1}.",
-                                                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                                                          fontWeight: FontWeight.bold,
+                                                            tooltip: t('Regenerate Clip Scene ${index + 1}', 'Regenerate Klip Scene ${index + 1}'),
+                                                            onPressed: (isSceneProcessing || isProjectActivelyRendering)
+                                                                ? null 
+                                                                : () {
+                                                                    _stopSequencePlayback();
+                                                                    _showPaidRegenerateDialog(scene, project, projectMap);
+                                                                  },
+                                                          ),
                                                         ),
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 4),
-                                                    Container(
-                                                      width: 80,
-                                                      height: 60,
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.grey[300],
-                                                        borderRadius: BorderRadius.circular(8),
-                                                        image: DecorationImage(
-                                                          image: NetworkImage(imageUrl),
-                                                          fit: BoxFit.cover,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 12),
-                                                    Expanded(
-                                                      child: Text(
-                                                        charName,
-                                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                                                        maxLines: 2,
-                                                        overflow: TextOverflow.ellipsis,
-                                                      ),
-                                                    ),
-                                                    IconButton(
-                                                      icon: const Icon(Icons.download, color: Colors.blueAccent, size: 20),
-                                                      tooltip: 'Download Image $charName',
-                                                      onPressed: () => _launchURL(imageUrl),
-                                                    ),
-                                                    IconButton(
-                                                      icon: const Icon(Icons.flag_outlined, color: Colors.redAccent, size: 20),
-                                                      tooltip: 'Lapor Image $charName',
-                                                      onPressed: () => _showCharacterReportDialog(charName, imageUrl, index),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                          childCount: project.identifiedCharacters.length,
-                                        ),
-                                      ),
-                                    ],
-                                    const SliverToBoxAdapter(
-                                      child: SizedBox(height: 16),
-                                    ),
-                                  ],
-                                ),
-                              ),
 
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8.0, vertical: 12.0),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    ElevatedButton.icon(
-                                      onPressed: !canPlayOrReplay
-                                          ? null
-                                          : () {
-                                              if (_isPlayingSequence) {
-                                                _pauseSequencePlayback();
-                                              } else {
-                                                _startOrResumeSequencePlayback();
-                                              }
+                                                        const SizedBox(width: 4),
+
+                                                        // --- [TOMBOL LAPOR KONTEN (MERAH TEGAS)] ---
+                                                        IconButton(
+                                                          padding: EdgeInsets.zero,
+                                                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                                          icon: const Icon(
+                                                            Icons.flag_outlined, 
+                                                            color: Colors.redAccent, 
+                                                            size: 20,
+                                                          ),
+                                                          tooltip: t('Report Scene ${index + 1} Content', 'Lapor Konten Scene ${index + 1}'),
+                                                          onPressed: () => _showSceneReportDialog(scene, index),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              );
                                             },
-                                      icon: Icon(isCalculating
-                                          ? Icons.hourglass_top
-                                          : (_isPlayingSequence
-                                              ? Icons.pause
-                                              : Icons.play_arrow)),
-                                      label: Text(isCalculating
-                                          ? 'CALCULATING...'
-                                          : (_isPlayingSequence
-                                              ? 'PAUSE'
-                                              : 'PLAY ALL')),
-                                      style: ElevatedButton.styleFrom(
-                                              backgroundColor:
-                                                  _isPlayingSequence
-                                                      ? Colors.orangeAccent
-                                                      : Theme.of(context)
-                                                          .colorScheme
-                                                          .primary,
-                                              foregroundColor: Colors.white,
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 12),
-                                              textStyle: const TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold))
-                                          .copyWith(
-                                        backgroundColor: MaterialStateProperty
-                                            .resolveWith<Color?>(
-                                                (states) => states.contains(
-                                                        MaterialState.disabled)
-                                                    ? Colors.grey.shade400
-                                                    : (_isPlayingSequence
-                                                        ? Colors.orangeAccent
-                                                        : Theme.of(context)
-                                                            .colorScheme
-                                                            .primary)),
-                                        foregroundColor: MaterialStateProperty
-                                            .resolveWith<Color?>(
-                                                (states) => states.contains(
-                                                        MaterialState.disabled)
-                                                    ? Colors.grey.shade700
-                                                    : Colors.white),
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.replay),
-                                      iconSize: 32,
-                                      tooltip: 'Replay from Beginning',
-                                      color: canPlayOrReplay
-                                          ? Theme.of(context)
-                                              .colorScheme
-                                              .secondary
-                                          : Colors.grey,
-                                      onPressed: !canPlayOrReplay
-                                          ? null
-                                          : _replaySequence,
-                                    ),
-                                    
-                                    Stack(
-                                      clipBehavior: Clip.none,
-                                      alignment: Alignment.center,
-                                      children: [
-                                        ElevatedButton(
-                                          style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.red.shade700,
-                                                  foregroundColor: Colors.white,
-                                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))
-                                              .copyWith(
-                                            backgroundColor: MaterialStateProperty.resolveWith<Color?>(
-                                                    (states) => states.contains(MaterialState.disabled) ? Colors.red.shade200 : Colors.red.shade700),
-                                            foregroundColor: MaterialStateProperty.resolveWith<Color?>(
-                                                    (states) => states.contains(MaterialState.disabled) ? Colors.white70 : Colors.white),
+                                            childCount: scenes.length,
                                           ),
-                                          onPressed: !canRender
+                                        ),
+
+                                        if (project.identifiedCharacters.isNotEmpty) ...[
+                                          SliverToBoxAdapter(
+                                            child: Padding(
+                                              padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 24.0, bottom: 8.0),
+                                              child: Text(
+                                                t("Image character:", "Gambar karakter:"),
+                                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+
+                                          SliverList(
+                                            delegate: SliverChildBuilderDelegate(
+                                              (context, index) {
+                                                final charMap = project.identifiedCharacters[index];
+                                                final String charName = charMap['name'] as String? ?? "Character ${index + 1}";
+                                                final String? imageUrl = (charMap['imageUri'] as String?) ??
+                                                    (charMap['imageUrl'] as String?) ??
+                                                    (charMap['gcsUri'] as String?);
+
+                                                if (imageUrl == null || imageUrl.isEmpty) {
+                                                  return const SizedBox.shrink();
+                                                }
+
+                                                return Card(
+                                                  margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  elevation: 1,
+                                                  color: Colors.grey[900],
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(10),
+                                                    side: const BorderSide(color: Colors.white12),
+                                                  ),
+                                                  child: Padding(
+                                                    padding: const EdgeInsets.all(8.0),
+                                                    child: Row(
+                                                      children: [
+                                                        Container(
+                                                          width: 32,
+                                                          alignment: Alignment.centerLeft,
+                                                          child: Text(
+                                                            "${index + 1}.",
+                                                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                                                              fontWeight: FontWeight.bold,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        const SizedBox(width: 4),
+                                                        Container(
+                                                          width: 80,
+                                                          height: 60,
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.black45,
+                                                            borderRadius: BorderRadius.circular(8),
+                                                            image: DecorationImage(
+                                                              image: NetworkImage(imageUrl),
+                                                              fit: BoxFit.cover,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        const SizedBox(width: 12),
+                                                        Expanded(
+                                                          child: Text(
+                                                            charName,
+                                                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                                                            maxLines: 2,
+                                                            overflow: TextOverflow.ellipsis,
+                                                          ),
+                                                        ),
+                                                        IconButton(
+                                                          icon: Icon(Icons.download_rounded, color: Colors.greenAccent.shade400, size: 22),
+                                                          tooltip: t('Download Image $charName', 'Unduh Gambar $charName'),
+                                                          onPressed: () => _launchURL(imageUrl),
+                                                        ),
+                                                        IconButton(
+                                                          icon: const Icon(Icons.flag_outlined, color: Colors.redAccent, size: 20),
+                                                          tooltip: t('Report Image $charName', 'Lapor Gambar $charName'),
+                                                          onPressed: () => _showCharacterReportDialog(charName, imageUrl, index),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              childCount: project.identifiedCharacters.length,
+                                            ),
+                                          ),
+                                        ],
+                                        const SliverToBoxAdapter(
+                                          child: SizedBox(height: 16),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8.0, vertical: 12.0),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceEvenly,
+                                      children: [
+                                        // --- [TOMBOL PLAY ALL / PAUSE KONTRAS TINGGI] ---
+                                        ElevatedButton.icon(
+                                          onPressed: !canPlayOrReplay
                                               ? null
                                               : () {
-                                                  setState(() {
-                                                    _hasDismissedRenderPopup = true; 
-                                                  });
-                                                  _stopSequencePlayback();
-                                                  showDialog(
-                                                    context: context,
-                                                    barrierDismissible: false,
-                                                    builder: (BuildContext context) {
-                                                      bool _isSaving = false;
-                                                      String _loadingMessage = "Memulai Render...";
-                                                      return StatefulBuilder(
-                                                        builder: (context, setDialogState) {
-                                                          return AlertDialog(
-                                                            title: const Text('Mulai Render Video?'),
-                                                            content: Column(
-                                                              mainAxisSize: MainAxisSize.min,
-                                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                                              children: [
-                                                                const Text("Data akan dikirim ke server untuk digabungkan menjadi video utuh."),
-                                                                if (_isSaving)
-                                                                  Padding(
-                                                                    padding: const EdgeInsets.only(top: 16.0),
-                                                                    child: Row(
-                                                                      children: [
-                                                                        const SizedBox(
-                                                                          width: 20, height: 20,
-                                                                          child: CircularProgressIndicator(strokeWidth: 3)),
-                                                                        const SizedBox(width: 12),
-                                                                        Flexible(child: Text(_loadingMessage)),
-                                                                      ],
-                                                                    ),
-                                                                  ),
-                                                              ],
-                                                            ),
-                                                            actions: <Widget>[
-                                                              TextButton(
-                                                                child: const Text('Batal'),
-                                                                onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
-                                                              ),
-                                                              TextButton(
-                                                                child: Text(
-                                                                  _isSaving ? 'MEMPROSES...' : 'RENDER SEKARANG',
-                                                                  style: TextStyle(fontWeight: FontWeight.bold, color: _isSaving ? Colors.grey : Colors.red),
+                                                  if (_isPlayingSequence) {
+                                                    _pauseSequencePlayback();
+                                                  } else {
+                                                    _startOrResumeSequencePlayback();
+                                                  }
+                                                },
+                                          icon: Icon(isCalculating
+                                              ? Icons.hourglass_top
+                                              : (_isPlayingSequence
+                                                  ? Icons.pause
+                                                  : Icons.play_arrow)),
+                                          label: Text(isCalculating
+                                              ? t('CALCULATING...', 'MENGHITUNG...')
+                                              : (_isPlayingSequence
+                                                  ? t('PAUSE', 'JEDA')
+                                                  : t('PLAY ALL', 'PUTAR SEMUA'))),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: _isPlayingSequence
+                                                ? Colors.orangeAccent
+                                                : Colors.blueAccent,
+                                            foregroundColor: Colors.white,
+                                            disabledBackgroundColor: Colors.grey[850],
+                                            disabledForegroundColor: Colors.grey[600],
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 16, vertical: 12),
+                                            textStyle: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold),
+                                            elevation: 3,
+                                          ),
+                                        ),
+
+                                        // --- [TOMBOL REPLAY DENGAN WARNA TEAL MENYALA] ---
+                                        IconButton(
+                                          icon: const Icon(Icons.replay),
+                                          iconSize: 32,
+                                          tooltip: t('Replay from Beginning', 'Putar Ulang dari Awal'),
+                                          color: canPlayOrReplay
+                                              ? Colors.tealAccent
+                                              : Colors.grey[700],
+                                          onPressed: !canPlayOrReplay
+                                              ? null
+                                              : _replaySequence,
+                                        ),
+                                        
+                                        // --- [TOMBOL RENDER MERAH SOLID DENGAN STATE DISABLED TEGAS] ---
+                                        Stack(
+                                          clipBehavior: Clip.none,
+                                          alignment: Alignment.center,
+                                          children: [
+                                            ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.red.shade700,
+                                                foregroundColor: Colors.white,
+                                                disabledBackgroundColor: Colors.grey[850],
+                                                disabledForegroundColor: Colors.grey[600],
+                                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                                elevation: 3,
+                                              ),
+                                              onPressed: !canRender
+                                                  ? null
+                                                  : () {
+                                                      setState(() {
+                                                        _hasDismissedRenderPopup = true; 
+                                                      });
+                                                      _stopSequencePlayback();
+                                                      showDialog(
+                                                        context: context,
+                                                        barrierDismissible: false,
+                                                        builder: (BuildContext context) {
+                                                          bool _isSaving = false;
+                                                          String _loadingMessage = t("Starting Render...", "Memulai Render...");
+                                                          return StatefulBuilder(
+                                                            builder: (context, setDialogState) {
+                                                              return AlertDialog(
+                                                                backgroundColor: Colors.grey[900],
+                                                                title: Text(t('Start Video Render?', 'Mulai Render Video?')),
+                                                                content: Column(
+                                                                  mainAxisSize: MainAxisSize.min,
+                                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                                  children: [
+                                                                    Text(t(
+                                                                      "Data will be sent to the server to be merged into a complete video.",
+                                                                      "Data akan dikirim ke server untuk digabungkan menjadi video utuh."
+                                                                    )),
+                                                                    if (_isSaving)
+                                                                      Padding(
+                                                                        padding: const EdgeInsets.only(top: 16.0),
+                                                                        child: Row(
+                                                                          children: [
+                                                                            const SizedBox(
+                                                                              width: 20, height: 20,
+                                                                              child: CircularProgressIndicator(color: Colors.blueAccent, strokeWidth: 3)),
+                                                                            const SizedBox(width: 12),
+                                                                            Flexible(child: Text(_loadingMessage)),
+                                                                          ],
+                                                                        ),
+                                                                      ),
+                                                                  ],
                                                                 ),
-                                                                onPressed: _isSaving
-                                                                    ? null
-                                                                    : () async {
-                                                                        setDialogState(() { _isSaving = true; });
-                                                                        try {
-                                                                          // [HANYA MENGUBAH STATUS KE ASSETS_COMPLETE]
-                                                                          // Membiarkan Backend yang bekerja merakit paket
-                                                                          await ref.read(firestoreVeoServiceProvider).updateProject(
-                                                                              widget.projectId,
-                                                                              {
-                                                                                'status': 'ASSETS_COMPLETE',
-                                                                                'errorDetail': FieldValue.delete()
+                                                                actions: <Widget>[
+                                                                  TextButton(
+                                                                    style: TextButton.styleFrom(foregroundColor: Colors.white70),
+                                                                    child: Text(t('Cancel', 'Batal')),
+                                                                    onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
+                                                                  ),
+                                                                  ElevatedButton(
+                                                                    style: ElevatedButton.styleFrom(
+                                                                      backgroundColor: Colors.red.shade700,
+                                                                      foregroundColor: Colors.white,
+                                                                      disabledBackgroundColor: Colors.grey[850],
+                                                                      disabledForegroundColor: Colors.grey[600],
+                                                                    ),
+                                                                    child: Text(
+                                                                      _isSaving ? t('PROCESSING...', 'MEMPROSES...') : t('RENDER NOW', 'RENDER SEKARANG'),
+                                                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                                                    ),
+                                                                    onPressed: _isSaving
+                                                                        ? null
+                                                                        : () async {
+                                                                            setDialogState(() { _isSaving = true; });
+                                                                            try {
+                                                                              // [HANYA MENGUBAH STATUS KE ASSETS_COMPLETE]
+                                                                              // Membiarkan Backend yang bekerja merakit paket
+                                                                              await ref.read(firestoreVeoServiceProvider).updateProject(
+                                                                                widget.projectId,
+                                                                                {
+                                                                                  'status': 'ASSETS_COMPLETE',
+                                                                                  'needsReRender': false,
+                                                                                  'errorDetail': FieldValue.delete()
+                                                                                }
+                                                                              );
+                                                                              if (mounted) Navigator.of(context).pop();
+                                                                            } catch (e) {
+                                                                              if (mounted) {
+                                                                                Navigator.of(context).pop();
+                                                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                                                  SnackBar(
+                                                                                    content: Text(t('❌ Failed: $e', '❌ Gagal: $e')),
+                                                                                    backgroundColor: Colors.redAccent,
+                                                                                  ),
+                                                                                );
                                                                               }
-                                                                          );
-                                                                          if (mounted) Navigator.of(context).pop();
-                                                                        } catch (e) {
-                                                                          if (mounted) {
-                                                                            Navigator.of(context).pop();
-                                                                            ScaffoldMessenger.of(context).showSnackBar(
-                                                                              SnackBar(content: Text('❌ Gagal: $e'), backgroundColor: Colors.red),
-                                                                            );
-                                                                          }
-                                                                        }
-                                                                      },
-                                                              ),
-                                                            ],
+                                                                            }
+                                                                          },
+                                                                  ),
+                                                                ],
+                                                              );
+                                                            },
                                                           );
                                                         },
                                                       );
                                                     },
-                                                  );
-                                                },
-                                          child: const Text('RENDER'),
-                                        ),
-                                        if (canRender && !_hasDismissedRenderPopup)
-                                          Positioned(
-                                            bottom: 50,
-                                            child: TweenAnimationBuilder<double>(
-                                              tween: Tween(begin: 0.0, end: 1.0),
-                                              duration: const Duration(milliseconds: 600),
-                                              curve: Curves.elasticOut,
-                                              builder: (context, value, child) {
-                                                return Transform.scale(
-                                                  scale: value,
-                                                  alignment: Alignment.bottomCenter,
-                                                  child: child,
-                                                );
-                                              },
-                                              child: IgnorePointer(
-                                                child: Column(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.green.shade600,
-                                                        borderRadius: BorderRadius.circular(8),
-                                                        boxShadow: const [
-                                                          BoxShadow(
-                                                            color: Colors.black26,
-                                                            blurRadius: 4,
-                                                            offset: Offset(0, 3),
-                                                          )
-                                                        ],
-                                                      ),
-                                                      child: const Text(
-                                                        "✨ Finish & Export to MP4",
-                                                        style: TextStyle(
-                                                          color: Colors.white,
-                                                          fontSize: 12,
-                                                          fontWeight: FontWeight.bold,
+                                              child: Text(t('RENDER', 'RENDER')),
+                                            ),
+                                            if (canRender && !_hasDismissedRenderPopup)
+                                              Positioned(
+                                                bottom: 50,
+                                                child: TweenAnimationBuilder<double>(
+                                                  tween: Tween(begin: 0.0, end: 1.0),
+                                                  duration: const Duration(milliseconds: 600),
+                                                  curve: Curves.elasticOut,
+                                                  builder: (context, value, child) {
+                                                    return Transform.scale(
+                                                      scale: value,
+                                                      alignment: Alignment.bottomCenter,
+                                                      child: child,
+                                                    );
+                                                  },
+                                                  child: IgnorePointer(
+                                                    child: Column(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.green.shade600,
+                                                            borderRadius: BorderRadius.circular(8),
+                                                            boxShadow: const [
+                                                              BoxShadow(
+                                                                color: Colors.black26,
+                                                                blurRadius: 4,
+                                                                offset: Offset(0, 3),
+                                                              )
+                                                            ],
+                                                          ),
+                                                          child: Text(
+                                                            t("✨ Finish & Export to MP4", "✨ Selesai & Ekspor ke MP4"),
+                                                            style: const TextStyle(
+                                                              color: Colors.white,
+                                                              fontSize: 12,
+                                                              fontWeight: FontWeight.bold,
+                                                            ),
+                                                          ),
                                                         ),
-                                                      ),
+                                                        Transform.translate(
+                                                          offset: const Offset(0, -6),
+                                                          child: Icon(
+                                                            Icons.arrow_drop_down,
+                                                            color: Colors.green.shade600,
+                                                            size: 32,
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
-                                                    Transform.translate(
-                                                      offset: const Offset(0, -6),
-                                                      child: Icon(
-                                                        Icons.arrow_drop_down,
-                                                        color: Colors.green.shade600,
-                                                        size: 32,
-                                                      ),
-                                                    ),
-                                                  ],
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                          ),
+                                          ],
+                                        ),
                                       ],
                                     ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
+                    if (isProjectRendering)
+                      _buildRenderingOverlay(hasValidStartTime),
                   ],
-                ),
-                if (isProjectRendering)
-                  _buildRenderingOverlay(
-                      secondsRemainingForOverlay, hasValidStartTime),
-              ],
+                );
+              },
             );
           },
         ),
@@ -1534,30 +1792,37 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
   }
 //Akhir Blok 6........................................................................................//
 
-
 //No ke-7: FITUR LAPOR / FLAG SCENE & CHARACTER.......................................................//
 //Sub-judul: Memunculkan dialog pelaporan pelanggaran ke database.....................................//
   void _showSceneReportDialog(SceneVeo scene, int index) {
+    final currentLocale = ref.read(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     final TextEditingController reasonController = TextEditingController();
     
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text("Lapor Scene ${index + 1} (Veo)"),
+        backgroundColor: Colors.grey[900],
+        title: Text(t("Report Scene ${index + 1} (Veo)", "Lapor Scene ${index + 1} (Veo)")),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Apakah video atau narasi scene ini melanggar kebijakan?",
-              style: TextStyle(fontSize: 14),
+            Text(
+              t(
+                "Does this scene video or narration violate platform policy?",
+                "Apakah video atau narasi scene ini melanggar kebijakan?"
+              ),
+              style: const TextStyle(fontSize: 14, color: Colors.white70),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: reasonController,
-              decoration: const InputDecoration(
-                hintText: "Alasan (SARA, Kekerasan, dll)...",
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                hintText: t("Reason (Hate speech, Violence, etc)...", "Alasan (SARA, Kekerasan, dll)..."),
+                border: const OutlineInputBorder(),
               ),
               maxLines: 3,
             ),
@@ -1565,11 +1830,15 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
         ),
         actions: [
           TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.white70),
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Batal"),
+            child: Text(t("Cancel", "Batal")),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () {
               final user = ref.read(firestoreUserProvider).valueOrNull;
               final userId = user?.uid ?? 'anonymous'; 
@@ -1587,15 +1856,15 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
                 if (mounted) {
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Laporan dikirim. Terima kasih."),
+                    SnackBar(
+                      content: Text(t("Report submitted. Thank you.", "Laporan dikirim. Terima kasih.")),
                       backgroundColor: Colors.green,
                     ),
                   );
                 }
               });
             },
-            child: const Text("Lapor", style: TextStyle(color: Colors.white)),
+            child: Text(t("Report", "Lapor"), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1603,26 +1872,34 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
   }
 
   void _showCharacterReportDialog(String charName, String imageUrl, int index) {
+    final currentLocale = ref.read(appLanguageProvider);
+    final isIndo = currentLocale.languageCode == 'id';
+    String t(String en, String id) => isIndo ? id : en;
+
     final TextEditingController reasonController = TextEditingController();
     
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text("Lapor Karakter $charName"),
+        backgroundColor: Colors.grey[900],
+        title: Text(t("Report Character $charName", "Lapor Karakter $charName")),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              "Apakah gambar karakter ini melanggar kebijakan?",
-              style: TextStyle(fontSize: 14),
+            Text(
+              t(
+                "Does this character image violate platform policy?",
+                "Apakah gambar karakter ini melanggar kebijakan?"
+              ),
+              style: const TextStyle(fontSize: 14, color: Colors.white70),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: reasonController,
-              decoration: const InputDecoration(
-                hintText: "Alasan (SARA, Kekerasan, dll)...",
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                hintText: t("Reason (Hate speech, Violence, etc)...", "Alasan (SARA, Kekerasan, dll)..."),
+                border: const OutlineInputBorder(),
               ),
               maxLines: 3,
             ),
@@ -1630,11 +1907,15 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
         ),
         actions: [
           TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.white70),
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Batal"),
+            child: Text(t("Cancel", "Batal")),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () {
               final user = ref.read(firestoreUserProvider).valueOrNull;
               final userId = user?.uid ?? 'anonymous'; 
@@ -1652,21 +1933,21 @@ class _TimelineReviewVeoScreenState extends ConsumerState<TimelineReviewVeoScree
                 if (mounted) {
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Laporan karakter dikirim. Terima kasih."),
+                    SnackBar(
+                      content: Text(t("Character report submitted. Thank you.", "Laporan karakter dikirim. Terima kasih.")),
                       backgroundColor: Colors.green,
                     ),
                   );
                 }
               });
             },
-            child: const Text("Lapor", style: TextStyle(color: Colors.white)),
+            child: Text(t("Report", "Lapor"), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
-} 
+ }
 //Akhir Blok 7........................................................................................//
 
 
