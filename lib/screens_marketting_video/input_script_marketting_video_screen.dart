@@ -86,317 +86,317 @@ class _InputScriptMarkettingVideoScreenState extends ConsumerState<InputScriptMa
   // OPSI SUARA (LENGKAP - TIDAK ADA YANG DIPOTONG)
   // ==========================================
   final Map<String, String> _indonesianVoiceOptions = {
-    'Achernar (ID)': 'id-ID-Chirp3-HD-Achernar', 'Achird (ID)': 'id-ID-Chirp3-HD-Achird',
-    'Algenib (ID)': 'id-ID-Chirp3-HD-Algenib', 'Algieba (ID)': 'id-ID-Chirp3-HD-Algieba',
-    'Alnilam (ID)': 'id-ID-Chirp3-HD-Alnilam', 'Aoede (ID)': 'id-ID-Chirp3-HD-Aoede',
-    'Autonoe (ID)': 'id-ID-Chirp3-HD-Autonoe', 'Callirrhoe (ID)': 'id-ID-Chirp3-HD-Callirrhoe',
-    'Charon (ID)': 'id-ID-Chirp3-HD-Charon', 'Despina (ID)': 'id-ID-Chirp3-HD-Despina',
-    'Enceladus (ID)': 'id-ID-Chirp3-HD-Enceladus', 'Erinome (ID)': 'id-ID-Chirp3-HD-Erinome',
-    'Fenrir (ID)': 'id-ID-Chirp3-HD-Fenrir', 'Gacrux (ID)': 'id-ID-Chirp3-HD-Gacrux',
-    'Iapetus (ID)': 'id-ID-Chirp3-HD-Iapetus', 'Kore (ID)': 'id-ID-Chirp3-HD-Kore',
-    'Laomedeia (ID)': 'id-ID-Chirp3-HD-Laomedeia', 'Leda (ID)': 'id-ID-Chirp3-HD-Leda',
-    'Orus (ID)': 'id-ID-Chirp3-HD-Orus', 'Puck (ID)': 'id-ID-Chirp3-HD-Puck',
-    'Pulcherrima (ID)': 'id-ID-Chirp3-HD-Pulcherrima', 'Rasalgethi (ID)': 'id-ID-Chirp3-HD-Rasalgethi',
-    'Sadachbia (ID)': 'id-ID-Chirp3-HD-Sadachbia', 'Sadaltager (ID)': 'id-ID-Chirp3-HD-Sadaltager',
-    'Schedar (ID)': 'id-ID-Chirp3-HD-Schedar', 'Sulafat (ID)': 'id-ID-Chirp3-HD-Sulafat',
-    'Umbriel (ID)': 'id-ID-Chirp3-HD-Umbriel', 'Vindemiatrix (ID)': 'id-ID-Chirp3-HD-Vindemiatrix',
-    'Zephyr (ID)': 'id-ID-Chirp3-HD-Zephyr', 'Zubenelgenubi (ID)': 'id-ID-Chirp3-HD-Zubenelgenubi',
+    'Achernar (ID) - F': 'id-ID-Chirp3-HD-Achernar', 'Achird (ID) - M': 'id-ID-Chirp3-HD-Achird',
+    'Algenib (ID) - M': 'id-ID-Chirp3-HD-Algenib', 'Algieba (ID) - M': 'id-ID-Chirp3-HD-Algieba',
+    'Alnilam (ID) - M': 'id-ID-Chirp3-HD-Alnilam', 'Aoede (ID) - F': 'id-ID-Chirp3-HD-Aoede',
+    'Autonoe (ID) - F': 'id-ID-Chirp3-HD-Autonoe', 'Callirrhoe (ID) - F': 'id-ID-Chirp3-HD-Callirrhoe',
+    'Charon (ID) - M': 'id-ID-Chirp3-HD-Charon', 'Despina (ID) - F': 'id-ID-Chirp3-HD-Despina',
+    'Enceladus (ID) - M': 'id-ID-Chirp3-HD-Enceladus', 'Erinome (ID) - F': 'id-ID-Chirp3-HD-Erinome',
+    'Fenrir (ID) - M': 'id-ID-Chirp3-HD-Fenrir', 'Gacrux (ID) - F': 'id-ID-Chirp3-HD-Gacrux',
+    'Iapetus (ID) - M': 'id-ID-Chirp3-HD-Iapetus', 'Kore (ID) - F': 'id-ID-Chirp3-HD-Kore',
+    'Laomedeia (ID) - F': 'id-ID-Chirp3-HD-Laomedeia', 'Leda (ID) - F': 'id-ID-Chirp3-HD-Leda',
+    'Orus (ID) - M': 'id-ID-Chirp3-HD-Orus', 'Puck (ID) - M': 'id-ID-Chirp3-HD-Puck',
+    'Pulcherrima (ID) - M': 'id-ID-Chirp3-HD-Pulcherrima', 'Rasalgethi (ID) - M': 'id-ID-Chirp3-HD-Rasalgethi',
+    'Sadachbia (ID) - M': 'id-ID-Chirp3-HD-Sadachbia', 'Sadaltager (ID) - M': 'id-ID-Chirp3-HD-Sadaltager',
+    'Schedar (ID) - M': 'id-ID-Chirp3-HD-Schedar', 'Sulafat (ID) - F': 'id-ID-Chirp3-HD-Sulafat',
+    'Umbriel (ID) - M': 'id-ID-Chirp3-HD-Umbriel', 'Vindemiatrix (ID) - F': 'id-ID-Chirp3-HD-Vindemiatrix',
+    'Zephyr (ID) - F': 'id-ID-Chirp3-HD-Zephyr', 'Zubenelgenubi (ID) - M': 'id-ID-Chirp3-HD-Zubenelgenubi',
   };
 
   final Map<String, String> _englishVoiceOptions = {
-    'Alnilam (EN)': 'en-US-Chirp3-HD-Alnilam', 'Aoede (EN)': 'en-US-Chirp3-HD-Aoede',
-    'Autonoe (EN)': 'en-US-Chirp3-HD-Aoede', 'Callirrhoe (EN)': 'en-US-Chirp3-HD-Callirrhoe',
-    'Charon (EN)': 'en-US-Chirp3-HD-Charon', 'Despina (EN)': 'en-US-Chirp3-HD-Despina',
-    'Enceladus (EN)': 'en-US-Chirp3-HD-Enceladus', 'Erinome (EN)': 'en-US-Chirp3-HD-Erinome',
-    'Fenrir (EN)': 'en-US-Chirp3-HD-Fenrir', 'Gacrux (EN)': 'en-US-Chirp3-HD-Gacrux',
-    'Iapetus (EN)': 'en-US-Chirp3-HD-Iapetus', 'Kore (EN)': 'en-US-Chirp3-HD-Kore',
-    'Laomedeia (EN)': 'en-US-Chirp3-HD-Laomedeia', 'Leda (EN)': 'en-US-Chirp3-HD-Leda',
-    'Orus (EN)': 'en-US-Chirp3-HD-Orus', 'Puck (EN)': 'en-US-Chirp3-HD-Puck',
-    'Pulcherrima (EN)': 'en-US-Chirp3-HD-Pulcherrima', 'Rasalgethi (EN)': 'en-US-Chirp3-HD-Rasalgethi',
-    'Sadachbia (EN)': 'en-US-Chirp3-HD-Sadachbia', 'Sadaltager (EN)': 'en-US-Chirp3-HD-Sadaltager',
-    'Schedar (EN)': 'en-US-Chirp3-HD-Schedar', 'Sulafat (EN)': 'en-US-Chirp3-HD-Sulafat',
-    'Umbriel (EN)': 'en-US-Chirp3-HD-Umbriel', 'Vindemiatrix (EN)': 'en-US-Chirp3-HD-Vindemiatrix',
-    'Zephyr (EN)': 'en-US-Chirp3-HD-Zephyr', 'Zubenelgenubi (EN)': 'en-US-Chirp3-HD-Zubenelgenubi',
+    'Alnilam (EN) - M': 'en-US-Chirp3-HD-Alnilam', 'Aoede (EN) - F': 'en-US-Chirp3-HD-Aoede',
+    'Autonoe (EN) - F': 'en-US-Chirp3-HD-Aoede', 'Callirrhoe (EN) - F': 'en-US-Chirp3-HD-Callirrhoe',
+    'Charon (EN) - M': 'en-US-Chirp3-HD-Charon', 'Despina (EN) - F': 'en-US-Chirp3-HD-Despina',
+    'Enceladus (EN) - M': 'en-US-Chirp3-HD-Enceladus', 'Erinome (EN) - F': 'en-US-Chirp3-HD-Erinome',
+    'Fenrir (EN) - M': 'en-US-Chirp3-HD-Fenrir', 'Gacrux (EN) - F': 'en-US-Chirp3-HD-Gacrux',
+    'Iapetus (EN) - M': 'en-US-Chirp3-HD-Iapetus', 'Kore (EN) - F': 'en-US-Chirp3-HD-Kore',
+    'Laomedeia (EN) - F': 'en-US-Chirp3-HD-Laomedeia', 'Leda (EN) - F': 'en-US-Chirp3-HD-Leda',
+    'Orus (EN) - M': 'en-US-Chirp3-HD-Orus', 'Puck (EN) - M': 'en-US-Chirp3-HD-Puck',
+    'Pulcherrima (EN) - M': 'en-US-Chirp3-HD-Pulcherrima', 'Rasalgethi (EN) - M': 'en-US-Chirp3-HD-Rasalgethi',
+    'Sadachbia (EN) - M': 'en-US-Chirp3-HD-Sadachbia', 'Sadaltager (EN) - M': 'en-US-Chirp3-HD-Sadaltager',
+    'Schedar (EN) - M': 'en-US-Chirp3-HD-Schedar', 'Sulafat (EN) - F': 'en-US-Chirp3-HD-Sulafat',
+    'Umbriel (EN) - M': 'en-US-Chirp3-HD-Umbriel', 'Vindemiatrix (EN) - F': 'en-US-Chirp3-HD-Vindemiatrix',
+    'Zephyr (EN) - F': 'en-US-Chirp3-HD-Zephyr', 'Zubenelgenubi (EN) - M': 'en-US-Chirp3-HD-Zubenelgenubi',
   };
 
   final Map<String, String> _arabicVoiceOptions = {
-    'Achernar (ar-XA)': 'ar-XA-Chirp3-HD-Achernar', 'Aoede (ar-XA)': 'ar-XA-Chirp3-HD-Aoede',
-    'Autonoe (ar-XA)': 'ar-XA-Chirp3-HD-Autonoe', 'Callirrhoe (ar-XA)': 'ar-XA-Chirp3-HD-Callirrhoe',
-    'Despina (ar-XA)': 'ar-XA-Chirp3-HD-Despina', 'Achird (ar-XA)': 'ar-XA-Chirp3-HD-Achird',
-    'Algenib (ar-XA)': 'ar-XA-Chirp3-HD-Algenib', 'Algieba (ar-XA)': 'ar-XA-Chirp3-HD-Algieba',
-    'Alnilam (ar-XA)': 'ar-XA-Chirp3-HD-Alnilam', 'Charon (ar-XA)': 'ar-XA-Chirp3-HD-Charon',
+    'Achernar (ar-XA) - F': 'ar-XA-Chirp3-HD-Achernar', 'Aoede (ar-XA) - F': 'ar-XA-Chirp3-HD-Aoede',
+    'Autonoe (ar-XA) - F': 'ar-XA-Chirp3-HD-Autonoe', 'Callirrhoe (ar-XA) - F': 'ar-XA-Chirp3-HD-Callirrhoe',
+    'Despina (ar-XA) - F': 'ar-XA-Chirp3-HD-Despina', 'Achird (ar-XA) - M': 'ar-XA-Chirp3-HD-Achird',
+    'Algenib (ar-XA) - M': 'ar-XA-Chirp3-HD-Algenib', 'Algieba (ar-XA) - M': 'ar-XA-Chirp3-HD-Algieba',
+    'Alnilam (ar-XA) - M': 'ar-XA-Chirp3-HD-Alnilam', 'Charon (ar-XA) - M': 'ar-XA-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _bengaliVoiceOptions = {
-    'Achernar (bn-IN)': 'bn-IN-Chirp3-HD-Achernar', 'Aoede (bn-IN)': 'bn-IN-Chirp3-HD-Aoede',
-    'Autonoe (bn-IN)': 'bn-IN-Chirp3-HD-Autonoe', 'Callirrhoe (bn-IN)': 'bn-IN-Chirp3-HD-Callirrhoe',
-    'Despina (bn-IN)': 'bn-IN-Chirp3-HD-Despina', 'Achird (bn-IN)': 'bn-IN-Chirp3-HD-Achird',
-    'Algenib (bn-IN)': 'bn-IN-Chirp3-HD-Algenib', 'Algieba (bn-IN)': 'bn-IN-Chirp3-HD-Algieba',
-    'Alnilam (bn-IN)': 'bn-IN-Chirp3-HD-Alnilam', 'Charon (bn-IN)': 'bn-IN-Chirp3-HD-Charon',
+    'Achernar (bn-IN) - F': 'bn-IN-Chirp3-HD-Achernar', 'Aoede (bn-IN) - F': 'bn-IN-Chirp3-HD-Aoede',
+    'Autonoe (bn-IN) - F': 'bn-IN-Chirp3-HD-Autonoe', 'Callirrhoe (bn-IN) - F': 'bn-IN-Chirp3-HD-Callirrhoe',
+    'Despina (bn-IN) - F': 'bn-IN-Chirp3-HD-Despina', 'Achird (bn-IN) - M': 'bn-IN-Chirp3-HD-Achird',
+    'Algenib (bn-IN) - M': 'bn-IN-Chirp3-HD-Algenib', 'Algieba (bn-IN) - M': 'bn-IN-Chirp3-HD-Algieba',
+    'Alnilam (bn-IN) - M': 'bn-IN-Chirp3-HD-Alnilam', 'Charon (bn-IN) - M': 'bn-IN-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _danishVoiceOptions = {
-    'Achernar (da-DK)': 'da-DK-Chirp3-HD-Achernar', 'Aoede (da-DK)': 'da-DK-Chirp3-HD-Aoede',
-    'Autonoe (da-DK)': 'da-DK-Chirp3-HD-Autonoe', 'Callirrhoe (da-DK)': 'da-DK-Chirp3-HD-Callirrhoe',
-    'Despina (da-DK)': 'da-DK-Chirp3-HD-Despina', 'Achird (da-DK)': 'da-DK-Chirp3-HD-Achird',
-    'Algenib (da-DK)': 'da-DK-Chirp3-HD-Algenib', 'Algieba (da-DK)': 'da-DK-Chirp3-HD-Algieba',
-    'Alnilam (da-DK)': 'da-DK-Chirp3-HD-Alnilam', 'Charon (da-DK)': 'da-DK-Chirp3-HD-Charon',
+    'Achernar (da-DK) - F': 'da-DK-Chirp3-HD-Achernar', 'Aoede (da-DK) - F': 'da-DK-Chirp3-HD-Aoede',
+    'Autonoe (da-DK) - F': 'da-DK-Chirp3-HD-Autonoe', 'Callirrhoe (da-DK) - F': 'da-DK-Chirp3-HD-Callirrhoe',
+    'Despina (da-DK) - F': 'da-DK-Chirp3-HD-Despina', 'Achird (da-DK) - M': 'da-DK-Chirp3-HD-Achird',
+    'Algenib (da-DK) - M': 'da-DK-Chirp3-HD-Algenib', 'Algieba (da-DK) - M': 'da-DK-Chirp3-HD-Algieba',
+    'Alnilam (da-DK) - M': 'da-DK-Chirp3-HD-Alnilam', 'Charon (da-DK) - M': 'da-DK-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _dutchBelgiumVoiceOptions = {
-    'Achernar (nl-BE)': 'nl-BE-Chirp3-HD-Achernar', 'Aoede (nl-BE)': 'nl-BE-Chirp3-HD-Aoede',
-    'Autonoe (nl-BE)': 'nl-BE-Chirp3-HD-Autonoe', 'Callirrhoe (nl-BE)': 'nl-BE-Chirp3-HD-Callirrhoe',
-    'Despina (nl-BE)': 'nl-BE-Chirp3-HD-Despina', 'Achird (nl-BE)': 'nl-BE-Chirp3-HD-Achird',
-    'Algenib (nl-BE)': 'nl-BE-Chirp3-HD-Algenib', 'Algieba (nl-BE)': 'nl-BE-Chirp3-HD-Algieba',
-    'Alnilam (nl-BE)': 'nl-BE-Chirp3-HD-Alnilam', 'Charon (nl-BE)': 'nl-BE-Chirp3-HD-Charon',
+    'Achernar (nl-BE) - F': 'nl-BE-Chirp3-HD-Achernar', 'Aoede (nl-BE) - F': 'nl-BE-Chirp3-HD-Aoede',
+    'Autonoe (nl-BE) - F': 'nl-BE-Chirp3-HD-Autonoe', 'Callirrhoe (nl-BE) - F': 'nl-BE-Chirp3-HD-Callirrhoe',
+    'Despina (nl-BE) - F': 'nl-BE-Chirp3-HD-Despina', 'Achird (nl-BE) - M': 'nl-BE-Chirp3-HD-Achird',
+    'Algenib (nl-BE) - M': 'nl-BE-Chirp3-HD-Algenib', 'Algieba (nl-BE) - M': 'nl-BE-Chirp3-HD-Algieba',
+    'Alnilam (nl-BE) - M': 'nl-BE-Chirp3-HD-Alnilam', 'Charon (nl-BE) - M': 'nl-BE-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _dutchNetherlandsVoiceOptions = {
-    'Achernar (nl-NL)': 'nl-NL-Chirp3-HD-Achernar', 'Aoede (nl-NL)': 'nl-NL-Chirp3-HD-Aoede',
-    'Autonoe (nl-NL)': 'nl-NL-Chirp3-HD-Autonoe', 'Callirrhoe (nl-NL)': 'nl-NL-Chirp3-HD-Callirrhoe',
-    'Despina (nl-NL)': 'nl-NL-Chirp3-HD-Despina', 'Achird (nl-NL)': 'nl-NL-Chirp3-HD-Achird',
-    'Algenib (nl-NL)': 'nl-NL-Chirp3-HD-Algenib', 'Algieba (nl-NL)': 'nl-NL-Chirp3-HD-Algieba',
-    'Alnilam (nl-NL)': 'nl-NL-Chirp3-HD-Alnilam', 'Charon (nl-NL)': 'nl-NL-Chirp3-HD-Charon',
+    'Achernar (nl-NL) - F': 'nl-NL-Chirp3-HD-Achernar', 'Aoede (nl-NL) - F': 'nl-NL-Chirp3-HD-Aoede',
+    'Autonoe (nl-NL) - F': 'nl-NL-Chirp3-HD-Autonoe', 'Callirrhoe (nl-NL) - F': 'nl-NL-Chirp3-HD-Callirrhoe',
+    'Despina (nl-NL) - F': 'nl-NL-Chirp3-HD-Despina', 'Achird (nl-NL) - M': 'nl-NL-Chirp3-HD-Achird',
+    'Algenib (nl-NL) - M': 'nl-NL-Chirp3-HD-Algenib', 'Algieba (nl-NL) - M': 'nl-NL-Chirp3-HD-Algieba',
+    'Alnilam (nl-NL) - M': 'nl-NL-Chirp3-HD-Alnilam', 'Charon (nl-NL) - M': 'nl-NL-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _englishAustraliaVoiceOptions = {
-    'Achernar (en-AU)': 'en-AU-Chirp3-HD-Achernar', 'Aoede (en-AU)': 'en-AU-Chirp3-HD-Aoede',
-    'Autonoe (en-AU)': 'en-AU-Chirp3-HD-Autonoe', 'Callirrhoe (en-AU)': 'en-AU-Chirp3-HD-Callirrhoe',
-    'Despina (en-AU)': 'en-AU-Chirp3-HD-Despina', 'Achird (en-AU)': 'en-AU-Chirp3-HD-Achird',
-    'Algenib (en-AU)': 'en-AU-Chirp3-HD-Algenib', 'Algieba (en-AU)': 'en-AU-Chirp3-HD-Algieba',
-    'Alnilam (en-AU)': 'en-AU-Chirp3-HD-Alnilam', 'Charon (en-AU)': 'en-AU-Chirp3-HD-Charon',
+    'Achernar (en-AU) - F': 'en-AU-Chirp3-HD-Achernar', 'Aoede (en-AU) - F': 'en-AU-Chirp3-HD-Aoede',
+    'Autonoe (en-AU) - F': 'en-AU-Chirp3-HD-Autonoe', 'Callirrhoe (en-AU) - F': 'en-AU-Chirp3-HD-Callirrhoe',
+    'Despina (en-AU) - F': 'en-AU-Chirp3-HD-Despina', 'Achird (en-AU) - M': 'en-AU-Chirp3-HD-Achird',
+    'Algenib (en-AU) - M': 'en-AU-Chirp3-HD-Algenib', 'Algieba (en-AU) - M': 'en-AU-Chirp3-HD-Algieba',
+    'Alnilam (en-AU) - M': 'en-AU-Chirp3-HD-Alnilam', 'Charon (en-AU) - M': 'en-AU-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _englishIndiaVoiceOptions = {
-    'Achernar (en-IN)': 'en-IN-Chirp3-HD-Achernar', 'Aoede (en-IN)': 'en-IN-Chirp3-HD-Aoede',
-    'Autonoe (en-IN)': 'en-IN-Chirp3-HD-Autonoe', 'Callirrhoe (en-IN)': 'en-IN-Chirp3-HD-Callirrhoe',
-    'Despina (en-IN)': 'en-IN-Chirp3-HD-Despina', 'Achird (en-IN)': 'en-IN-Chirp3-HD-Achird',
-    'Algenib (en-IN)': 'en-IN-Chirp3-HD-Algenib', 'Algieba (en-IN)': 'en-IN-Chirp3-HD-Algieba',
-    'Alnilam (en-IN)': 'en-IN-Chirp3-HD-Alnilam', 'Charon (en-IN)': 'en-IN-Chirp3-HD-Charon',
+    'Achernar (en-IN) - F': 'en-IN-Chirp3-HD-Achernar', 'Aoede (en-IN) - F': 'en-IN-Chirp3-HD-Aoede',
+    'Autonoe (en-IN) - F': 'en-IN-Chirp3-HD-Autonoe', 'Callirrhoe (en-IN) - F': 'en-IN-Chirp3-HD-Callirrhoe',
+    'Despina (en-IN) - F': 'en-IN-Chirp3-HD-Despina', 'Achird (en-IN) - M': 'en-IN-Chirp3-HD-Achird',
+    'Algenib (en-IN) - M': 'en-IN-Chirp3-HD-Algenib', 'Algieba (en-IN) - M': 'en-IN-Chirp3-HD-Algieba',
+    'Alnilam (en-IN) - M': 'en-IN-Chirp3-HD-Alnilam', 'Charon (en-IN) - M': 'en-IN-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _englishUKVoiceOptions = {
-    'Achernar (en-GB)': 'en-GB-Chirp3-HD-Achernar', 'Aoede (en-GB)': 'en-GB-Chirp3-HD-Aoede',
-    'Autonoe (en-GB)': 'en-GB-Chirp3-HD-Autonoe', 'Callirrhoe (en-GB)': 'en-GB-Chirp3-HD-Callirrhoe',
-    'Despina (en-GB)': 'en-GB-Chirp3-HD-Despina', 'Achird (en-GB)': 'en-GB-Chirp3-HD-Achird',
-    'Algenib (en-GB)': 'en-GB-Chirp3-HD-Algenib', 'Algieba (en-GB)': 'en-GB-Chirp3-HD-Algieba',
-    'Alnilam (en-GB)': 'en-GB-Chirp3-HD-Alnilam', 'Charon (en-GB)': 'en-GB-Chirp3-HD-Charon',
+    'Achernar (en-GB) - F': 'en-GB-Chirp3-HD-Achernar', 'Aoede (en-GB) - F': 'en-GB-Chirp3-HD-Aoede',
+    'Autonoe (en-GB) - F': 'en-GB-Chirp3-HD-Autonoe', 'Callirrhoe (en-GB) - F': 'en-GB-Chirp3-HD-Callirrhoe',
+    'Despina (en-GB) - F': 'en-GB-Chirp3-HD-Despina', 'Achird (en-GB) - M': 'en-GB-Chirp3-HD-Achird',
+    'Algenib (en-GB) - M': 'en-GB-Chirp3-HD-Algenib', 'Algieba (en-GB) - M': 'en-GB-Chirp3-HD-Algieba',
+    'Alnilam (en-GB) - M': 'en-GB-Chirp3-HD-Alnilam', 'Charon (en-GB) - M': 'en-GB-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _finnishVoiceOptions = {
-    'Achernar (fi-FI)': 'fi-FI-Chirp3-HD-Achernar', 'Aoede (fi-FI)': 'fi-FI-Chirp3-HD-Aoede',
-    'Autonoe (fi-FI)': 'fi-FI-Chirp3-HD-Autonoe', 'Callirrhoe (fi-FI)': 'fi-FI-Chirp3-HD-Callirrhoe',
-    'Despina (fi-FI)': 'fi-FI-Chirp3-HD-Despina', 'Achird (fi-FI)': 'fi-FI-Chirp3-HD-Achird',
-    'Algenib (fi-FI)': 'fi-FI-Chirp3-HD-Algenib', 'Algieba (fi-FI)': 'fi-FI-Chirp3-HD-Algieba',
-    'Alnilam (fi-FI)': 'fi-FI-Chirp3-HD-Alnilam', 'Charon (fi-FI)': 'fi-FI-Charon',
+    'Achernar (fi-FI) - F': 'fi-FI-Chirp3-HD-Achernar', 'Aoede (fi-FI) - F': 'fi-FI-Chirp3-HD-Aoede',
+    'Autonoe (fi-FI) - F': 'fi-FI-Chirp3-HD-Autonoe', 'Callirrhoe (fi-FI) - F': 'fi-FI-Chirp3-HD-Callirrhoe',
+    'Despina (fi-FI) - F': 'fi-FI-Chirp3-HD-Despina', 'Achird (fi-FI) - M': 'fi-FI-Chirp3-HD-Achird',
+    'Algenib (fi-FI) - M': 'fi-FI-Chirp3-HD-Algenib', 'Algieba (fi-FI) - M': 'fi-FI-Chirp3-HD-Algieba',
+    'Alnilam (fi-FI) - M': 'fi-FI-Chirp3-HD-Alnilam', 'Charon (fi-FI) - M': 'fi-FI-Charon',
   };
 
   final Map<String, String> _frenchCanadaVoiceOptions = {
-    'Achernar (fr-CA)': 'fr-CA-Chirp3-HD-Achernar', 'Aoede (fr-CA)': 'fr-CA-Chirp3-HD-Aoede',
-    'Autonoe (fr-CA)': 'fr-CA-Chirp3-HD-Autonoe', 'Callirrhoe (fr-CA)': 'fr-CA-Chirp3-HD-Callirrhoe',
-    'Despina (fr-CA)': 'fr-CA-Chirp3-HD-Despina', 'Achird (fr-CA)': 'fr-CA-Chirp3-HD-Achird',
-    'Algenib (fr-CA)': 'fr-CA-Chirp3-HD-Algenib', 'Algieba (fr-CA)': 'fr-CA-Chirp3-HD-Algieba',
-    'Alnilam (fr-CA)': 'fr-CA-Chirp3-HD-Alnilam', 'Charon (fr-CA)': 'fr-CA-Chirp3-HD-Charon',
+    'Achernar (fr-CA) - F': 'fr-CA-Chirp3-HD-Achernar', 'Aoede (fr-CA) - F': 'fr-CA-Chirp3-HD-Aoede',
+    'Autonoe (fr-CA) - F': 'fr-CA-Chirp3-HD-Autonoe', 'Callirrhoe (fr-CA) - F': 'fr-CA-Chirp3-HD-Callirrhoe',
+    'Despina (fr-CA) - F': 'fr-CA-Chirp3-HD-Despina', 'Achird (fr-CA) - M': 'fr-CA-Chirp3-HD-Achird',
+    'Algenib (fr-CA) - M': 'fr-CA-Chirp3-HD-Algenib', 'Algieba (fr-CA) - M': 'fr-CA-Chirp3-HD-Algieba',
+    'Alnilam (fr-CA) - M': 'fr-CA-Chirp3-HD-Alnilam', 'Charon (fr-CA) - M': 'fr-CA-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _frenchFranceVoiceOptions = {
-    'Achernar (fr-FR)': 'fr-FR-Chirp3-HD-Achernar', 'Aoede (fr-FR)': 'fr-FR-Chirp3-HD-Aoede',
-    'Autonoe (fr-FR)': 'fr-FR-Chirp3-HD-Autonoe', 'Callirrhoe (fr-FR)': 'fr-FR-Chirp3-HD-Callirrhoe',
-    'Despina (fr-FR)': 'fr-FR-Chirp3-HD-Despina', 'Achird (fr-FR)': 'fr-FR-Chirp3-HD-Achird',
-    'Algenib (fr-FR)': 'fr-FR-Chirp3-HD-Algenib', 'Algieba (fr-FR)': 'fr-FR-Chirp3-HD-Algieba',
-    'Alnilam (fr-FR)': 'fr-FR-Chirp3-HD-Alnilam', 'Charon (fr-FR)': 'fr-FR-Chirp3-HD-Charon',
+    'Achernar (fr-FR) - F': 'fr-FR-Chirp3-HD-Achernar', 'Aoede (fr-FR) - F': 'fr-FR-Chirp3-HD-Aoede',
+    'Autonoe (fr-FR) - F': 'fr-FR-Chirp3-HD-Autonoe', 'Callirrhoe (fr-FR) - F': 'fr-FR-Chirp3-HD-Callirrhoe',
+    'Despina (fr-FR) - F': 'fr-FR-Chirp3-HD-Despina', 'Achird (fr-FR) - M': 'fr-FR-Chirp3-HD-Achird',
+    'Algenib (fr-FR) - M': 'fr-CA-Chirp3-HD-Algenib', 'Algieba (fr-FR) - M': 'fr-FR-Chirp3-HD-Algieba',
+    'Alnilam (fr-FR) - M': 'fr-FR-Chirp3-HD-Alnilam', 'Charon (fr-FR) - M': 'fr-FR-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _germanVoiceOptions = {
-    'Achernar (de-DE)': 'de-DE-Chirp3-HD-Achernar', 'Aoede (de-DE)': 'de-DE-Chirp3-HD-Aoede',
-    'Autonoe (de-DE)': 'de-DE-Chirp3-HD-Autonoe', 'Callirrhoe (de-DE)': 'de-DE-Chirp3-HD-Callirrhoe',
-    'Despina (de-DE)': 'de-DE-Chirp3-HD-Despina', 'Achird (de-DE)': 'de-DE-Chirp3-HD-Achird',
-    'Algenib (de-DE)': 'de-DE-Chirp3-HD-Algenib', 'Algieba (de-DE)': 'de-DE-Chirp3-HD-Algieba',
-    'Alnilam (de-DE)': 'de-DE-Chirp3-HD-Alnilam', 'Charon (de-DE)': 'de-DE-Chirp3-HD-Charon',
+    'Achernar (de-DE) - F': 'de-DE-Chirp3-HD-Achernar', 'Aoede (de-DE) - F': 'de-DE-Chirp3-HD-Aoede',
+    'Autonoe (de-DE) - F': 'de-DE-Chirp3-HD-Autonoe', 'Callirrhoe (de-DE) - F': 'de-DE-Chirp3-HD-Callirrhoe',
+    'Despina (de-DE) - F': 'de-DE-Chirp3-HD-Despina', 'Achird (de-DE) - M': 'de-DE-Chirp3-HD-Achird',
+    'Algenib (de-DE) - M': 'de-DE-Chirp3-HD-Algenib', 'Algieba (de-DE) - M': 'de-DE-Chirp3-HD-Algieba',
+    'Alnilam (de-DE) - M': 'de-DE-Chirp3-HD-Alnilam', 'Charon (de-DE) - M': 'de-DE-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _gujaratiVoiceOptions = {
-    'Achernar (gu-IN)': 'gu-IN-Chirp3-HD-Achernar', 'Aoede (gu-IN)': 'gu-IN-Chirp3-HD-Aoede',
-    'Autonoe (gu-IN)': 'gu-IN-Chirp3-HD-Autonoe', 'Callirrhoe (gu-IN)': 'gu-IN-Chirp3-HD-Callirrhoe',
-    'Despina (gu-IN)': 'gu-IN-Chirp3-HD-Despina', 'Achird (gu-IN)': 'gu-IN-Chirp3-HD-Achird',
-    'Algenib (gu-IN)': 'gu-IN-Chirp3-HD-Algenib', 'Algieba (gu-IN)': 'gu-IN-Chirp3-HD-Algieba',
-    'Alnilam (gu-IN)': 'gu-IN-Chirp3-HD-Alnilam', 'Charon (gu-IN)': 'gu-IN-Chirp3-HD-Charon',
+    'Achernar (gu-IN) - F': 'gu-IN-Chirp3-HD-Achernar', 'Aoede (gu-IN) - F': 'gu-IN-Chirp3-HD-Aoede',
+    'Autonoe (gu-IN) - F': 'gu-IN-Chirp3-HD-Autonoe', 'Callirrhoe (gu-IN) - F': 'gu-IN-Chirp3-HD-Callirrhoe',
+    'Despina (gu-IN) - F': 'gu-IN-Chirp3-HD-Despina', 'Achird (gu-IN) - M': 'gu-IN-Chirp3-HD-Achird',
+    'Algenib (gu-IN) - M': 'gu-IN-Chirp3-HD-Algenib', 'Algieba (gu-IN) - M': 'gu-IN-Chirp3-HD-Algieba',
+    'Alnilam (gu-IN) - M': 'gu-IN-Chirp3-HD-Alnilam', 'Charon (gu-IN) - M': 'gu-IN-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _hindiVoiceOptions = {
-    'Achernar (hi-IN)': 'hi-IN-Chirp3-HD-Achernar', 'Aoede (hi-IN)': 'hi-IN-Chirp3-HD-Aoede',
-    'Autonoe (hi-IN)': 'hi-IN-Chirp3-HD-Autonoe', 'Callirrhoe (hi-IN)': 'hi-IN-Chirp3-HD-Callirrhoe',
-    'Despina (hi-IN)': 'hi-IN-Chirp3-HD-Despina', 'Achird (hi-IN)': 'hi-IN-Chirp3-HD-Achird',
-    'Algenib (hi-IN)': 'hi-IN-Chirp3-HD-Algenib', 'Algieba (hi-IN)': 'hi-IN-Chirp3-HD-Algieba',
-    'Alnilam (hi-IN)': 'hi-IN-Chirp3-HD-Alnilam', 'Charon (hi-IN)': 'hi-IN-Chirp3-HD-Charon',
+    'Achernar (hi-IN) - F': 'hi-IN-Chirp3-HD-Achernar', 'Aoede (hi-IN) - F': 'hi-IN-Chirp3-HD-Aoede',
+    'Autonoe (hi-IN) - F': 'hi-IN-Chirp3-HD-Autonoe', 'Callirrhoe (hi-IN) - F': 'hi-IN-Chirp3-HD-Callirrhoe',
+    'Despina (hi-IN) - F': 'hi-IN-Chirp3-HD-Despina', 'Achird (hi-IN) - M': 'hi-IN-Chirp3-HD-Achird',
+    'Algenib (hi-IN) - M': 'hi-IN-Chirp3-HD-Algenib', 'Algieba (hi-IN) - M': 'hi-IN-Chirp3-HD-Algieba',
+    'Alnilam (hi-IN) - M': 'hi-IN-Chirp3-HD-Alnilam', 'Charon (hi-IN) - M': 'hi-IN-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _italianVoiceOptions = {
-    'Achernar (it-IT)': 'it-IT-Chirp3-HD-Achernar', 'Aoede (it-IT)': 'it-IT-Chirp3-HD-Aoede',
-    'Autonoe (it-IT)': 'it-IT-Chirp3-HD-Autonoe', 'Callirrhoe (it-IT)': 'it-IT-Chirp3-HD-Callirrhoe',
-    'Despina (it-IT)': 'it-IT-Chirp3-HD-Despina', 'Achird (it-IT)': 'it-IT-Chirp3-HD-Achird',
-    'Algenib (it-IT)': 'it-IT-Chirp3-HD-Algenib', 'Algieba (it-IT)': 'it-IT-Chirp3-HD-Algieba',
-    'Alnilam (it-IT)': 'it-IT-Chirp3-HD-Alnilam', 'Charon (it-IT)': 'it-IT-Chirp3-HD-Charon',
+    'Achernar (it-IT) - F': 'it-IT-Chirp3-HD-Achernar', 'Aoede (it-IT) - F': 'it-IT-Chirp3-HD-Aoede',
+    'Autonoe (it-IT) - F': 'it-IT-Chirp3-HD-Autonoe', 'Callirrhoe (it-IT) - F': 'it-IT-Chirp3-HD-Callirrhoe',
+    'Despina (it-IT) - F': 'it-IT-Chirp3-HD-Despina', 'Achird (it-IT) - M': 'it-IT-Chirp3-HD-Achird',
+    'Algenib (it-IT) - M': 'it-IT-Chirp3-HD-Algenib', 'Algieba (it-IT) - M': 'it-IT-Chirp3-HD-Algieba',
+    'Alnilam (it-IT) - M': 'it-IT-Chirp3-HD-Alnilam', 'Charon (it-IT) - M': 'it-IT-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _japaneseVoiceOptions = {
-    'Achernar (ja-JP)': 'ja-JP-Chirp3-HD-Achernar', 'Aoede (ja-JP)': 'ja-JP-Chirp3-HD-Aoede',
-    'Autonoe (ja-JP)': 'ja-JP-Chirp3-HD-Autonoe', 'Callirrhoe (ja-JP)': 'ja-JP-Chirp3-HD-Callirrhoe',
-    'Despina (ja-JP)': 'ja-JP-Chirp3-HD-Despina', 'Achird (ja-JP)': 'ja-JP-Chirp3-HD-Achird',
-    'Algenib (ja-JP)': 'ja-JP-Chirp3-HD-Algenib', 'Algieba (ja-JP)': 'ja-JP-Chirp3-HD-Algieba',
-    'Alnilam (ja-JP)': 'ja-JP-Chirp3-HD-Alnilam', 'Charon (ja-JP)': 'ja-JP-Chirp3-HD-Charon',
+    'Achernar (ja-JP) - F': 'ja-JP-Chirp3-HD-Achernar', 'Aoede (ja-JP) - F': 'ja-JP-Chirp3-HD-Aoede',
+    'Autonoe (ja-JP) - F': 'ja-JP-Chirp3-HD-Autonoe', 'Callirrhoe (ja-JP) - F': 'ja-JP-Chirp3-HD-Callirrhoe',
+    'Despina (ja-JP) - F': 'ja-JP-Chirp3-HD-Despina', 'Achird (ja-JP) - M': 'ja-JP-Chirp3-HD-Achird',
+    'Algenib (ja-JP) - M': 'ja-JP-Chirp3-HD-Algenib', 'Algieba (ja-JP) - M': 'ja-JP-Chirp3-HD-Algieba',
+    'Alnilam (ja-JP) - M': 'ja-JP-Chirp3-HD-Alnilam', 'Charon (ja-JP) - M': 'ja-JP-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _kannadaVoiceOptions = {
-    'Achernar (kn-IN)': 'kn-IN-Chirp3-HD-Achernar', 'Aoede (kn-IN)': 'kn-IN-Chirp3-HD-Aoede',
-    'Autonoe (kn-IN)': 'kn-IN-Chirp3-HD-Autonoe', 'Callirrhoe (kn-IN)': 'kn-IN-Chirp3-HD-Callirrhoe',
-    'Despina (kn-IN)': 'kn-IN-Chirp3-HD-Despina', 'Achird (kn-IN)': 'kn-IN-Chirp3-HD-Achird',
-    'Algenib (kn-IN)': 'kn-IN-Chirp3-HD-Algenib', 'Algieba (kn-IN)': 'kn-IN-Chirp3-HD-Algieba',
-    'Alnilam (kn-IN)': 'kn-IN-Chirp3-HD-Alnilam', 'Charon (kn-IN)': 'kn-IN-Chirp3-HD-Charon',
+    'Achernar (kn-IN) - F': 'kn-IN-Chirp3-HD-Achernar', 'Aoede (kn-IN) - F': 'kn-IN-Chirp3-HD-Aoede',
+    'Autonoe (kn-IN) - F': 'kn-IN-Chirp3-HD-Autonoe', 'Callirrhoe (kn-IN) - F': 'kn-IN-Chirp3-HD-Callirrhoe',
+    'Despina (kn-IN) - F': 'kn-IN-Chirp3-HD-Despina', 'Achird (kn-IN) - M': 'kn-IN-Chirp3-HD-Achird',
+    'Algenib (kn-IN) - M': 'kn-IN-Chirp3-HD-Algenib', 'Algieba (kn-IN) - M': 'kn-IN-Chirp3-HD-Algieba',
+    'Alnilam (kn-IN) - M': 'kn-IN-Chirp3-HD-Alnilam', 'Charon (kn-IN) - M': 'kn-IN-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _koreanVoiceOptions = {
-    'Achernar (ko-KR)': 'ko-KR-Chirp3-HD-Achernar', 'Aoede (ko-KR)': 'ko-KR-Chirp3-HD-Aoede',
-    'Autonoe (ko-KR)': 'ko-KR-Chirp3-HD-Autonoe', 'Callirrhoe (ko-KR)': 'ko-KR-Chirp3-HD-Callirrhoe',
-    'Despina (ko-KR)': 'ko-KR-Chirp3-HD-Despina', 'Achird (ko-KR)': 'ko-KR-Chirp3-HD-Achird',
-    'Algenib (ko-KR)': 'ko-KR-Chirp3-HD-Algenib', 'Algieba (ko-KR)': 'ko-KR-Chirp3-HD-Algieba',
-    'Alnilam (ko-KR)': 'ko-KR-Chirp3-HD-Alnilam', 'Charon (ko-KR)': 'ko-KR-Chirp3-HD-Charon',
+    'Achernar (ko-KR) - F': 'ko-KR-Chirp3-HD-Achernar', 'Aoede (ko-KR) - F': 'ko-KR-Chirp3-HD-Aoede',
+    'Autonoe (ko-KR) - F': 'ko-KR-Chirp3-HD-Autonoe', 'Callirrhoe (ko-KR) - F': 'ko-KR-Chirp3-HD-Callirrhoe',
+    'Despina (ko-KR) - F': 'ko-KR-Chirp3-HD-Despina', 'Achird (ko-KR) - M': 'ko-KR-Chirp3-HD-Achird',
+    'Algenib (ko-KR) - M': 'ko-KR-Chirp3-HD-Algenib', 'Algieba (ko-KR) - M': 'ko-KR-Chirp3-HD-Algieba',
+    'Alnilam (ko-KR) - M': 'ko-KR-Chirp3-HD-Alnilam', 'Charon (ko-KR) - M': 'ko-KR-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _malayalamVoiceOptions = {
-    'Achernar (ml-IN)': 'ml-IN-Chirp3-HD-Achernar', 'Aoede (ml-IN)': 'ml-IN-Chirp3-HD-Aoede',
-    'Autonoe (ml-IN)': 'ml-IN-Chirp3-HD-Autonoe', 'Callirrhoe (ml-IN)': 'ml-IN-Chirp3-HD-Callirrhoe',
-    'Despina (ml-IN)': 'ml-IN-Chirp3-HD-Despina', 'Achird (ml-IN)': 'ml-IN-Chirp3-HD-Achird',
-    'Algenib (ml-IN)': 'ml-IN-Chirp3-HD-Algenib', 'Algieba (ml-IN)': 'ml-IN-Chirp3-HD-Algieba',
-    'Alnilam (ml-IN)': 'ml-IN-Chirp3-HD-Alnilam', 'Charon (ml-IN)': 'ml-IN-Chirp3-HD-Charon',
+    'Achernar (ml-IN) - F': 'ml-IN-Chirp3-HD-Achernar', 'Aoede (ml-IN) - F': 'ml-IN-Chirp3-HD-Aoede',
+    'Autonoe (ml-IN) - F': 'ml-IN-Chirp3-HD-Autonoe', 'Callirrhoe (ml-IN) - F': 'ml-IN-Chirp3-HD-Callirrhoe',
+    'Despina (ml-IN) - F': 'ml-IN-Chirp3-HD-Despina', 'Achird (ml-IN) - M': 'ml-IN-Chirp3-HD-Achird',
+    'Algenib (ml-IN) - M': 'ml-IN-Chirp3-HD-Algenib', 'Algieba (ml-IN) - M': 'ml-IN-Chirp3-HD-Algieba',
+    'Alnilam (ml-IN) - M': 'ml-IN-Chirp3-HD-Alnilam', 'Charon (ml-IN) - M': 'ml-IN-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _mandarinVoiceOptions = {
-    'Achernar (cmn-CN)': 'cmn-CN-Chirp3-HD-Achernar', 'Aoede (cmn-CN)': 'cmn-CN-Chirp3-HD-Aoede',
-    'Autonoe (cmn-CN)': 'cmn-CN-Chirp3-HD-Autonoe', 'Callirrhoe (cmn-CN)': 'cmn-CN-Chirp3-HD-Callirrhoe',
-    'Despina (cmn-CN)': 'cmn-CN-Chirp3-HD-Despina', 'Achird (cmn-CN)': 'cmn-CN-Chirp3-HD-Achird',
-    'Algenib (cmn-CN)': 'cmn-CN-Chirp3-HD-Algenib', 'Algieba (cmn-CN)': 'cmn-CN-Chirp3-HD-Algieba',
-    'Alnilam (cmn-CN)': 'cmn-CN-Chirp3-HD-Alnilam', 'Charon (cmn-CN)': 'cmn-CN-Chirp3-HD-Charon',
+    'Achernar (cmn-CN) - F': 'cmn-CN-Chirp3-HD-Achernar', 'Aoede (cmn-CN) - F': 'cmn-CN-Chirp3-HD-Aoede',
+    'Autonoe (cmn-CN) - F': 'cmn-CN-Chirp3-HD-Autonoe', 'Callirrhoe (cmn-CN) - F': 'cmn-CN-Chirp3-HD-Callirrhoe',
+    'Despina (cmn-CN) - F': 'cmn-CN-Chirp3-HD-Despina', 'Achird (cmn-CN) - M': 'cmn-CN-Chirp3-HD-Achird',
+    'Algenib (cmn-CN) - M': 'cmn-CN-Chirp3-HD-Algenib', 'Algieba (cmn-CN) - M': 'cmn-CN-Chirp3-HD-Algieba',
+    'Alnilam (cmn-CN) - M': 'cmn-CN-Chirp3-HD-Alnilam', 'Charon (cmn-CN) - M': 'cmn-CN-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _marathiVoiceOptions = {
-    'Achernar (mr-IN)': 'mr-IN-Chirp3-HD-Achernar', 'Aoede (mr-IN)': 'mr-IN-Chirp3-HD-Aoede',
-    'Autonoe (mr-IN)': 'mr-IN-Chirp3-HD-Autonoe', 'Callirrhoe (mr-IN)': 'mr-IN-Chirp3-HD-Callirrhoe',
-    'Despina (mr-IN)': 'mr-IN-Chirp3-HD-Despina', 'Achird (mr-IN)': 'mr-IN-Chirp3-HD-Achird',
-    'Algenib (mr-IN)': 'mr-IN-Chirp3-HD-Algenib', 'Algieba (mr-IN)': 'mr-IN-Chirp3-HD-Algieba',
-    'Alnilam (mr-IN)': 'mr-IN-Chirp3-HD-Alnilam', 'Charon (mr-IN)': 'mr-IN-Chirp3-HD-Charon',
+    'Achernar (mr-IN) - F': 'mr-IN-Chirp3-HD-Achernar', 'Aoede (mr-IN) - F': 'mr-IN-Chirp3-HD-Aoede',
+    'Autonoe (mr-IN) - F': 'mr-IN-Chirp3-HD-Autonoe', 'Callirrhoe (mr-IN) - F': 'mr-IN-Chirp3-HD-Callirrhoe',
+    'Despina (mr-IN) - F': 'mr-IN-Chirp3-HD-Despina', 'Achird (mr-IN) - M': 'mr-IN-Chirp3-HD-Achird',
+    'Algenib (mr-IN) - M': 'mr-IN-Chirp3-HD-Algenib', 'Algieba (mr-IN) - M': 'mr-IN-Chirp3-HD-Algieba',
+    'Alnilam (mr-IN) - M': 'mr-IN-Chirp3-HD-Alnilam', 'Charon (mr-IN) - M': 'mr-IN-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _norwegianVoiceOptions = {
-    'Achernar (nb-NO)': 'nb-NO-Chirp3-HD-Achernar', 'Aoede (nb-NO)': 'nb-NO-Chirp3-HD-Aoede',
-    'Autonoe (nb-NO)': 'nb-NO-Chirp3-HD-Autonoe', 'Callirrhoe (nb-NO)': 'nb-NO-Chirp3-HD-Callirrhoe',
-    'Despina (nb-NO)': 'nb-NO-Chirp3-HD-Despina', 'Achird (nb-NO)': 'nb-NO-Chirp3-HD-Achird',
-    'Algenib (nb-NO)': 'nb-NO-Chirp3-HD-Algenib', 'Algieba (nb-NO)': 'nb-NO-Chirp3-HD-Algieba',
-    'Alnilam (nb-NO)': 'nb-NO-Chirp3-HD-Alnilam', 'Charon (nb-NO)': 'nb-NO-Chirp3-HD-Charon',
+    'Achernar (nb-NO) - F': 'nb-NO-Chirp3-HD-Achernar', 'Aoede (nb-NO) - F': 'nb-NO-Chirp3-HD-Aoede',
+    'Autonoe (nb-NO) - F': 'nb-NO-Chirp3-HD-Autonoe', 'Callirrhoe (nb-NO) - F': 'nb-NO-Chirp3-HD-Callirrhoe',
+    'Despina (nb-NO) - F': 'nb-NO-Chirp3-HD-Despina', 'Achird (nb-NO) - M': 'nb-NO-Chirp3-HD-Achird',
+    'Algenib (nb-NO) - M': 'nb-NO-Chirp3-HD-Algenib', 'Algieba (nb-NO) - M': 'nb-NO-Chirp3-HD-Algieba',
+    'Alnilam (nb-NO) - M': 'nb-NO-Chirp3-HD-Alnilam', 'Charon (nb-NO) - M': 'nb-NO-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _polishVoiceOptions = {
-    'Achernar (pl-PL)': 'pl-PL-Chirp3-HD-Achernar', 'Aoede (pl-PL)': 'pl-PL-Chirp3-HD-Aoede',
-    'Autonoe (pl-PL)': 'pl-PL-Chirp3-HD-Autonoe', 'Callirrhoe (pl-PL)': 'pl-PL-Chirp3-HD-Callirrhoe',
-    'Despina (pl-PL)': 'pl-PL-Chirp3-HD-Despina', 'Achird (pl-PL)': 'pl-PL-Chirp3-HD-Achird',
-    'Algenib (pl-PL)': 'pl-PL-Chirp3-HD-Algenib', 'Algieba (pl-PL)': 'pl-PL-Chirp3-HD-Algieba',
-    'Alnilam (pl-PL)': 'pl-PL-Chirp3-HD-Alnilam', 'Charon (pl-PL)': 'Charon',
+    'Achernar (pl-PL) - F': 'pl-PL-Chirp3-HD-Achernar', 'Aoede (pl-PL) - F': 'pl-PL-Chirp3-HD-Aoede',
+    'Autonoe (pl-PL) - F': 'pl-PL-Chirp3-HD-Autonoe', 'Callirrhoe (pl-PL) - F': 'pl-PL-Chirp3-HD-Callirrhoe',
+    'Despina (pl-PL) - F': 'pl-PL-Chirp3-HD-Despina', 'Achird (pl-PL) - M': 'pl-PL-Chirp3-HD-Achird',
+    'Algenib (pl-PL) - M': 'pl-PL-Chirp3-HD-Algenib', 'Algieba (pl-PL) - M': 'pl-PL-Chirp3-HD-Algieba',
+    'Alnilam (pl-PL) - M': 'pl-PL-Chirp3-HD-Alnilam', 'Charon (pl-PL) - M': 'Charon',
   };
 
   final Map<String, String> _portugueseBrazilVoiceOptions = {
-    'Achernar (pt-BR)': 'pt-BR-Chirp3-HD-Achernar', 'Aoede (pt-BR)': 'pt-BR-Chirp3-HD-Aoede',
-    'Autonoe (pt-BR)': 'pt-BR-Chirp3-HD-Autonoe', 'Callirrhoe (pt-BR)': 'pt-BR-Chirp3-HD-Callirrhoe',
-    'Despina (pt-BR)': 'pt-BR-Chirp3-HD-Despina', 'Achird (pt-BR)': 'pt-BR-Chirp3-HD-Achird',
-    'Algenib (pt-BR)': 'pt-BR-Chirp3-HD-Algenib', 'Algieba (pt-BR)': 'pt-BR-Chirp3-HD-Algieba',
-    'Alnilam (pt-BR)': 'pt-BR-Chirp3-HD-Alnilam', 'Charon (pt-BR)': 'pt-BR-Chirp3-HD-Charon',
+    'Achernar (pt-BR) - F': 'pt-BR-Chirp3-HD-Achernar', 'Aoede (pt-BR) - F': 'pt-BR-Chirp3-HD-Aoede',
+    'Autonoe (pt-BR) - F': 'pt-BR-Chirp3-HD-Autonoe', 'Callirrhoe (pt-BR) - F': 'pt-BR-Chirp3-HD-Callirrhoe',
+    'Despina (pt-BR) - F': 'pt-BR-Chirp3-HD-Despina', 'Achird (pt-BR) - M': 'pt-BR-Chirp3-HD-Achird',
+    'Algenib (pt-BR) - M': 'pt-BR-Chirp3-HD-Algenib', 'Algieba (pt-BR) - M': 'pt-BR-Chirp3-HD-Algieba',
+    'Alnilam (pt-BR) - M': 'pt-BR-Chirp3-HD-Alnilam', 'Charon (pt-BR) - M': 'pt-BR-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _russianVoiceOptions = {
-    'Aoede (ru-RU)': 'ru-RU-Chirp3-HD-Aoede', 'Kore (ru-RU)': 'ru-RU-Chirp3-HD-Kore',
-    'Leda (ru-RU)': 'ru-RU-Chirp3-HD-Leda', 'Zephyr (ru-RU)': 'ru-RU-Chirp3-HD-Zephyr',
-    'Achernar (ru-RU)': 'ru-RU-Chirp3-HD-Achernar', 'Charon (ru-RU)': 'ru-RU-Chirp3-HD-Charon',
-    'Fenrir (ru-RU)': 'ru-RU-Chirp3-HD-Fenrir', 'Orus (ru-RU)': 'ru-RU-Chirp3-HD-Orus',
-    'Puck (ru-RU)': 'ru-RU-Chirp3-HD-Puck', 'Achird (ru-RU)': 'ru-RU-Chirp3-HD-Achird',
+    'Aoede (ru-RU) - F': 'ru-RU-Chirp3-HD-Aoede', 'Kore (ru-RU) - F': 'ru-RU-Chirp3-HD-Kore',
+    'Leda (ru-RU) - F': 'ru-RU-Chirp3-HD-Leda', 'Zephyr (ru-RU) - F': 'ru-RU-Chirp3-HD-Zephyr',
+    'Achernar (ru-RU) - F': 'ru-RU-Chirp3-HD-Achernar', 'Charon (ru-RU) - M': 'ru-RU-Chirp3-HD-Charon',
+    'Fenrir (ru-RU) - M': 'ru-RU-Chirp3-HD-Fenrir', 'Orus (ru-RU) - M': 'ru-RU-Chirp3-HD-Orus',
+    'Puck (ru-RU) - M': 'ru-RU-Chirp3-HD-Puck', 'Achird (ru-RU) - M': 'ru-RU-Chirp3-HD-Achird',
   };
 
   final Map<String, String> _spanishSpainVoiceOptions = {
-    'Achernar (es-ES)': 'es-ES-Chirp3-HD-Achernar', 'Aoede (es-ES)': 'es-ES-Chirp3-HD-Aoede',
-    'Autonoe (es-ES)': 'es-ES-Chirp3-HD-Autonoe', 'Callirrhoe (es-ES)': 'es-ES-Chirp3-HD-Callirrhoe',
-    'Despina (es-ES)': 'es-ES-Chirp3-HD-Despina', 'Achird (es-ES)': 'es-ES-Chirp3-HD-Achird',
-    'Algenib (es-ES)': 'es-ES-Chirp3-HD-Algenib', 'Algieba (es-ES)': 'es-ES-Chirp3-HD-Algieba',
-    'Alnilam (es-ES)': 'es-ES-Chirp3-HD-Alnilam', 'Charon (es-ES)': 'es-ES-Chirp3-HD-Charon',
+    'Achernar (es-ES) - F': 'es-ES-Chirp3-HD-Achernar', 'Aoede (es-ES) - F': 'es-ES-Chirp3-HD-Aoede',
+    'Autonoe (es-ES) - F': 'es-ES-Chirp3-HD-Autonoe', 'Callirrhoe (es-ES) - F': 'es-ES-Chirp3-HD-Callirrhoe',
+    'Despina (es-ES) - F': 'es-ES-Chirp3-HD-Despina', 'Achird (es-ES) - M': 'es-ES-Chirp3-HD-Achird',
+    'Algenib (es-ES) - M': 'es-ES-Chirp3-HD-Algenib', 'Algieba (es-ES) - M': 'es-ES-Chirp3-HD-Algieba',
+    'Alnilam (es-ES) - M': 'es-ES-Chirp3-HD-Alnilam', 'Charon (es-ES) - M': 'es-ES-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _spanishUSVoiceOptions = {
-    'Achernar (es-US)': 'es-US-Chirp3-HD-Achernar', 'Aoede (es-US)': 'es-US-Chirp3-HD-Aoede',
-    'Autonoe (es-US)': 'es-US-Chirp3-HD-Autonoe', 'Callirrhoe (es-US)': 'es-US-Chirp3-HD-Callirrhoe',
-    'Despina (es-US)': 'es-US-Chirp3-HD-Despina', 'Achird (es-US)': 'es-US-Chirp3-HD-Achird',
-    'Algenib (es-US)': 'es-US-Chirp3-HD-Algenib', 'Algieba (es-US)': 'es-US-Chirp3-HD-Algieba',
-    'Alnilam (es-US)': 'es-US-Chirp3-HD-Alnilam', 'Charon (es-US)': 'es-US-Chirp3-HD-Charon',
+    'Achernar (es-US) - F': 'es-US-Chirp3-HD-Achernar', 'Aoede (es-US) - F': 'es-US-Chirp3-HD-Aoede',
+    'Autonoe (es-US) - F': 'es-US-Chirp3-HD-Autonoe', 'Callirrhoe (es-US) - F': 'es-US-Chirp3-HD-Callirrhoe',
+    'Despina (es-US) - F': 'es-US-Chirp3-HD-Despina', 'Achird (es-US) - M': 'es-US-Chirp3-HD-Achird',
+    'Algenib (es-US) - M': 'es-US-Chirp3-HD-Algenib', 'Algieba (es-US) - M': 'es-US-Chirp3-HD-Algieba',
+    'Alnilam (es-US) - M': 'es-US-Chirp3-HD-Alnilam', 'Charon (es-US) - M': 'es-US-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _swedishVoiceOptions = {
-    'Achernar (sv-SE)': 'sv-SE-Chirp3-HD-Achernar', 'Aoede (sv-SE)': 'sv-SE-Chirp3-HD-Aoede',
-    'Autonoe (sv-SE)': 'sv-SE-Chirp3-HD-Autonoe', 'Callirrhoe (sv-SE)': 'sv-SE-Chirp3-HD-Callirrhoe',
-    'Despina (sv-SE)': 'sv-SE-Chirp3-HD-Despina', 'Achird (sv-SE)': 'sv-SE-Chirp3-HD-Achird',
-    'Algenib (sv-SE)': 'sv-SE-Chirp3-HD-Algenib', 'Algieba (sv-SE)': 'sv-SE-Chirp3-HD-Algieba',
-    'Alnilam (sv-SE)': 'sv-SE-Chirp3-HD-Alnilam', 'Charon (sv-SE)': 'sv-SE-Chirp3-HD-Charon',
+    'Achernar (sv-SE) - F': 'sv-SE-Chirp3-HD-Achernar', 'Aoede (sv-SE) - F': 'sv-SE-Chirp3-HD-Aoede',
+    'Autonoe (sv-SE) - F': 'sv-SE-Chirp3-HD-Autonoe', 'Callirrhoe (sv-SE) - F': 'sv-SE-Chirp3-HD-Callirrhoe',
+    'Despina (sv-SE) - F': 'sv-SE-Chirp3-HD-Despina', 'Achird (sv-SE) - M': 'sv-SE-Chirp3-HD-Achird',
+    'Algenib (sv-SE) - M': 'sv-SE-Chirp3-HD-Algenib', 'Algieba (sv-SE) - M': 'sv-SE-Chirp3-HD-Algieba',
+    'Alnilam (sv-SE) - M': 'sv-SE-Chirp3-HD-Alnilam', 'Charon (sv-SE) - M': 'sv-SE-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _tamilVoiceOptions = {
-    'Achernar (ta-IN)': 'ta-IN-Chirp3-HD-Achernar', 'Aoede (ta-IN)': 'ta-IN-Chirp3-HD-Aoede',
-    'Autonoe (ta-IN)': 'ta-IN-Chirp3-HD-Autonoe', 'Callirrhoe (ta-IN)': 'ta-IN-Chirp3-HD-Callirrhoe',
-    'Despina (ta-IN)': 'ta-IN-Chirp3-HD-Despina', 'Achird (ta-IN)': 'ta-IN-Chirp3-HD-Achird',
-    'Algenib (ta-IN)': 'ta-IN-Chirp3-HD-Algenib', 'Algieba (ta-IN)': 'ta-IN-Chirp3-HD-Algieba',
-    'Alnilam (ta-IN)': 'ta-IN-Chirp3-HD-Alnilam', 'Charon (ta-IN)': 'ta-IN-Chirp3-HD-Charon',
+    'Achernar (ta-IN) - F': 'ta-IN-Chirp3-HD-Achernar', 'Aoede (ta-IN) - F': 'ta-IN-Chirp3-HD-Aoede',
+    'Autonoe (ta-IN) - F': 'ta-IN-Chirp3-HD-Autonoe', 'Callirrhoe (ta-IN) - F': 'ta-IN-Chirp3-HD-Callirrhoe',
+    'Despina (ta-IN) - F': 'ta-IN-Chirp3-HD-Despina', 'Achird (ta-IN) - M': 'ta-IN-Chirp3-HD-Achird',
+    'Algenib (ta-IN) - M': 'ta-IN-Chirp3-HD-Algenib', 'Algieba (ta-IN) - M': 'ta-IN-Chirp3-HD-Algieba',
+    'Alnilam (ta-IN) - M': 'ta-IN-Chirp3-HD-Alnilam', 'Charon (ta-IN) - M': 'ta-IN-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _teluguVoiceOptions = {
-    'Achernar (te-IN)': 'te-IN-Chirp3-HD-Achernar', 'Aoede (te-IN)': 'te-IN-Chirp3-HD-Aoede',
-    'Autonoe (te-IN)': 'te-IN-Chirp3-HD-Autonoe', 'Callirrhoe (te-IN)': 'te-IN-Chirp3-HD-Callirrhoe',
-    'Despina (te-IN)': 'te-IN-Chirp3-HD-Despina', 'Achird (te-IN)': 'te-IN-Chirp3-HD-Achird',
-    'Algenib (te-IN)': 'te-IN-Chirp3-HD-Algenib', 'Algieba (te-IN)': 'te-IN-Chirp3-HD-Algieba',
-    'Alnilam (te-IN)': 'te-IN-Chirp3-HD-Alnilam', 'Charon (te-IN)': 'te-IN-Chirp3-HD-Charon',
+    'Achernar (te-IN) - F': 'te-IN-Chirp3-HD-Achernar', 'Aoede (te-IN) - F': 'te-IN-Chirp3-HD-Aoede',
+    'Autonoe (te-IN) - F': 'te-IN-Chirp3-HD-Autonoe', 'Callirrhoe (te-IN) - F': 'te-IN-Chirp3-HD-Callirrhoe',
+    'Despina (te-IN) - F': 'te-IN-Chirp3-HD-Despina', 'Achird (te-IN) - M': 'te-IN-Chirp3-HD-Achird',
+    'Algenib (te-IN) - M': 'te-IN-Chirp3-HD-Algenib', 'Algieba (te-IN) - M': 'te-IN-Chirp3-HD-Algieba',
+    'Alnilam (te-IN) - M': 'te-IN-Chirp3-HD-Alnilam', 'Charon (te-IN) - M': 'te-IN-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _thaiVoiceOptions = {
-    'Achernar (th-TH)': 'th-TH-Chirp3-HD-Achernar', 'Aoede (th-TH)': 'th-TH-Chirp3-HD-Aoede',
-    'Autonoe (th-TH)': 'th-TH-Chirp3-HD-Autonoe', 'Callirrhoe (th-TH)': 'th-TH-Chirp3-HD-Callirrhoe',
-    'Despina (th-TH)': 'th-TH-Chirp3-HD-Despina', 'Achird (th-TH)': 'th-TH-Chirp3-HD-Achird',
-    'Algenib (th-TH)': 'th-TH-Chirp3-HD-Algenib', 'Algieba (th-TH)': 'th-TH-Chirp3-HD-Algieba',
-    'Alnilam (th-TH)': 'th-TH-Chirp3-HD-Alnilam', 'Charon (th-TH)': 'th-TH-Chirp3-HD-Charon',
+    'Achernar (th-TH) - F': 'th-TH-Chirp3-HD-Achernar', 'Aoede (th-TH) - F': 'th-TH-Chirp3-HD-Aoede',
+    'Autonoe (th-TH) - F': 'th-TH-Chirp3-HD-Autonoe', 'Callirrhoe (th-TH) - F': 'th-TH-Chirp3-HD-Callirrhoe',
+    'Despina (th-TH) - F': 'th-TH-Chirp3-HD-Despina', 'Achird (th-TH) - M': 'th-TH-Chirp3-HD-Achird',
+    'Algenib (th-TH) - M': 'th-TH-Chirp3-HD-Algenib', 'Algieba (th-TH) - M': 'th-TH-Chirp3-HD-Algieba',
+    'Alnilam (th-TH) - M': 'th-TH-Chirp3-HD-Alnilam', 'Charon (th-TH) - M': 'th-TH-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _turkishVoiceOptions = {
-    'Achernar (tr-TR)': 'tr-TR-Chirp3-HD-Achernar', 'Aoede (tr-TR)': 'tr-TR-Chirp3-HD-Aoede',
-    'Autonoe (tr-TR)': 'tr-TR-Chirp3-HD-Autonoe', 'Callirrhoe (tr-TR)': 'tr-TR-Chirp3-HD-Callirrhoe',
-    'Despina (tr-TR)': 'tr-TR-Chirp3-HD-Despina', 'Achird (tr-TR)': 'tr-TR-Chirp3-HD-Achird',
-    'Algenib (tr-TR)': 'tr-TR-Chirp3-HD-Algenib', 'Algieba (tr-TR)': 'tr-TR-Chirp3-HD-Algieba',
-    'Alnilam (tr-TR)': 'tr-TR-Chirp3-HD-Alnilam', 'Charon (tr-TR)': 'tr-TR-Chirp3-HD-Charon',
+    'Achernar (tr-TR) - F': 'tr-TR-Chirp3-HD-Achernar', 'Aoede (tr-TR) - F': 'tr-TR-Chirp3-HD-Aoede',
+    'Autonoe (tr-TR) - F': 'tr-TR-Chirp3-HD-Autonoe', 'Callirrhoe (tr-TR) - F': 'tr-TR-Chirp3-HD-Callirrhoe',
+    'Despina (tr-TR) - F': 'tr-TR-Chirp3-HD-Despina', 'Achird (tr-TR) - M': 'tr-TR-Chirp3-HD-Achird',
+    'Algenib (tr-TR) - M': 'tr-TR-Chirp3-HD-Algenib', 'Algieba (tr-TR) - M': 'tr-TR-Chirp3-HD-Algieba',
+    'Alnilam (tr-TR) - M': 'tr-TR-Chirp3-HD-Alnilam', 'Charon (tr-TR) - M': 'tr-TR-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _ukrainianVoiceOptions = {
-    'Achernar (uk-UA)': 'uk-UA-Chirp3-HD-Achernar', 'Aoede (uk-UA)': 'uk-UA-Chirp3-HD-Aoede',
-    'Autonoe (uk-UA)': 'uk-UA-Chirp3-HD-Autonoe', 'Callirrhoe (uk-UA)': 'uk-UA-Chirp3-HD-Callirrhoe',
-    'Despina (uk-UA)': 'uk-UA-Chirp3-HD-Despina', 'Achird (uk-UA)': 'uk-UA-Chirp3-HD-Achird',
-    'Algenib (uk-UA)': 'uk-UA-Chirp3-HD-Algenib', 'Algieba (uk-UA)': 'uk-UA-Chirp3-HD-Algieba',
-    'Alnilam (uk-UA)': 'uk-UA-Chirp3-HD-Alnilam', 'Charon (uk-UA)': 'uk-UA-Chirp3-HD-Charon',
+    'Achernar (uk-UA) - F': 'uk-UA-Chirp3-HD-Achernar', 'Aoede (uk-UA) - F': 'uk-UA-Chirp3-HD-Aoede',
+    'Autonoe (uk-UA) - F': 'uk-UA-Chirp3-HD-Autonoe', 'Callirrhoe (uk-UA) - F': 'uk-UA-Chirp3-HD-Callirrhoe',
+    'Despina (uk-UA) - F': 'uk-UA-Chirp3-HD-Despina', 'Achird (uk-UA) - M': 'uk-UA-Chirp3-HD-Achird',
+    'Algenib (uk-UA) - M': 'uk-UA-Chirp3-HD-Algenib', 'Algieba (uk-UA) - M': 'uk-UA-Chirp3-HD-Algieba',
+    'Alnilam (uk-UA) - M': 'uk-UA-Chirp3-HD-Alnilam', 'Charon (uk-UA) - M': 'uk-UA-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _urduIndiaVoiceOptions = {
-    'Achernar (ur-IN)': 'ur-IN-Chirp3-HD-Achernar', 'Aoede (ur-IN)': 'ur-IN-Chirp3-HD-Aoede',
-    'Autonoe (ur-IN)': 'ur-IN-Chirp3-HD-Autonoe', 'Callirrhoe (ur-IN)': 'ur-IN-Chirp3-HD-Callirrhoe',
-    'Despina (ur-IN)': 'ur-IN-Chirp3-HD-Despina', 'Achird (ur-IN)': 'ur-IN-Chirp3-HD-Achird',
-    'Algenib (ur-IN)': 'ur-IN-Chirp3-HD-Algenib', 'Algieba (ur-IN)': 'ur-IN-Chirp3-HD-Algieba',
-    'Alnilam (ur-IN)': 'ur-IN-Chirp3-HD-Alnilam', 'Charon (ur-IN)': 'ur-IN-Chirp3-HD-Charon',
+    'Achernar (ur-IN) - F': 'ur-IN-Chirp3-HD-Achernar', 'Aoede (ur-IN) - F': 'ur-IN-Chirp3-HD-Aoede',
+    'Autonoe (ur-IN) - F': 'ur-IN-Chirp3-HD-Autonoe', 'Callirrhoe (ur-IN) - F': 'ur-IN-Chirp3-HD-Callirrhoe',
+    'Despina (ur-IN) - F': 'ur-IN-Chirp3-HD-Despina', 'Achird (ur-IN) - M': 'ur-IN-Chirp3-HD-Achird',
+    'Algenib (ur-IN) - M': 'ur-IN-Chirp3-HD-Algenib', 'Algieba (ur-IN) - M': 'ur-IN-Chirp3-HD-Algieba',
+    'Alnilam (ur-IN) - M': 'ur-IN-Chirp3-HD-Alnilam', 'Charon (ur-IN) - M': 'ur-IN-Chirp3-HD-Charon',
   };
 
   final Map<String, String> _vietnameseVoiceOptions = {
-    'Achernar (vi-VN)': 'vi-VN-Chirp3-HD-Achernar', 'Aoede (vi-VN)': 'vi-VN-Chirp3-HD-Aoede',
-    'Autonoe (vi-VN)': 'vi-VN-Chirp3-HD-Autonoe', 'Callirrhoe (vi-VN)': 'vi-VN-Chirp3-HD-Callirrhoe',
-    'Despina (vi-VN)': 'vi-VN-Chirp3-HD-Despina', 'Achird (vi-VN)': 'vi-VN-Chirp3-HD-Achird',
-    'Algenib (vi-VN)': 'vi-VN-Chirp3-HD-Algenib', 'Algieba (vi-VN)': 'vi-VN-Chirp3-HD-Algieba',
-    'Alnilam (vi-VN)': 'vi-VN-Chirp3-HD-Alnilam', 'Charon (vi-VN)': 'vi-VN-Chirp3-HD-Charon',
+    'Achernar (vi-VN) - F': 'vi-VN-Chirp3-HD-Achernar', 'Aoede (vi-VN) - F': 'vi-VN-Chirp3-HD-Aoede',
+    'Autonoe (vi-VN) - F': 'vi-VN-Chirp3-HD-Autonoe', 'Callirrhoe (vi-VN) - F': 'vi-VN-Chirp3-HD-Callirrhoe',
+    'Despina (vi-VN) - F': 'vi-VN-Chirp3-HD-Despina', 'Achird (vi-VN) - M': 'vi-VN-Chirp3-HD-Achird',
+    'Algenib (vi-VN) - M': 'vi-VN-Chirp3-HD-Algenib', 'Algieba (vi-VN) - M': 'vi-VN-Chirp3-HD-Algieba',
+    'Alnilam (vi-VN) - M': 'vi-VN-Chirp3-HD-Alnilam', 'Charon (vi-VN) - M': 'vi-VN-Chirp3-HD-Charon',
   };
 
   final List<String> _languageList = [
@@ -455,7 +455,7 @@ class _InputScriptMarkettingVideoScreenState extends ConsumerState<InputScriptMa
 //......................................................//
 
 //No ke-3.........................................................//
-// INIT, DISPOSE, LOGIC GAMBAR, & SUBMIT                          //
+//LIFECYCLE, IMAGE PICKER, NETWORK CLIENT & SUBMIT LOGIC..........//
   @override
   void initState() {
     super.initState();
@@ -488,11 +488,11 @@ class _InputScriptMarkettingVideoScreenState extends ConsumerState<InputScriptMa
     _productTypeController.dispose();
     _brandController.dispose();
     _productDescController.dispose();
-    _aiLanguageController.dispose(); // Disposal dari controller bahasa narasi
+    _aiLanguageController.dispose();
     super.dispose();
   }
 
-  // [FUNGSI BARU]: DUAL IMAGE PICKER RAMAH WEB & MOBILE
+  // DUAL IMAGE PICKER RAMAH WEB & MOBILE
   Future<void> _pickProductImage() async {
     try {
       final XFile? pickedFile = await _imagePicker.pickImage(
@@ -524,15 +524,14 @@ class _InputScriptMarkettingVideoScreenState extends ConsumerState<InputScriptMa
   void _removeProductImage() => setState(() => _productImage = null);
   void _removeLogoImage() => setState(() => _logoImage = null);
 
-  // [PERBAIKAN MUTLAK]: Standard & High sama-sama menggunakan 1 kalimat per segmen (~100 karakter)
   int _calculateEstimatedScenes(String text) {
     final String cleanText = text.trim();
     if (cleanText.isEmpty) return 0;
-    const int divisor = 100; // 1 kalimat per segmen untuk semua kategori
+    const int divisor = 100;
     return (cleanText.length / divisor).ceil();
   }
 
-  // [FUNGSI YANG DIPERBAIKI]: Memanggil Cloud Function dengan SnackBar Bilingual Presisi
+  // GENERATOR NARASI AI: ROBUST CLIENT DENGAN AUTO-RETRY SAAT COLD START
   Future<void> _generateNarrationWithGemini() async {
     final isIndo = ref.read(appLanguageProvider).languageCode == 'id';
 
@@ -555,19 +554,55 @@ class _InputScriptMarkettingVideoScreenState extends ConsumerState<InputScriptMa
     try {
       const String cloudFunctionUrl = "https://asia-southeast2-majiku-5b07e.cloudfunctions.net/generateMarketingScriptWorker";
       
-      final response = await http.post(
-        Uri.parse(cloudFunctionUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          "productType": _productTypeController.text.trim(),
-          "brandName": _brandController.text.trim(),
-          "productDesc": _productDescController.text.trim(),
-          "narrationLength": _narrationLength,
-          "targetLanguage": _aiLanguageController.text.trim(),
-        }),
-      );
+      final body = jsonEncode({
+        "productType": _productTypeController.text.trim(),
+        "brandName": _brandController.text.trim(),
+        "productDesc": _productDescController.text.trim(),
+        "narrationLength": _narrationLength,
+        "targetLanguage": _aiLanguageController.text.trim(),
+      });
 
-      if (response.statusCode == 200) {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Connection': 'close',
+      };
+
+      http.Response? response;
+      int attempts = 0;
+      const int maxAttempts = 2;
+
+      // Auto-retry 1x untuk mengatasi Cold Start Cloud Functions
+      while (attempts < maxAttempts) {
+        attempts++;
+        final client = http.Client();
+        try {
+          response = await client.post(
+            Uri.parse(cloudFunctionUrl),
+            headers: headers,
+            body: body,
+          ).timeout(const Duration(seconds: 120));
+          break;
+        } on io.SocketException catch (_) {
+          if (attempts < maxAttempts) {
+            await Future.delayed(const Duration(milliseconds: 1000));
+            continue;
+          }
+          rethrow;
+        } on http.ClientException catch (ce) {
+          final isReset = ce.message.toLowerCase().contains('connection reset') ||
+              ce.message.toLowerCase().contains('socketexception');
+          if (isReset && attempts < maxAttempts) {
+            await Future.delayed(const Duration(milliseconds: 1000));
+            continue;
+          }
+          rethrow;
+        } finally {
+          client.close();
+        }
+      }
+
+      if (response != null && response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['script'] != null) {
           String cleanScript = data['script'].toString().trim();
@@ -585,7 +620,7 @@ class _InputScriptMarkettingVideoScreenState extends ConsumerState<InputScriptMa
           });
         }
       } else {
-        throw Exception("Server Error: ${response.statusCode}");
+        throw Exception("Server Error: ${response?.statusCode}");
       }
     } catch (e) {
       if (mounted) {
@@ -643,12 +678,10 @@ class _InputScriptMarkettingVideoScreenState extends ConsumerState<InputScriptMa
 
         if (mounted) {
           if (newProjectId != null && newProjectId.isNotEmpty) {
-            // --- [LOG AKTIVITAS FITUR: KONVERSI SUKSES (CONVERSION)] ---
             ref.read(firestoreServiceProvider).logFeatureActivity(
               featureKey: 'auto_marketing_video',
               eventType: 'conversion',
             );
-            // -----------------------------------------------------------
 
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
@@ -683,7 +716,7 @@ class _InputScriptMarkettingVideoScreenState extends ConsumerState<InputScriptMa
 //................................................................//
 
 //No ke-4.........................................................//
-// BUILD UI & FORM LAYOUT DENGAN IMAGE PICKER                     //
+//BUILD UI & FORM LAYOUT (RESPONSIVE AI SCRIPT GENERATOR).........//
   @override
   Widget build(BuildContext context) {
     final currentLocale = ref.watch(appLanguageProvider);
@@ -707,7 +740,6 @@ class _InputScriptMarkettingVideoScreenState extends ConsumerState<InputScriptMa
       userReady = true;
     });
 
-    // [SIMULASI BIAYA LIVE DARI FIRESTORE]: Membaca tarif Standard vs High dinamis
     configAsync.whenData((config) {
       final markettingCosts = config.costs.markettingVideoCosts;
       if (_selectedCostLevel == 'High') {
@@ -715,7 +747,6 @@ class _InputScriptMarkettingVideoScreenState extends ConsumerState<InputScriptMa
             ? markettingCosts.highPerSegment1080p
             : markettingCosts.highPerSegment720p;
       } else {
-        // Default: 'Standard'
         costPerScene = _selectedResolution == '1080p'
             ? markettingCosts.standardPerSegment1080p
             : markettingCosts.standardPerSegment720p;
@@ -836,7 +867,7 @@ class _InputScriptMarkettingVideoScreenState extends ConsumerState<InputScriptMa
                                 image: _logoImage,
                                 onTap: _pickLogoImage,
                                 onRemove: _removeLogoImage,
-                                label: t('Logo\n(Optional)', 'Logo\n(Opsional)'), // <--- PERUBAHAN DI SINI
+                                label: t('Logo\n(Optional)', 'Logo\n(Opsional)'),
                                 icon: Icons.branding_watermark_outlined,
                               ),
                             ),
@@ -855,6 +886,7 @@ class _InputScriptMarkettingVideoScreenState extends ConsumerState<InputScriptMa
                         ),
                         const SizedBox(height: 24),
 
+                        // KOTAK GENERATOR SKRIP AI (TATA LETAK RESPONSIF & BEBAS SESAK)
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
@@ -863,73 +895,79 @@ class _InputScriptMarkettingVideoScreenState extends ConsumerState<InputScriptMa
                             border: Border.all(color: Colors.blueAccent.withOpacity(0.3)),
                           ),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Text(
                                 t('Don\'t have a script? Let AI write it for you!', 'Belum punya skrip? Biar AI yang buatkan!'),
                                 style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueAccent),
                               ),
-                              const SizedBox(height: 12),
-                              TextFormField(
-                                controller: _aiLanguageController,
-                                decoration: InputDecoration(
-                                  labelText: t('Narration Language (Optional)', 'Bahasa Narasi (Opsional)'),
-                                  hintText: t(
-                                    'e.g., English, Spanish, Japanese (Leave blank for default)',
-                                    'Cth: Inggris, Jawa, Sunda (Biarkan kosong jika ikut default)',
-                                  ),
-                                  isDense: true,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 14),
+
+                              // BARIS 1: BAHASA NARASI (KIRI) & CHARACTERS LENGTH (KANAN)
                               Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Expanded(
-                                    flex: 2,
-                                    child: DropdownButtonFormField<int>(
-                                      value: _narrationLength,
+                                    flex: 3,
+                                    child: TextFormField(
+                                      controller: _aiLanguageController,
                                       decoration: InputDecoration(
-                                        labelText: t('Narration Length', 'Panjang Narasi'),
+                                        labelText: t('Narration Language (Optional)', 'Bahasa Narasi (Opsional)'),
+                                        hintText: t(
+                                          'e.g., English, Spanish...',
+                                          'Cth: Inggris, Jawa...',
+                                        ),
                                         isDense: true,
                                       ),
-                                      items: [
-                                        DropdownMenuItem(
-                                          value: 500, 
-                                          child: Text(t('500 Characters', '500 Karakter')),
-                                        ),
-                                        DropdownMenuItem(
-                                          value: 1000, 
-                                          child: Text(t('1000 Characters', '1000 Karakter')),
-                                        ),
-                                        DropdownMenuItem(
-                                          value: 1500, 
-                                          child: Text(t('1500 Characters', '1500 Karakter')),
-                                        ),
-                                        DropdownMenuItem(
-                                          value: 2000, 
-                                          child: Text(t('2000 Characters', '2000 Karakter')),
-                                        ),
-                                      ],
-                                      onChanged: (val) { if (val != null) setState(() => _narrationLength = val); },
                                     ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
-                                    flex: 3,
-                                    child: ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.blueAccent, 
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(vertical: 14),
+                                    flex: 2,
+                                    child: DropdownButtonFormField<int>(
+                                      value: _narrationLength,
+                                      isExpanded: true,
+                                      decoration: InputDecoration(
+                                        labelText: t('Characters Length', 'Panjang Karakter'),
+                                        isDense: true,
                                       ),
-                                      onPressed: _isGeneratingNarration ? null : _generateNarrationWithGemini,
-                                      icon: _isGeneratingNarration 
-                                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) 
-                                          : const Icon(Icons.auto_awesome),
-                                      label: Text(t('Generate Script', 'Buat Narasi')),
+                                      items: const [
+                                        DropdownMenuItem(value: 500, child: Text('500')),
+                                        DropdownMenuItem(value: 1000, child: Text('1000')),
+                                        DropdownMenuItem(value: 1500, child: Text('1500')),
+                                        DropdownMenuItem(value: 2000, child: Text('2000')),
+                                      ],
+                                      onChanged: (val) {
+                                        if (val != null) setState(() => _narrationLength = val);
+                                      },
                                     ),
                                   ),
                                 ],
+                              ),
+                              const SizedBox(height: 14),
+
+                              // BARIS 2: TOMBOL GENERATE SCRIPT (MANDIRI 1 BARIS PENUH)
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blueAccent,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                onPressed: _isGeneratingNarration ? null : _generateNarrationWithGemini,
+                                icon: _isGeneratingNarration
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                      )
+                                    : const Icon(Icons.auto_awesome, size: 20),
+                                label: Text(
+                                  t('Generate Script', 'Buat Narasi'),
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                ),
                               ),
                             ],
                           ),
@@ -1168,7 +1206,6 @@ class _InputScriptMarkettingVideoScreenState extends ConsumerState<InputScriptMa
                               ),
                             ),
                             const SizedBox(width: 16),
-                            // [PILIHAN TINGKAT BIAYA STANDAR VS HIGH - MURNI TANPA EMBEL-EMBEL VEO]
                             Expanded(
                               child: DropdownButtonFormField<String>(
                                 value: _selectedCostLevel,
@@ -1299,9 +1336,7 @@ class _InputScriptMarkettingVideoScreenState extends ConsumerState<InputScriptMa
     );
   }
 
-  // =========================================================================
-  // WIDGET HELPER KHUSUS: DUAL IMAGE PICKER BOX (EFEK HOVER GLOW & UKURAN)
-  // =========================================================================
+  // WIDGET HELPER: DUAL IMAGE PICKER BOX
   Widget _buildImagePickerBox({
     required XFile? image, 
     required VoidCallback onTap, 
@@ -1391,4 +1426,4 @@ class _InputScriptMarkettingVideoScreenState extends ConsumerState<InputScriptMa
     );
   }
 }
-//Akhir Blok 4....................................................//
+//................................................................//

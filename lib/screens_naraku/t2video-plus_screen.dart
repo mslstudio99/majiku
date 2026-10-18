@@ -33,10 +33,12 @@ class T2videoPlusScreen extends ConsumerStatefulWidget {
 //.......................................................//
 
 // No ke-2 - STATE & INITIALIZATION //
+// Manajemen state, lifecycle controller, dan pembersihan listener anti-memory leak //
 //.......................................................//
 class _T2videoPlusScreenState extends ConsumerState<T2videoPlusScreen> {
   final int _maxPromptLength = 2000;
   final _formKey = GlobalKey<FormState>();
+  TextEditingController? _narrativeController;
 
   @override
   void initState() {
@@ -44,7 +46,8 @@ class _T2videoPlusScreenState extends ConsumerState<T2videoPlusScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final viewModel = ref.read(t2videoPlusViewModelProvider.notifier);
-        viewModel.narrativeController.addListener(_onTextChanged);
+        _narrativeController = viewModel.narrativeController;
+        _narrativeController?.addListener(_onTextChanged);
 
         // --- [LOG AKTIVITAS: KUNJUNGAN OTHER TOOLS -> T2VIDEO_PLUS] ---
         ref.read(firestoreServiceProvider).logFeatureActivity(
@@ -58,11 +61,17 @@ class _T2videoPlusScreenState extends ConsumerState<T2videoPlusScreen> {
   }
 
   void _onTextChanged() {
-    setState(() {}); 
+    // [PENGAMAN MOUNTED]: Mencegah pemanggilan setState pada widget yang sudah unmounted / defunct
+    if (mounted) {
+      setState(() {}); 
+    }
   }
 
   @override
   void dispose() {
+    // [PEMBERSIHAN MUTLAK ANTI-DEFUNCT]: Melepas listener controller secara aman sebelum element dihancurkan
+    _narrativeController?.removeListener(_onTextChanged);
+    _narrativeController = null;
     super.dispose();
   }
 //.......................................................//
@@ -373,26 +382,31 @@ class _T2videoPlusScreenState extends ConsumerState<T2videoPlusScreen> {
                           ],
                         ),
                         const SizedBox(height: 24),
+                        // [PERBAIKAN ANTI-ASSERTION]: Membungkus SwitchListTile dengan Material agar efek ripple/ink splash valid
                         Container(
                           decoration: BoxDecoration(
                             color: Colors.black12,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: Colors.white24, width: 1),
                           ),
-                          child: SwitchListTile(
-                            title: Text(
-                              t('Include Audio', 'Sertakan Audio'),
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          child: Material(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            child: SwitchListTile(
+                              title: Text(
+                                t('Include Audio', 'Sertakan Audio'),
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                              subtitle: Text(
+                                t('Generate sync audio: dialog, background sound/music', 'Buat dialog, suara/musik latar belakang otomatis'),
+                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                              value: state.isAudioEnabled,
+                              activeColor: Colors.blue,
+                              onChanged: state.isLoading ? null : (bool value) {
+                                viewModel.toggleAudio(value);
+                              },
                             ),
-                            subtitle: Text(
-                              t('Generate sync audio: dialog, background sound/music', 'Buat dialog, suara/musik latar belakang otomatis'),
-                              style: const TextStyle(fontSize: 12, color: Colors.grey),
-                            ),
-                            value: state.isAudioEnabled,
-                            activeColor: Colors.blue,
-                            onChanged: state.isLoading ? null : (bool value) {
-                              viewModel.toggleAudio(value);
-                            },
                           ),
                         ),
                         const SizedBox(height: 32),

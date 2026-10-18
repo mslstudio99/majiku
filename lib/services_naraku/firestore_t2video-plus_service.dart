@@ -3,7 +3,8 @@
 // MENYIMPAN, MEMBACA, DAN MENGHAPUS RIWAYAT T2VIDEO-PLUS //
 
 // No ke-1 - FIREBASE SERVICE //
-// SERVICE CRUD FIRESTORE UNTUK T2VIDEO-PLUS //
+// SERVICE CRUD FIRESTORE UNTUK T2VIDEO-PLUS DENGAN DUKUNGAN IMAGEURL //
+//.......................................................//
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models_naraku/video_project_t2video-plus.dart';
 
@@ -13,7 +14,7 @@ class FirestoreT2videoPlusService {
   // Nama koleksi utama
   final String _collectionName = 'projects_t2video_plus';
 
-  // [CREATE] Simpan proyek baru
+  // [CREATE] Simpan proyek baru (Mendukung URL Video & URL Gambar Acuan)
   Future<void> saveProject(VideoProjectT2videoPlus project) async {
     try {
       final docRef = _firestore.collection(_collectionName).doc();
@@ -22,6 +23,7 @@ class FirestoreT2videoPlusService {
         userid: project.userid,
         prompt: project.prompt,
         videourl: project.videourl,
+        imageurl: project.imageurl, // [BARU]: Meneruskan URL gambar referensi ke dokumen Firestore
         style: project.style,
         aspectratio: project.aspectratio,
         resolution: project.resolution,
@@ -58,4 +60,4 @@ class FirestoreT2videoPlusService {
     }
   }
 }
-// Penutup Blok //
+//.......................................................//

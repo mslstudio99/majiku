@@ -108,6 +108,7 @@ class T2ImageState {
 //......................................................//
 
 // No ke-3: VIEW MODEL LOGIC & REVISI DOWNLOAD //
+// Mengatur State, Panggilan HTTP ke Cloud Run generatorT2Image, & Penyimpanan Firestore //
 //......................................................//
 class T2ImageViewModel extends StateNotifier<T2ImageState> {
   final TextEditingController promptController = TextEditingController();
@@ -115,7 +116,8 @@ class T2ImageViewModel extends StateNotifier<T2ImageState> {
 
   T2ImageViewModel(this._ref) : super(const T2ImageState());
 
-  final String _functionUrl = "https://asia-southeast2-majiku-5b07e.cloudfunctions.net/generatorT2Image";
+  // [PERBAIKAN KRITIS]: Menggunakan URL Resmi Cloud Run Gen 2 (Bebas 302 Redirect & Bebas CORS Failed to Fetch)
+  final String _functionUrl = "https://generatort2image-l2jn5d37pa-et.a.run.app";
 
   void setStyle(String? value) {
     if (value == null) return;

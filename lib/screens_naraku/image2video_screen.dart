@@ -1,10 +1,10 @@
 // LIB/SCREENS_NARAKU/IMAGE2VIDEO_SCREEN.DART //
-// ....................................................... //
-// [KATEGORI: UI SCREEN FRONTEND] //
-// [TUJUAN: Antarmuka Image2Video dengan Image Picker, Loading Modern, Fix CORS, & Video Player] //
+// UI SCREEN FRONTEND //
+// ANTARMUKA IMAGE2VIDEO DENGAN IMAGE PICKER, LOADING MODERN, FIX CORS, & VIDEO PLAYER //
 
-// No ke-1: IMPORT & SETUP //
-// ....................................................... //
+//No ke-1: IMPORT & SETUP................................................//
+//Mengimpor dependensi UI, Riverpod, Video Player, Picker, dan tema dark modern//
+//.......................................................................//
 import 'dart:io'; 
 import 'package:flutter/foundation.dart'; // Wajib untuk mendeteksi kIsWeb
 import 'package:flutter/material.dart';
@@ -34,10 +34,11 @@ class Image2VideoScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<Image2VideoScreen> createState() => _Image2VideoScreenState();
 }
-// ....................................................... //
+//........//
 
-// No ke-2: STATE & INITIALIZATION //
-// ....................................................... //
+//No ke-2: STATE & INITIALIZATION........................................//
+//Manajemen state form, lifecycle controller, dan image picker terkompresi//
+//.......................................................................//
 class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
   final int _maxPromptLength = 2000;
   final _formKey = GlobalKey<FormState>();
@@ -45,6 +46,7 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
   // Menggunakan XFile untuk dukungan mutlak Web & Mobile
   XFile? _selectedImage;
   final ImagePicker _picker = ImagePicker();
+  TextEditingController? _narrativeController;
 
   @override
   void initState() {
@@ -52,7 +54,8 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final viewModel = ref.read(image2VideoViewModelProvider.notifier);
-        viewModel.narrativeController.addListener(_onTextChanged);
+        _narrativeController = viewModel.narrativeController;
+        _narrativeController?.addListener(_onTextChanged);
 
         // --- [LOG AKTIVITAS: KUNJUNGAN OTHER TOOLS -> IMAGE2VIDEO] ---
         ref.read(firestoreServiceProvider).logFeatureActivity(
@@ -66,17 +69,23 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
   }
 
   void _onTextChanged() {
-    setState(() {}); 
+    // [PENGAMAN MOUNTED]: Mencegah pemanggilan setState pada widget yang unmounted
+    if (mounted) {
+      setState(() {}); 
+    }
   }
 
-  // Fungsi untuk memilih gambar dari galeri (mendukung Web/Mobile)
+  // Fungsi untuk memilih gambar dari galeri (Dengan Kompresi Dimensi Anti-ERR_CONNECTION_RESET)
   Future<void> _pickImage() async {
     try {
+      // [KOMPRESI AMAN]: Membatasi dimensi maks 1280x1280 agar file tetap tajam (< 500 KB) dan lolos batasan HTTP
       final XFile? pickedFile = await _picker.pickImage(
         source: ImageSource.gallery,
+        maxWidth: 1280,
+        maxHeight: 1280,
         imageQuality: 85,
       );
-      if (pickedFile != null) {
+      if (pickedFile != null && mounted) {
         setState(() {
           _selectedImage = pickedFile;
         });
@@ -95,12 +104,16 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
 
   @override
   void dispose() {
+    // [PEMBERSIHAN MUTLAK ANTI-MEMORY LEAK]: Melepas listener controller sebelum widget dihancurkan
+    _narrativeController?.removeListener(_onTextChanged);
+    _narrativeController = null;
     super.dispose();
   }
-// ....................................................... //
+//........//
 
-// No ke-3: LOGIC & REPORT FUNCTION //
-// ....................................................... //
+//No ke-3: LOGIC & REPORT FUNCTION.......................................//
+//Fungsi pelaporan konten sensitif/pelanggaran kebijakan ke Firestore....//
+//.......................................................................//
   void _showReportDialog(BuildContext context, WidgetRef ref, String videoUrl) {
     final TextEditingController reasonController = TextEditingController();
     
@@ -140,11 +153,11 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
 
               FirebaseFirestore.instance.collection('reports').add({
                 'contentUrl': videoUrl,
-                'contentType': 'video_image2video', // [SESUAIKAN]
+                'contentType': 'video_image2video',
                 'reason': reasonController.text.isEmpty ? 'No reason provided' : reasonController.text,
                 'reportedAt': FieldValue.serverTimestamp(),
                 'userId': userId,
-                'feature': 'Generator Image2Video', // [SESUAIKAN]
+                'feature': 'Generator Image2Video',
               }).then((_) {
                 if (context.mounted) {
                   Navigator.pop(ctx);
@@ -173,10 +186,11 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
       ),
     );
   }
-// ....................................................... //
+//........//
 
-// No ke-4: MAIN BUILDER & FORM UI //
-// ....................................................... //
+//No ke-4: MAIN BUILDER & FORM UI........................................//
+//Render UI Form, Image Upload Box, Dropdown Setting, & SnackBar Copyable//
+//.......................................................................//
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(image2VideoViewModelProvider);
@@ -189,10 +203,31 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
 
     ref.listen<Image2VideoState>(image2VideoViewModelProvider, (previous, next) {
       if (next.errorMessage != null && previous?.errorMessage == null) {
+        // [FITUR BARU]: Pesan Error Bisa Diblok & Memiliki Tombol SALIN Langsung
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(next.errorMessage!),
-            backgroundColor: Theme.of(context).colorScheme.error,
+            backgroundColor: Colors.red.shade900,
+            duration: const Duration(seconds: 15),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            content: SelectableText(
+              next.errorMessage!,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+            ),
+            action: SnackBarAction(
+              label: 'SALIN',
+              textColor: Colors.amberAccent,
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: next.errorMessage!));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Pesan error berhasil disalin ke clipboard!"),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+            ),
           ),
         );
       }
@@ -227,16 +262,17 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
       int costPerSecond = 0;
 
       if (state.selectedResolution == '480') {
-        costPerSecond = state.isAudioEnabled ? i2vCosts.res480WithAudio : i2vCosts.res480NoAudio;
+        costPerSecond = (state.isAudioEnabled ? i2vCosts.res480WithAudio : i2vCosts.res480NoAudio).round();
       } else if (state.selectedResolution == '720') {
-        costPerSecond = state.isAudioEnabled ? i2vCosts.res720WithAudio : i2vCosts.res720NoAudio;
+        costPerSecond = (state.isAudioEnabled ? i2vCosts.res720WithAudio : i2vCosts.res720NoAudio).round();
       } else if (state.selectedResolution == '1080') {
-        costPerSecond = state.isAudioEnabled ? i2vCosts.res1080WithAudio : i2vCosts.res1080NoAudio;
+        costPerSecond = (state.isAudioEnabled ? i2vCosts.res1080WithAudio : i2vCosts.res1080NoAudio).round();
       } else {
-        costPerSecond = i2vCosts.res480NoAudio; 
+        costPerSecond = i2vCosts.res480NoAudio.round(); 
       }
 
-      requiredTokens = costPerSecond * state.selectedDuration;
+      // [PERBAIKAN TIPE DATA]: Konversi eksplisit hasil perkalian ke int menggunakan round()
+      requiredTokens = (costPerSecond * state.selectedDuration).round();
       configReady = true;
     });
 
@@ -481,26 +517,31 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
                           ],
                         ),
                         const SizedBox(height: 24),
+                        // [PERBAIKAN ANTI-ASSERTION]: Membungkus SwitchListTile dengan Material transparan
                         Container(
                           decoration: BoxDecoration(
                             color: Colors.black12,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: Colors.white24, width: 1),
                           ),
-                          child: SwitchListTile(
-                            title: Text(
-                              t('Include Audio', 'Sertakan Audio'),
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          child: Material(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            child: SwitchListTile(
+                              title: Text(
+                                t('Include Audio', 'Sertakan Audio'),
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                              subtitle: Text(
+                                t('Generate sync audio: dialog, background sound/music', 'Buat dialog, suara/musik latar belakang otomatis'),
+                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                              value: state.isAudioEnabled,
+                              activeColor: Colors.blue,
+                              onChanged: state.isLoading ? null : (bool value) {
+                                viewModel.toggleAudio(value);
+                              },
                             ),
-                            subtitle: Text(
-                              t('Generate sync audio: dialog, background sound/music', 'Buat dialog, suara/musik latar belakang otomatis'),
-                              style: const TextStyle(fontSize: 12, color: Colors.grey),
-                            ),
-                            value: state.isAudioEnabled,
-                            activeColor: Colors.blue,
-                            onChanged: state.isLoading ? null : (bool value) {
-                              viewModel.toggleAudio(value);
-                            },
                           ),
                         ),
                         const SizedBox(height: 32),
@@ -608,15 +649,16 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
       ),
     );
   }
-// ....................................................... //
+//........//
 
-// No ke-5: MODERN OUTPUT KARTU & FIX CORS //
-// ....................................................... //
+//No ke-5: MODERN OUTPUT KARTU & FIX CORS................................//
+//Render Hasil Video, Play Button, Progress Loading, & Download Action...//
+//.......................................................................//
   Widget _buildOutputCard(
     BuildContext context,
     WidgetRef ref,
-    Image2VideoViewModel viewModel, // [SESUAIKAN] ViewModel untuk Image2Video
-    Image2VideoState state, // [SESUAIKAN] State untuk Image2Video
+    Image2VideoViewModel viewModel,
+    Image2VideoState state,
     String Function(String, String) t,
   ) {
     final theme = Theme.of(context);
@@ -909,10 +951,11 @@ class _Image2VideoScreenState extends ConsumerState<Image2VideoScreen> {
     );
   }
 }
-// ....................................................... //
+//........//
 
-// No ke-6: WIDGET VIDEO PLAYER DIALOG [TANPA REGRESI] //
-// ....................................................... //
+//No ke-6: WIDGET VIDEO PLAYER DIALOG [TANPA REGRESI]....................//
+//Dialog Modal Player Video MP4 Fullscreen & Controller Loop Control.....//
+//.......................................................................//
 class VideoPlayerDialog extends StatefulWidget {
   final String videoUrl;
   
@@ -1009,4 +1052,4 @@ class _VideoPlayerDialogState extends State<VideoPlayerDialog> {
     );
   }
 }
-// ....................................................... //
+//........//

@@ -112,6 +112,7 @@ class T2videoPlusState {
 // Penutup Blok //
 
 // No ke-3 - VIEW MODEL LOGIC //
+// Mengatur State, Panggilan HTTP ke Cloud Run generatorT2VideoPlus, & Penyimpanan Dual URL ke Firestore //
 //.......................................................//
 class T2videoPlusViewModel extends StateNotifier<T2videoPlusState> {
   final TextEditingController narrativeController = TextEditingController();
@@ -119,8 +120,8 @@ class T2videoPlusViewModel extends StateNotifier<T2videoPlusState> {
 
   T2videoPlusViewModel(this._ref) : super(const T2videoPlusState());
 
-  // URL Resmi Firebase Function Gen 2 Jakarta
-  final String _engineUrl = "https://asia-southeast2-majiku-5b07e.cloudfunctions.net/generatorT2Video";
+  // [PERBAIKAN KRITIS]: Menggunakan URL Resmi Cloud Run Gen 2 (Bebas 302 Redirect & Bebas CORS Failed to Fetch)
+  final String _engineUrl = "https://generatort2videoplus-l2jn5d37pa-et.a.run.app";
 
   // --- Setter Parameter ---
   void setStyle(String? value) {
@@ -180,6 +181,7 @@ class T2videoPlusViewModel extends StateNotifier<T2videoPlusState> {
         }
       });
 
+      // [TIMEOUT 9 MENIT]: Disesuaikan dengan batas maksimal Cloud Functions / Cloud Run
       final response = await http.post(
         Uri.parse(_engineUrl),
         headers: {
@@ -187,24 +189,34 @@ class T2videoPlusViewModel extends StateNotifier<T2videoPlusState> {
           'Authorization': 'Bearer $idToken', 
         },
         body: body,
-      ).timeout(const Duration(minutes: 6)); 
+      ).timeout(const Duration(minutes: 9)); 
 
       if (response.statusCode == 200) {
         final responseBody = jsonDecode(response.body);
         
-        // Parsing URL Video
-        final videoUrl = responseBody['data'];
+        // [PARSING DUAL URL RESPON DEFENSIF]: Mendukung objek { videoUrl, imageUrl } maupun string
+        final data = responseBody['data'];
+        String? videoUrl;
+        String? imageUrl;
 
-        if (videoUrl != null && videoUrl.toString().isNotEmpty) {
+        if (data is Map) {
+          videoUrl = data['videoUrl']?.toString();
+          imageUrl = data['imageUrl']?.toString();
+        } else if (data is String) {
+          videoUrl = data;
+        }
+
+        if (videoUrl != null && videoUrl.isNotEmpty) {
           
-          // [PERBAIKAN ANTI-REGRESI: SIMPAN DATA KE FIRESTORE MENGGUNAKAN LOWERCASE]
+          // [SIMPAN DATA KE FIRESTORE: VIDEO + IMAGEURL]
           try {
             final firestoreService = FirestoreT2videoPlusService();
             final projectData = VideoProjectT2videoPlus(
               id: '', // Biarkan di-generate otomatis oleh service
               userid: user.uid,
               prompt: narrative,
-              videourl: videoUrl.toString(),
+              videourl: videoUrl,
+              imageurl: imageUrl, // Menyimpan URL gambar referensi ke dokumen Firestore
               style: state.selectedStyle,
               aspectratio: state.selectedRatio,
               resolution: state.selectedResolution,
@@ -212,7 +224,7 @@ class T2videoPlusViewModel extends StateNotifier<T2videoPlusState> {
               createdat: DateTime.now(),
             );
             await firestoreService.saveProject(projectData);
-            debugPrint("Sukses menyimpan History T2Video-Plus ke Firestore.");
+            debugPrint("Sukses menyimpan History T2Video-Plus ke Firestore (Video: $videoUrl, Image: $imageUrl).");
           } catch (dbError) {
             // Dibungkus try-catch tersendiri agar jika database gagal, video tetap tampil di UI
             debugPrint("Peringatan: Gagal menyimpan riwayat ke Firestore: $dbError");
@@ -221,7 +233,7 @@ class T2videoPlusViewModel extends StateNotifier<T2videoPlusState> {
           // Perbarui UI ke kondisi berhasil
           state = state.copyWith(
             isLoading: false,
-            generatedVideoUrl: videoUrl.toString(), 
+            generatedVideoUrl: videoUrl, 
             loadingText: '',
           );
         } else {
@@ -247,7 +259,6 @@ class T2videoPlusViewModel extends StateNotifier<T2videoPlusState> {
     if (state.generatedVideoUrl.isEmpty) return;
 
     try {
-      // Menggunakan arsitektur Native Delegation yang aman untuk Android 11+ & Web
       final Uri url = Uri.parse(state.generatedVideoUrl);
       
       if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
@@ -287,7 +298,7 @@ class T2videoPlusViewModel extends StateNotifier<T2videoPlusState> {
     super.dispose();
   }
 }
-// Penutup Blok //
+//.......................................................//
 
 // No ke-4 - PROVIDER //
 //.......................................................//

@@ -33,10 +33,12 @@ class T2VideoScreen extends ConsumerStatefulWidget {
 //.......................................................//
 
 // No ke-2: STATE & INITIALIZATION //
+// Manajemen state, lifecycle controller, dan pembersihan listener anti-memory leak //
 //.......................................................//
 class _T2VideoScreenState extends ConsumerState<T2VideoScreen> {
   final int _maxPromptLength = 2000;
   final _formKey = GlobalKey<FormState>();
+  TextEditingController? _narrativeController;
 
   @override
   void initState() {
@@ -44,7 +46,8 @@ class _T2VideoScreenState extends ConsumerState<T2VideoScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final viewModel = ref.read(t2VideoViewModelProvider.notifier);
-        viewModel.narrativeController.addListener(_onTextChanged);
+        _narrativeController = viewModel.narrativeController;
+        _narrativeController?.addListener(_onTextChanged);
 
         // --- [LOG AKTIVITAS: KUNJUNGAN OTHER TOOLS -> T2VIDEO] ---
         ref.read(firestoreServiceProvider).logFeatureActivity(
@@ -58,15 +61,20 @@ class _T2VideoScreenState extends ConsumerState<T2VideoScreen> {
   }
 
   void _onTextChanged() {
-    setState(() {}); 
+    // [PENGAMAN MOUNTED]: Mencegah pemanggilan setState pada widget yang sudah unmounted / defunct
+    if (mounted) {
+      setState(() {}); 
+    }
   }
 
   @override
   void dispose() {
+    // [PEMBERSIHAN MUTLAK ANTI-DEFUNCT]: Melepas listener controller secara aman sebelum element dihancurkan
+    _narrativeController?.removeListener(_onTextChanged);
+    _narrativeController = null;
     super.dispose();
   }
 //.......................................................//
-
 // No ke-3: LOGIC & REPORT FUNCTION //
   void _showReportDialog(BuildContext context, WidgetRef ref, String videoUrl) {
     final TextEditingController reasonController = TextEditingController();
@@ -142,8 +150,9 @@ class _T2VideoScreenState extends ConsumerState<T2VideoScreen> {
   }
 //.......................................................//
 
-//No ke-4............................................................//
-//MAIN BUILDER & FORM UI.............................................//
+// No ke-4: MAIN BUILDER & FORM UI                      //
+// Render UI Form, Dropdown Setting, & Pelacak Error Copyable //
+//.......................................................//
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(t2VideoViewModelProvider);
@@ -156,10 +165,31 @@ class _T2VideoScreenState extends ConsumerState<T2VideoScreen> {
 
     ref.listen<T2VideoState>(t2VideoViewModelProvider, (previous, next) {
       if (next.errorMessage != null && previous?.errorMessage == null) {
+        // [PELACAK ERROR INTERAKTIF]: Teks Bisa Diblok & Memiliki Tombol SALIN Langsung
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(next.errorMessage!),
-            backgroundColor: Theme.of(context).colorScheme.error,
+            backgroundColor: Colors.red.shade900,
+            duration: const Duration(seconds: 15),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            content: SelectableText(
+              next.errorMessage!,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+            ),
+            action: SnackBarAction(
+              label: 'SALIN',
+              textColor: Colors.amberAccent,
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: next.errorMessage!));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Pesan error berhasil disalin ke clipboard!"),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+            ),
           ),
         );
       }
@@ -179,7 +209,7 @@ class _T2VideoScreenState extends ConsumerState<T2VideoScreen> {
     final bool hasInput = textLength > 0;
     
     int currentBalance = 0;
-    int requiredTokens = 0; // [FIX] Inisialisasi awal 0
+    int requiredTokens = 0;
     bool configReady = false;
     bool userReady = false;
 
@@ -189,23 +219,22 @@ class _T2VideoScreenState extends ConsumerState<T2VideoScreen> {
     });
 
     configAsync.whenData((config) {
-      // [LOGIKA BARU] Kalkulasi Harga Dinamis berdasarkan State Pilihan User
+      // Kalkulasi Harga Dinamis berdasarkan State Pilihan User
       final t2costs = config.costs.t2videoCosts;
       int costPerSecond = 0;
 
       if (state.selectedResolution == '480') {
-        costPerSecond = state.isAudioEnabled ? t2costs.res480WithAudio : t2costs.res480NoAudio;
+        costPerSecond = (state.isAudioEnabled ? t2costs.res480WithAudio : t2costs.res480NoAudio).round();
       } else if (state.selectedResolution == '720') {
-        costPerSecond = state.isAudioEnabled ? t2costs.res720WithAudio : t2costs.res720NoAudio;
+        costPerSecond = (state.isAudioEnabled ? t2costs.res720WithAudio : t2costs.res720NoAudio).round();
       } else if (state.selectedResolution == '1080') {
-        costPerSecond = state.isAudioEnabled ? t2costs.res1080WithAudio : t2costs.res1080NoAudio;
+        costPerSecond = (state.isAudioEnabled ? t2costs.res1080WithAudio : t2costs.res1080NoAudio).round();
       } else {
-        // Fallback aman jika resolusi tidak dikenali
-        costPerSecond = t2costs.res480NoAudio; 
+        costPerSecond = t2costs.res480NoAudio.round(); 
       }
 
-      // Total Biaya = Harga Per Detik x Durasi
-      requiredTokens = costPerSecond * state.selectedDuration;
+      // [PENGAMAN TIPE DATA]: Konversi eksplisit hasil perkalian ke integer
+      requiredTokens = (costPerSecond * state.selectedDuration).round();
       configReady = true;
     });
 
@@ -374,26 +403,31 @@ class _T2VideoScreenState extends ConsumerState<T2VideoScreen> {
                           ],
                         ),
                         const SizedBox(height: 24),
+                        // [PERBAIKAN ANTI-ASSERTION]: Membungkus SwitchListTile dengan Material transparan
                         Container(
                           decoration: BoxDecoration(
                             color: Colors.black12,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: Colors.white24, width: 1),
                           ),
-                          child: SwitchListTile(
-                            title: Text(
-                              t('Include Audio', 'Sertakan Audio'),
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          child: Material(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            child: SwitchListTile(
+                              title: Text(
+                                t('Include Audio', 'Sertakan Audio'),
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                              subtitle: Text(
+                                t('Generate sync audio: dialog, background sound/music', 'Buat dialog, suara/musik latar belakang otomatis'),
+                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                              value: state.isAudioEnabled,
+                              activeColor: Colors.blue,
+                              onChanged: state.isLoading ? null : (bool value) {
+                                viewModel.toggleAudio(value);
+                              },
                             ),
-                            subtitle: Text(
-                              t('Generate sync audio: dialog, background sound/music', 'Buat dialog, suara/musik latar belakang otomatis'),
-                              style: const TextStyle(fontSize: 12, color: Colors.grey),
-                            ),
-                            value: state.isAudioEnabled,
-                            activeColor: Colors.blue,
-                            onChanged: state.isLoading ? null : (bool value) {
-                              viewModel.toggleAudio(value);
-                            },
                           ),
                         ),
                         const SizedBox(height: 32),
@@ -501,7 +535,7 @@ class _T2VideoScreenState extends ConsumerState<T2VideoScreen> {
       ),
     );
   }
-//...................................................................//
+//.......................................................//
 
 // No ke-5: MODERN OUTPUT KARTU & FIX CORS //
   Widget _buildOutputCard(

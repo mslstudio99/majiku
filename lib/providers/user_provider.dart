@@ -57,15 +57,15 @@ final _userDocumentStreamProvider =
 // APP USER PROVIDER (PINTU UTAMA UI & ANTI-FRAUD)  //
 /// Provider 3: Provider AppUser
 /// [KUNCI]: Menggabungkan data Auth dan Firestore untuk menghasilkan model AppUser.
-/// Telah dibersihkan dari logika Mock yang merusak sistem Anti-Fraud.
+/// Diperbarui dengan stabilisasi Stream.value(AppUser.empty) untuk mengeliminasi error defunct widget.
 final firestoreUserProvider = StreamProvider.autoDispose<AppUser>((ref) {
   
   final authState = ref.watch(authStateChangesProvider);
   final docAsyncValue = ref.watch(_userDocumentStreamProvider);
 
-  // 1. Tangani State Loading (Tunggu sampai kran terbuka dari Auth dan Firestore)
+  // 1. Tangani State Loading (Gunakan Stream.value(AppUser.empty) agar siklus stream tetap stabil)
   if (authState.isLoading || docAsyncValue.isLoading) {
-    return const Stream.empty();
+    return Stream.value(AppUser.empty);
   }
 
   // 2. Tangani Error
@@ -80,18 +80,12 @@ final firestoreUserProvider = StreamProvider.autoDispose<AppUser>((ref) {
     return Stream.value(AppUser.empty);
   }
 
-  // 4. Skenario: Menunggu Validasi Anti-Fraud (DOKUMEN BELUM ADA)
-  // [MODIFIKASI KRITIS]: Jika dokumen belum ada, kita TIDAK BOLEH membuat dokumen bayangan (Mock).
-  // Kita harus me-return Stream.empty() yang mengindikasikan status "Menunggu/Loading".
-  // UI akan berputar loading sampai firestore_service.dart selesai melakukan Batch Commit
-  // untuk menulis data user dan device_claims secara utuh.
+  // 4. Skenario: Menunggu Validasi Anti-Fraud / Dokumen Belum Terbentuk
   if (docSnapshot == null || !docSnapshot.exists) {
-    // Memaksa sistem menunggu "Hakim Tertinggi" selesai bekerja.
-    return const Stream.empty(); 
+    return Stream.value(AppUser.empty); 
   }
 
   // 5. Skenario: Sukses (Dokumen sah dan tervalidasi ditemukan)
-  // Data yang turun di sini sudah dijamin 100% melewati proses forensik hardwareId.
   return Stream.value(AppUser.fromFirestore(authUser, docSnapshot));
 });
 //..................................................//

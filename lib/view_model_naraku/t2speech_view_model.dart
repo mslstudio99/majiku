@@ -486,7 +486,8 @@ class T2SpeechVoiceDatabase {
 //================================================================//
 
 //No ke-3: CORE VIEW MODEL LOGIC, ENGINE API & AUDIO HANDLER      //
-//VALIDASI 20.000 CHAR, CALL FUNCTION JAKARTA, FIRESTORE & AUDIO  //
+//VALIDASI 20.000 CHAR, CALL FUNCTION CLOUD RUN, FIRESTORE & AUDIO//
+//................................................................//
 class T2SpeechViewModel extends StateNotifier<T2SpeechState> {
   final TextEditingController textController = TextEditingController();
   final AudioPlayer audioPlayer = AudioPlayer();
@@ -495,8 +496,8 @@ class T2SpeechViewModel extends StateNotifier<T2SpeechState> {
   // Stream subscription untuk audio player agar bisa di-cancel saat dispose
   StreamSubscription<PlayerState>? _playerStateSubscription;
 
-  // Endpoint Cloud Function Gen 2 Jakarta
-  final String _engineUrl = "https://asia-southeast2-majiku-5b07e.cloudfunctions.net/generatorT2Speech";
+  // [PERBAIKAN KRITIS]: Menggunakan URL Resmi Cloud Run Gen 2 (Bebas 302 Redirect & Bebas CORS Failed to Fetch)
+  final String _engineUrl = "https://generatort2speech-l2jn5d37pa-et.a.run.app";
 
   T2SpeechViewModel(this._ref) : super(const T2SpeechState()) {
     _initializeData();
@@ -599,7 +600,7 @@ class T2SpeechViewModel extends StateNotifier<T2SpeechState> {
         }
       });
 
-      // 4. Eksekusi Request HTTP ke Cloud Function Gen 2 Jakarta
+      // 4. Eksekusi Request HTTP ke Cloud Run Gen 2 Resmi
       final response = await http.post(
         Uri.parse(_engineUrl),
         headers: {
@@ -731,8 +732,7 @@ class T2SpeechViewModel extends StateNotifier<T2SpeechState> {
     super.dispose();
   }
 }
-// END OF BLOK 3 //
-//================================================================//
+//................................................................//
 
 //No ke-4: RIVERPOD PROVIDER REGISTRATION                         //
 //PENYEDIA INSTANCE STATE NOTIFIER T2SPEECH UNTUK UI              //

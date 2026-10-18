@@ -1,25 +1,24 @@
-﻿// [RILIS FINAL - HYBRID SPLIT STRATEGY]
-// KATEGORI_NARAKU_TOKEN NO_URUT_14
-// TUJUAN:
-// - [WEB] Menggunakan 'httpsCallable' (SDK) -> Terbukti SUKSES di Web.
-// - [ANDROID] Menggunakan 'http.post' (Manual) -> Solusi anti-macet di Android.
-// - [DATA] Memastikan 'currentTitle' terisi default jika kosong (Anti Error 400).
+﻿//................................................................//
+// NAMA FILE: GENERATOR_KONTEN_SHORT_VIEW_MODEL.DART              //
+// PATH: LIB/VIEW_MODEL_NARAKU/GENERATOR_KONTEN_SHORT_VIEW_MODEL.DART //
+//................................................................//
 
-import 'package:flutter/foundation.dart'; // Untuk kIsWeb
+//No ke-1.........................................................//
+//IMPORT MODULE & DEPENDENCIES....................................//
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// Import HTTP untuk Android
-import 'package:http/http.dart' as http; 
-import 'dart:convert';
+// Import SDK Resmi Cloud Functions
+import 'package:cloud_functions/cloud_functions.dart';
 
-// Import Cloud Functions untuk Web
-import 'package:cloud_functions/cloud_functions.dart'; 
+// Import Auth Provider
+import '../view_model/auth_view_model.dart';
+//................................................................//
 
-// Import Auth
-import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
-import '../view_model/auth_view_model.dart'; 
-
+//No ke-2.........................................................//
+//LOCALIZATION HELPER.............................................//
 class NarakuLocalizationHelper {
   static const Map<String, Map<String, String>> translations = {
     'id': {
@@ -33,13 +32,16 @@ class NarakuLocalizationHelper {
   };
 
   static String get(String key, {String? localeCode}) {
-    final lang = localeCode ?? 'en'; 
+    final lang = localeCode ?? 'en';
     final langKey = lang == 'id' ? 'id' : 'en';
     final translationMap = translations[langKey] ?? translations['id']!;
     return translationMap[key] ?? key;
   }
 }
+//................................................................//
 
+//No ke-3.........................................................//
+//STATE MODEL (GENERATOR KONTEN SHORT STATE)......................//
 @immutable
 class GeneratorKontenShortState {
   final bool isLoading;
@@ -73,15 +75,14 @@ class GeneratorKontenShortState {
     );
   }
 }
+//................................................................//
 
+//No ke-4.........................................................//
+//VIEW MODEL & GENERATION LOGIC (OFFICIAL FIREBASE SDK)...........//
 class GeneratorKontenShortViewModel
     extends StateNotifier<GeneratorKontenShortState> {
   final TextEditingController promptController = TextEditingController();
   final Ref _ref;
-
-  // URL Endpoint (Hanya dipakai Android)
-  final String _endpointUrl = 
-      "https://asia-southeast2-majiku-5b07e.cloudfunctions.net/generateKontenShort";
 
   GeneratorKontenShortViewModel(this._ref)
       : super(const GeneratorKontenShortState());
@@ -93,7 +94,7 @@ class GeneratorKontenShortViewModel
   Future<void> generateNarrative(String? currentTitle) async {
     if (state.isLoading) return;
     final prompt = promptController.text.trim();
-    
+
     if (prompt.isEmpty) {
       state = state.copyWith(
           errorMessage: NarakuLocalizationHelper.get('alertNoInput'),
@@ -107,14 +108,13 @@ class GeneratorKontenShortViewModel
     try {
       String? finalText;
 
-      // [FIX PENTING] Handle Title Kosong (Penyebab Error 400 di Backend)
+      // Handle Title Kosong (Mencegah Error 400 di Backend)
       String safeTitle = currentTitle ?? "";
       if (safeTitle.trim().isEmpty) {
-        // Jika kosong, gunakan 20 karakter pertama dari prompt atau default
         safeTitle = prompt.length > 20 ? prompt.substring(0, 20) : "Konten Baru";
       }
 
-      // Data Payload Murni
+      // Payload Murni
       final Map<String, dynamic> payload = {
         'promptValue': prompt,
         'currentTitle': safeTitle,
@@ -122,84 +122,26 @@ class GeneratorKontenShortViewModel
       };
 
       // ============================================================
-      // PERCABANGAN LOGIKA: WEB vs ANDROID
+      // JALUR TUNGGAL RESMI (WEB & HP ANDROID/IOS)
+      // Menggunakan SDK Resmi Firebase Functions dengan Native OkHttp
+      // Bebas dari SocketException / Connection reset by peer (errno 104)
       // ============================================================
+      final functions = FirebaseFunctions.instanceFor(region: "asia-southeast2");
+      final callable = functions.httpsCallable(
+        'generateKontenShort',
+        options: HttpsCallableOptions(timeout: const Duration(minutes: 3)),
+      );
 
-      if (kIsWeb) {
-        // [JALUR WEB] Gunakan SDK Resmi (httpsCallable)
-        // Ini sama persis dengan "Kode Awal" Anda yang sukses di Web.
-        // SDK akan otomatis membungkus payload dalam { data: ... }
-        
-        print("--- [WEB] Using httpsCallable SDK ---");
-        
-        final functions = FirebaseFunctions.instanceFor(region: "asia-southeast2");
-        final callable = functions.httpsCallable('generateKontenShort');
+      final result = await callable.call(payload);
 
-        final result = await callable.call(payload); // Kirim payload langsung!
-
-        final data = result.data;
-        if (data is Map && data.containsKey('data')) {
-           finalText = data['data']; 
-        } else if (data is String) {
-           finalText = data;
-        }
-
-      } else {
-        // [JALUR ANDROID] Gunakan HTTP Manual
-        // Agar tidak macet di Google Play Services.
-        
-        print("--- [ANDROID] Using HTTP Manual ---");
-
-        // 1. Ambil Token
-        final authUser = _ref.read(authStateChangesProvider).value;
-        if (authUser == null) throw Exception("User tidak login.");
-        final idToken = await authUser.getIdToken(true);
-
-        // 2. Bungkus Payload dengan key "data" (Single Wrap)
-        // Ini meniru apa yang dilakukan SDK Web secara manual.
-        final body = jsonEncode({
-          "data": payload 
-        });
-
-        // 3. Kirim
-        final response = await http.post(
-          Uri.parse(_endpointUrl),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $idToken',
-          },
-          body: body,
-        ).timeout(const Duration(seconds: 120));
-
-        print("Status Code: ${response.statusCode}");
-
-        if (response.statusCode == 200) {
-          final responseJson = jsonDecode(response.body);
-          // Hasil onCall HTTP ada di 'result' atau 'data'
-          final resultData = responseJson['result'] ?? responseJson['data'];
-          
-          if (resultData != null) {
-             if (resultData is String) {
-               finalText = resultData;
-             } else if (resultData is Map && resultData.containsKey('data')) {
-               finalText = resultData['data'];
-             } else {
-               finalText = resultData.toString();
-             }
-          } else {
-             // Fallback
-             final altData = responseJson['data'];
-             if (altData != null && altData is String) finalText = altData;
-          }
-        } else {
-           // Handle Error
-           final errorBody = jsonDecode(response.body);
-           final msg = errorBody['error']?['message'] ?? response.body;
-           throw Exception("Server Error (${response.statusCode}): $msg");
-        }
+      final data = result.data;
+      if (data is Map && data.containsKey('data')) {
+        finalText = data['data'];
+      } else if (data is String) {
+        finalText = data;
+      } else if (data != null) {
+        finalText = data.toString();
       }
-
-      // ============================================================
 
       if (finalText != null && finalText.isNotEmpty) {
         state = state.copyWith(
@@ -210,13 +152,21 @@ class GeneratorKontenShortViewModel
       } else {
         throw Exception("Hasil generasi kosong.");
       }
-
-    } catch (e) {
-      print("--- ERROR: $e ---");
+    } on FirebaseFunctionsException catch (fe) {
+      print("--- [KONTEN_SHORT] FirebaseFunctionsException: ${fe.code} - ${fe.message} ---");
+      final errorMsg = fe.message ?? fe.code;
       state = state.copyWith(
         isLoading: false,
         errorMessage: NarakuLocalizationHelper.get('alertApiError')
-            .replaceFirst('{message}', e.toString()),
+            .replaceFirst('{message}', errorMsg),
+        loadingText: '',
+      );
+    } catch (e) {
+      print("--- [KONTEN_SHORT] Exception: $e ---");
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: NarakuLocalizationHelper.get('alertApiError')
+            .replaceFirst('{message}', e.toString().replaceFirst('Exception: ', '')),
         loadingText: '',
       );
     }
@@ -237,10 +187,14 @@ class GeneratorKontenShortViewModel
     super.dispose();
   }
 }
+//................................................................//
 
+//No ke-5.........................................................//
+//PROVIDER DECLARATION............................................//
 final generatorKontenShortViewModelProvider = StateNotifierProvider.autoDispose<
     GeneratorKontenShortViewModel, GeneratorKontenShortState>(
   (ref) {
     return GeneratorKontenShortViewModel(ref);
   },
 );
+//................................................................//

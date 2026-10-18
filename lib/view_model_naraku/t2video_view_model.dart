@@ -111,6 +111,7 @@ class T2VideoState {
 // ------------------------------------------------------------------------- //
 
 // No ke-3: VIEW MODEL LOGIC //
+// Mengatur State, Panggilan HTTP ke Cloud Run generatorT2Video, & Penyimpanan Firestore //
 //.......................................................//
 class T2VideoViewModel extends StateNotifier<T2VideoState> {
   final TextEditingController narrativeController = TextEditingController();
@@ -118,10 +119,10 @@ class T2VideoViewModel extends StateNotifier<T2VideoState> {
 
   T2VideoViewModel(this._ref) : super(const T2VideoState());
 
-  // [PERBAIKAN] URL Resmi Firebase Function Gen 2 Jakarta
-  final String _engineUrl = "https://asia-southeast2-majiku-5b07e.cloudfunctions.net/generatorT2Video";
+  // [PERBAIKAN KRITIS]: Menggunakan URL Resmi Cloud Run Gen 2 (Bebas 302 Redirect & Bebas Connection Reset)
+  final String _engineUrl = "https://generatort2video-l2jn5d37pa-et.a.run.app";
 
-  // --- Setter Parameter (Tetap Sesuai Struktur Anda) ---
+  // --- Setter Parameter ---
   void setStyle(String? value) {
     if (value == null) return;
     state = state.copyWith(selectedStyle: value);
@@ -146,7 +147,7 @@ class T2VideoViewModel extends StateNotifier<T2VideoState> {
     state = state.copyWith(isAudioEnabled: value);
   }
 
-  // --- Core Generasi (Suntikan Logika Keamanan & Gen 2) ---
+  // --- Core Generasi ---
   Future<void> generateVideo() async {
     if (state.isLoading) return;
     final narrative = narrativeController.text.trim();
@@ -179,6 +180,7 @@ class T2VideoViewModel extends StateNotifier<T2VideoState> {
         }
       });
 
+      // [PERBAIKAN TIMEOUT]: Disesuaikan ke 9 menit agar selaras dengan timeout server Cloud Functions / Cloud Run
       final response = await http.post(
         Uri.parse(_engineUrl),
         headers: {
@@ -186,7 +188,7 @@ class T2VideoViewModel extends StateNotifier<T2VideoState> {
           'Authorization': 'Bearer $idToken', 
         },
         body: body,
-      ).timeout(const Duration(minutes: 6)); 
+      ).timeout(const Duration(minutes: 9)); 
 
       if (response.statusCode == 200) {
         final responseBody = jsonDecode(response.body);
@@ -196,7 +198,7 @@ class T2VideoViewModel extends StateNotifier<T2VideoState> {
 
         if (videoUrl != null && videoUrl.toString().isNotEmpty) {
           
-          // [PERBAIKAN ANTI-REGRESI: SIMPAN DATA KE FIRESTORE DI SINI]
+          // [SIMPAN DATA KE FIRESTORE]
           try {
             final firestoreService = FirestoreT2VideoService();
             final projectData = VideoProjectT2Video(
@@ -246,7 +248,7 @@ class T2VideoViewModel extends StateNotifier<T2VideoState> {
     if (state.generatedVideoUrl.isEmpty) return;
 
     try {
-      // [PERBAIKAN] Menggunakan arsitektur Native Delegation yang aman untuk Android 11+ & Web
+      // Menggunakan arsitektur Native Delegation yang aman untuk Android 11+ & Web
       final Uri url = Uri.parse(state.generatedVideoUrl);
       
       if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
@@ -265,7 +267,7 @@ class T2VideoViewModel extends StateNotifier<T2VideoState> {
     }
   }
 
-  // --- Reset State (Tetap Sesuai Struktur Anda) ---
+  // --- Reset State ---
   void clearAll() {
     narrativeController.clear();
     state = state.copyWith(

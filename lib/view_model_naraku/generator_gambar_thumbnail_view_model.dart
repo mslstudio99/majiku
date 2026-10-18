@@ -1,24 +1,23 @@
-//================================================================//
+//................................................................//
 // NAMA FILE: GENERATOR_GAMBAR_THUMBNAIL_VIEW_MODEL.DART          //
-// DIREKTORI: lib/view_model_naraku/generator_gambar_thumbnail_view_model.dart //
-//================================================================//
+// PATH: LIB/VIEW_MODEL_NARAKU/GENERATOR_GAMBAR_THUMBNAIL_VIEW_MODEL.DART //
+//................................................................//
 
 //No ke-1.........................................................//
-//IMPORT MODULE & DEPENDENCIES                                    //
+//IMPORT MODULE & DEPENDENCIES....................................//
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:http/http.dart' as http;
-import 'dart:typed_data';
-
 import 'package:path_provider/path_provider.dart';
 import 'dart:html' if (dart.library.io) '../utils/html_stub.dart' as html;
 //................................................................//
 
 //No ke-2.........................................................//
-//HELPER LOKALISASI (SINKRONISASI TEKS IMAGEN 4.0)                //
+//LOCALIZATION HELPER.............................................//
 class GambarThumbnailLocalizationHelper {
   static const Map<String, Map<String, String>> translations = {
     'id': {
@@ -69,7 +68,7 @@ class GambarThumbnailLocalizationHelper {
 //................................................................//
 
 //No ke-3.........................................................//
-//STATE CLASS                                                     //
+//STATE MODEL (GENERATOR GAMBAR THUMBNAIL STATE)..................//
 @immutable
 class GeneratorGambarThumbnailState {
   final bool isLoading;
@@ -115,7 +114,7 @@ class GeneratorGambarThumbnailState {
 //................................................................//
 
 //No ke-4.........................................................//
-//VIEW MODEL LOGIC (FIREBASE FUNCTIONS CALL & TOKEN HANDLING)     //
+//VIEW MODEL & GENERATION LOGIC (FIREBASE CALLABLE & DOWNLOAD)....//
 class GeneratorGambarThumbnailViewModel
     extends StateNotifier<GeneratorGambarThumbnailState> {
   final TextEditingController narrativeController = TextEditingController();
@@ -149,10 +148,12 @@ class GeneratorGambarThumbnailViewModel
         isLoading: true, clearError: true, clearSuccess: true, loadingText: 'GENERATING');
 
     try {
-      // SINKRONISASI BACKEND: Memanggil fungsi 'generatorGambarThumbnail' Firebase Cloud Functions
-      // Payload Disesuaikan dengan Index.ts (narrativeValue, selectedStyle, selectedRatio)
+      // 1. Inisialisasi Callable dengan Timeout 5 Menit (Cegah Deadline Exceeded di Android)
       final callable = FirebaseFunctions.instanceFor(region: 'asia-southeast2')
-          .httpsCallable('generatorGambarThumbnail');
+          .httpsCallable(
+            'generatorGambarThumbnail',
+            options: HttpsCallableOptions(timeout: const Duration(minutes: 5)),
+          );
 
       final payload = {
         'narrativeValue': narrative,
@@ -160,11 +161,24 @@ class GeneratorGambarThumbnailViewModel
         'selectedRatio': state.selectedRatio,
       };
 
-      // PERBAIKAN 1: Hapus bungkus manual {'data': payload}. Firebase httpsCallable sudah membungkusnya secara otomatis di balik layar.
+      // 2. Eksekusi pemanggilan Cloud Function
       final result = await callable.call(payload);
 
-      // PERBAIKAN 2: Tangkap respons. Backend mengembalikan tipe String (URL) secara langsung, bukan Map.
-      final String? imageUrl = result.data as String?;
+      // 3. Ekstraksi URL Defensif (Mendukung String Langsung maupun Map Objek)
+      String? imageUrl;
+      final rawData = result.data;
+
+      if (rawData is String) {
+        imageUrl = rawData;
+      } else if (rawData is Map) {
+        if (rawData.containsKey('data') && rawData['data'] != null) {
+          imageUrl = rawData['data'].toString();
+        } else if (rawData.containsKey('result') && rawData['result'] != null) {
+          imageUrl = rawData['result'].toString();
+        } else if (rawData.containsKey('url') && rawData['url'] != null) {
+          imageUrl = rawData['url'].toString();
+        }
+      }
 
       if (imageUrl != null && imageUrl.isNotEmpty) {
         state = state.copyWith(
@@ -176,10 +190,11 @@ class GeneratorGambarThumbnailViewModel
         throw Exception("Gagal mendapatkan URL gambar dari mesin.");
       }
     } on FirebaseFunctionsException catch (e) {
-      // Penanganan khusus error Token Habis (Sesuai backend: 402 / insufficient_tokens)
       String errorMsg = e.message ?? "Terjadi kesalahan server.";
       if (e.code == 'insufficient_tokens' || e.code == 'payment-required') {
         errorMsg = "Token Anda tidak mencukupi untuk melakukan tindakan ini.";
+      } else if (e.code == 'deadline-exceeded') {
+        errorMsg = "Waktu pemrosesan gambar habis. Silakan coba lagi.";
       }
       state = state.copyWith(
         isLoading: false,
@@ -190,7 +205,7 @@ class GeneratorGambarThumbnailViewModel
       state = state.copyWith(
         isLoading: false,
         errorMessage: GambarThumbnailLocalizationHelper.get('alertApiError')
-            .replaceFirst('{message}', e.toString()),
+            .replaceFirst('{message}', e.toString().replaceFirst('Exception: ', '')),
         loadingText: '',
       );
     }
@@ -200,7 +215,6 @@ class GeneratorGambarThumbnailViewModel
     if (state.generatedImageUrl.isEmpty) return;
 
     try {
-      // Karena respons sekarang murni URL, kita gunakan http.get untuk mengunduh byte gambar
       final response = await http.get(Uri.parse(state.generatedImageUrl));
       if (response.statusCode != 200) {
         throw Exception('Gagal mengunduh gambar dari server.');
@@ -216,11 +230,11 @@ class GeneratorGambarThumbnailViewModel
         anchorElement.download = fileName;
         anchorElement.click();
         html.Url.revokeObjectUrl(url);
-        
+
         state = state.copyWith(
           successMessage: GambarThumbnailLocalizationHelper.get('statusDownloadSuccess')
               .replaceFirst('{path}', 'Downloads folder'),
-          clearError: true
+          clearError: true,
         );
       } else if (Platform.isAndroid) {
         final directory = await getApplicationDocumentsDirectory();
@@ -231,13 +245,14 @@ class GeneratorGambarThumbnailViewModel
         state = state.copyWith(
           successMessage: GambarThumbnailLocalizationHelper.get('statusDownloadSuccess')
               .replaceFirst('{path}', filePath),
-          clearError: true
+          clearError: true,
         );
       }
     } catch (e) {
       state = state.copyWith(
-          errorMessage: GambarThumbnailLocalizationHelper.get('statusDownloadFailed') + " ${e.toString()}",
-          clearError: false);
+        errorMessage: "${GambarThumbnailLocalizationHelper.get('statusDownloadFailed')} ${e.toString()}",
+        clearError: false,
+      );
     }
   }
 
@@ -258,7 +273,10 @@ class GeneratorGambarThumbnailViewModel
     super.dispose();
   }
 }
+//................................................................//
 
+//No ke-5.........................................................//
+//PROVIDER DECLARATION............................................//
 final generatorGambarThumbnailViewModelProvider = StateNotifierProvider.autoDispose<
     GeneratorGambarThumbnailViewModel, GeneratorGambarThumbnailState>(
   (ref) => GeneratorGambarThumbnailViewModel(ref),

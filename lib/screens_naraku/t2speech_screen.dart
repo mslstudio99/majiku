@@ -21,6 +21,7 @@ import '../theme/app_theme.dart';
 
 //No ke-2: STATEFUL WIDGET, SETUP & LIFECYCLE                     //
 //INISIALISASI FORM, CONTROLLER LISTENER, & LOGGING AKTIVITAS     //
+//................................................................//
 class T2SpeechScreen extends ConsumerStatefulWidget {
   const T2SpeechScreen({super.key});
 
@@ -32,6 +33,7 @@ class _T2SpeechScreenState extends ConsumerState<T2SpeechScreen> {
   final int _maxTextLength = 20000;
   final _formKey = GlobalKey<FormState>();
   bool _isDownloaded = false;
+  TextEditingController? _textController;
 
   @override
   void initState() {
@@ -39,7 +41,8 @@ class _T2SpeechScreenState extends ConsumerState<T2SpeechScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final viewModel = ref.read(t2SpeechViewModelProvider.notifier);
-        viewModel.textController.addListener(() => setState(() {}));
+        _textController = viewModel.textController;
+        _textController?.addListener(_onTextChanged);
 
         // --- [LOG AKTIVITAS: KUNJUNGAN FITUR T2SPEECH PREMIUM] ---
         ref.read(firestoreServiceProvider).logFeatureActivity(
@@ -50,12 +53,21 @@ class _T2SpeechScreenState extends ConsumerState<T2SpeechScreen> {
     });
   }
 
+  void _onTextChanged() {
+    // [PENGAMAN MOUNTED]: Mencegah pemanggilan setState pada widget yang unmounted
+    if (mounted) {
+      setState(() {}); 
+    }
+  }
+
   @override
   void dispose() {
+    // [PEMBERSIHAN MUTLAK ANTI-MEMORY LEAK]: Melepas listener controller secara aman sebelum element dihancurkan
+    _textController?.removeListener(_onTextChanged);
+    _textController = null;
     super.dispose();
   }
-// END OF BLOK 2 //
-//================================================================//
+//................................................................//
 
 //No ke-3: LOGIKA REPORT, PLAYBACK & AUDIO CONTROLS               //
 //DIALOG LAPORAN PELANGGARAN AUDIO, PLAY/PAUSE & DOWNLOAD         //
@@ -129,7 +141,8 @@ class _T2SpeechScreenState extends ConsumerState<T2SpeechScreen> {
 //================================================================//
 
 //No ke-4: FORM INPUT TEKS, PILIHAN BAHASA & SUARA CHIRP3-HD      //
-//APPBAR DENGAN BADGE TOKEN, TEXTAREA 10.000 CHAR, DROPDOWN SUARA //
+//APPBAR DENGAN BADGE TOKEN, TEXTAREA 20.000 CHAR, & PELACAK ERROR//
+//................................................................//
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(t2SpeechViewModelProvider);
@@ -151,8 +164,8 @@ class _T2SpeechScreenState extends ConsumerState<T2SpeechScreen> {
     });
 
     configAsync.whenData((config) {
-      costPer100Chars = config.costs.t2speechCosts.costPer100Chars;
-      minTokens = config.costs.t2speechCosts.minTokens;
+      costPer100Chars = config.costs.t2speechCosts.costPer100Chars.round();
+      minTokens = config.costs.t2speechCosts.minTokens.round();
     });
 
     // 2. Kalkulasi Kebutuhan Token Secara Realtime Berbasis Karakter
@@ -172,17 +185,39 @@ class _T2SpeechScreenState extends ConsumerState<T2SpeechScreen> {
       }
 
       if (next.errorMessage != null && next.errorMessage != previous?.errorMessage) {
+        // [PELACAK ERROR INTERAKTIF]: Teks Bisa Diblok & Memiliki Tombol SALIN Langsung
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
+            backgroundColor: Colors.red.shade900,
+            duration: const Duration(seconds: 15),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             content: Row(
               children: [
                 const Icon(Icons.error_outline, color: Colors.white),
                 const SizedBox(width: 10),
-                Expanded(child: Text(next.errorMessage!, style: const TextStyle(color: Colors.white))),
+                Expanded(
+                  child: SelectableText(
+                    next.errorMessage!,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                  ),
+                ),
               ],
             ),
-            backgroundColor: Colors.red.shade700,
-            behavior: SnackBarBehavior.floating,
+            action: SnackBarAction(
+              label: 'SALIN',
+              textColor: Colors.amberAccent,
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: next.errorMessage!));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Pesan error berhasil disalin ke clipboard!"),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+            ),
           ),
         );
       }
@@ -451,8 +486,7 @@ class _T2SpeechScreenState extends ConsumerState<T2SpeechScreen> {
       ),
     );
   }
-// END OF BLOK 4 //
-//================================================================//
+//................................................................//
 
 //No ke-5: KARTU OUTPUT AUDIO PLAYER & DOWNLOAD                   //
 //KONTROL AUDIO PLAYER URL, ANIMASI GELOMBANG, UNDUH NATIVE       //

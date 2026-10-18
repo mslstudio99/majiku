@@ -113,6 +113,7 @@ class Image2VideoState {
 // ------------------------------------------------------------------------- //
 
 // No ke-3: VIEW MODEL LOGIC //
+// Mengatur State, Panggilan HTTP ke Cloud Run generatorImage2Video, & Penyimpanan Firestore //
 //.......................................................//
 class Image2VideoViewModel extends StateNotifier<Image2VideoState> {
   final TextEditingController narrativeController = TextEditingController();
@@ -120,8 +121,8 @@ class Image2VideoViewModel extends StateNotifier<Image2VideoState> {
 
   Image2VideoViewModel(this._ref) : super(const Image2VideoState());
 
-  // URL Resmi Firebase Function Gen 2 Jakarta untuk Image2Video
-  final String _engineUrl = "https://asia-southeast2-majiku-5b07e.cloudfunctions.net/generatorImage2Video";
+  // [PERBAIKAN KRITIS]: Menggunakan URL Resmi Cloud Run Gen 2 (Bebas 302 Redirect & Bebas CORS Failed to Fetch)
+  final String _engineUrl = "https://generatorimage2video-l2jn5d37pa-et.a.run.app";
 
   // --- Setter Parameter ---
   void setStyle(String? value) {
@@ -149,7 +150,6 @@ class Image2VideoViewModel extends StateNotifier<Image2VideoState> {
   }
 
   // --- Core Generasi (Menerima Parameter XFile dari UI Web/Mobile) ---
-  // [PERBAIKAN] Parameter imageFile sekarang adalah XFile? agar cocok dengan UI
   Future<void> generateVideo({XFile? imageFile}) async {
     if (state.isLoading) return;
     
@@ -176,7 +176,7 @@ class Image2VideoViewModel extends StateNotifier<Image2VideoState> {
       final imageBytes = await imageFile.readAsBytes();
       final base64Image = base64Encode(imageBytes);
 
-      // [BARU & FLEKSIBEL] Deteksi Ekstensi File dari nama XFile
+      // Deteksi Ekstensi File dari nama XFile
       String mimeType = 'image/jpeg'; // Fallback default
       final String fileNameLower = imageFile.name.toLowerCase();
       if (fileNameLower.endsWith('.png')) {
@@ -201,6 +201,7 @@ class Image2VideoViewModel extends StateNotifier<Image2VideoState> {
         }
       });
 
+      // [PERBAIKAN TIMEOUT]: Disesuaikan ke 9 menit agar selaras dengan timeout server Cloud Run
       final response = await http.post(
         Uri.parse(_engineUrl),
         headers: {
@@ -208,25 +209,34 @@ class Image2VideoViewModel extends StateNotifier<Image2VideoState> {
           'Authorization': 'Bearer $idToken', 
         },
         body: body,
-      ).timeout(const Duration(minutes: 6)); 
+      ).timeout(const Duration(minutes: 9)); 
 
       if (response.statusCode == 200) {
         final responseBody = jsonDecode(response.body);
         
-        // Parsing URL Video
-        final videoUrl = responseBody['data'];
+        // [PARSING DUAL URL RESPON DEFENSIF]: Mendukung objek { videoUrl, imageUrl } maupun string
+        final data = responseBody['data'];
+        String? videoUrl;
+        String? imageUrl;
 
-        if (videoUrl != null && videoUrl.toString().isNotEmpty) {
+        if (data is Map) {
+          videoUrl = data['videoUrl']?.toString();
+          imageUrl = data['imageUrl']?.toString();
+        } else if (data is String) {
+          videoUrl = data;
+        }
+
+        if (videoUrl != null && videoUrl.isNotEmpty) {
           
-          // [SIMPAN DATA KE FIRESTORE]
+          // [SIMPAN DATA KE FIRESTORE]: Menyimpan tautan video dan tautan gambar input
           try {
             final firestoreService = FirestoreImage2VideoService();
             final projectData = VideoProjectImage2Video(
               id: '', 
               userId: user.uid,
-              imageUrl: '', 
+              imageUrl: imageUrl ?? '', 
               prompt: narrative,
-              videoUrl: videoUrl.toString(),
+              videoUrl: videoUrl,
               style: state.selectedStyle,
               aspectRatio: state.selectedRatio,
               resolution: state.selectedResolution,
@@ -234,7 +244,7 @@ class Image2VideoViewModel extends StateNotifier<Image2VideoState> {
               createdAt: DateTime.now(),
             );
             await firestoreService.saveProject(projectData);
-            debugPrint("Sukses menyimpan History Image2Video ke Firestore.");
+            debugPrint("Sukses menyimpan History Image2Video ke Firestore (Video: $videoUrl, Image: $imageUrl).");
           } catch (dbError) {
             debugPrint("Peringatan: Gagal menyimpan riwayat ke Firestore: $dbError");
           }
@@ -242,7 +252,7 @@ class Image2VideoViewModel extends StateNotifier<Image2VideoState> {
           // Perbarui UI ke kondisi berhasil
           state = state.copyWith(
             isLoading: false,
-            generatedVideoUrl: videoUrl.toString(), 
+            generatedVideoUrl: videoUrl, 
             loadingText: '',
           );
         } else {
@@ -268,7 +278,6 @@ class Image2VideoViewModel extends StateNotifier<Image2VideoState> {
     if (state.generatedVideoUrl.isEmpty) return;
 
     try {
-      // [PERBAIKAN] Menggunakan arsitektur Native Delegation yang aman untuk Android 11+ & Web
       final Uri url = Uri.parse(state.generatedVideoUrl);
       
       if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {

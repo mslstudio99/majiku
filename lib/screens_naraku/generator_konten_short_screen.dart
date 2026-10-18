@@ -51,14 +51,23 @@ class GeneratorKontenShortScreen extends ConsumerStatefulWidget {
 class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShortScreen> {
   final int _maxPromptLength = 200;
   OverlayEntry? _overlayEntry;
-  Timer? _popupTimer; // [TAMBAHAN] Timer untuk auto-hide popup
+  Timer? _popupTimer;
+  
+  // Counter karakter stabil (Dikelola di lifecycle, bukan di build)
+  late final ValueNotifier<int> _charCounter;
 //................................................................//
 
 //No ke-3.........................................................//
-//LIFECYCLE & POPUP TUTORIAL LOGIC................................//
+//LIFECYCLE & POPUP TUTORIAL LOGIC (STABIL & AMAN OVERLAY)........//
   @override
   void initState() {
     super.initState();
+    
+    // Inisialisasi counter sekali saja secara aman
+    final vm = ref.read(generatorKontenShortViewModelProvider.notifier);
+    _charCounter = ValueNotifier<int>(vm.promptController.text.length);
+    vm.promptController.addListener(_onPromptChanged);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _showTutorialPopup();
@@ -74,14 +83,23 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
     });
   }
 
+  void _onPromptChanged() {
+    final vm = ref.read(generatorKontenShortViewModelProvider.notifier);
+    _charCounter.value = vm.promptController.text.length;
+  }
+
   @override
   void dispose() {
+    final vm = ref.read(generatorKontenShortViewModelProvider.notifier);
+    vm.promptController.removeListener(_onPromptChanged);
+    _charCounter.dispose();
     _removePopup();
     super.dispose();
   }
 
   void _removePopup() {
-    _popupTimer?.cancel(); // Membatalkan timer jika popup ditutup manual atau halaman di-dispose
+    _popupTimer?.cancel();
+    _popupTimer = null;
     if (_overlayEntry != null && _overlayEntry!.mounted) {
       _overlayEntry!.remove();
       _overlayEntry = null;
@@ -89,6 +107,12 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
   }
 
   void _showTutorialPopup() {
+    if (!mounted || _overlayEntry != null) return;
+
+    // Gunakan maybeOf agar tidak melempar crash jika overlay belum terpasang sempurna
+    final overlayState = Overlay.maybeOf(context);
+    if (overlayState == null) return;
+
     _overlayEntry = OverlayEntry(
       builder: (context) {
         final topPadding = MediaQuery.of(context).padding.top;
@@ -132,9 +156,8 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
       },
     );
 
-    Overlay.of(context).insert(_overlayEntry!);
+    overlayState.insert(_overlayEntry!);
 
-    // [TAMBAHAN] Logika Timer: Hilangkan otomatis setelah 10 Detik
     _popupTimer = Timer(const Duration(seconds: 10), () {
       if (mounted) {
         _removePopup();
@@ -319,11 +342,6 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
       String Function(String, String) t) {
     
     final theme = Theme.of(context);
-    final charCounter =
-        ValueNotifier<int>(viewModel.promptController.text.length);
-    viewModel.promptController.addListener(() {
-      charCounter.value = viewModel.promptController.text.length;
-    });
 
     final bool vmIsLoading = state.isLoading;
     final bool providersAreLoading = userState.isLoading || configState.isLoading;
@@ -375,7 +393,7 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
                   style: theme.textTheme.bodyMedium,
                 ),
                 ValueListenableBuilder<int>(
-                  valueListenable: charCounter,
+                  valueListenable: _charCounter,
                   builder: (context, count, child) {
                     return Text(
                       '$count / $_maxPromptLength',
@@ -417,6 +435,7 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
             const SizedBox(height: 16),
             DropdownButtonFormField<int>(
               value: state.lengthOption,
+              isExpanded: true,
               decoration: InputDecoration(
                 labelText: t('Target Character Length', 'Target Panjang Karakter'),
                 filled: true,
@@ -635,7 +654,6 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
     return {'title': rawTitle, 'script': cleanedScript};
   }
 
-  // --- [PERBAIKAN] Helper: Tombol Kirim -> PopupMenu 4 Pilihan ---
   Widget _buildSendToProjectButton(
       BuildContext context, GeneratorKontenShortState state, String Function(String, String) t) {
     
@@ -671,14 +689,13 @@ class _GeneratorKontenShortScreenState extends ConsumerState<GeneratorKontenShor
         color: theme.primaryColor,
         borderRadius: BorderRadius.circular(30),
         child: PopupMenuButton<String>(
-          offset: const Offset(40, -210), // Disesuaikan lebih tinggi untuk 4 opsi
+          offset: const Offset(40, -210),
           elevation: 6,
           color: theme.cardColor,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           onSelected: (String value) {
             Widget targetScreen;
             
-            // Logika Penentuan Layar Tujuan (4 Opsi)
             if (value == 'storinema') {
               targetScreen = InputScriptStorinemaScreen(initialTitle: cleanTitle, initialScript: cleanScript);
             } else if (value == 'naracinema_plus') {

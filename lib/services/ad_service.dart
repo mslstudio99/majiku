@@ -27,6 +27,9 @@ class AdService {
 
   // [RESMI] Ad Unit ID Interstitial Majiku Terbaru (Production)
   final String _interstitialAdUnitId = 'ca-app-pub-9735424824803924/8874789092';
+
+  /// [BARU]: Mengecek ketersediaan iklan di memori sebelum memicu transisi
+  bool get isAdReady => _interstitialAd != null;
 //.......................................................//
 
 //No ke-2: INISIALISASI & PRE-LOAD IKLAN (AUTO-RETRY)....//
@@ -75,7 +78,11 @@ class AdService {
     );
   }
 
-  void _setFullScreenCallbacks(InterstitialAd ad, {VoidCallback? onAdClicked}) {
+  void _setFullScreenCallbacks(
+    InterstitialAd ad, {
+    VoidCallback? onAdClicked,
+    VoidCallback? onAdDismissed,
+  }) {
     ad.fullScreenContentCallback = FullScreenContentCallback(
       onAdClicked: (ad) {
         debugPrint("🎯 AdMob: Pengguna mengklik iklan Interstitial.");
@@ -89,6 +96,11 @@ class AdService {
         _interstitialAd = null;
         _retryAttempt = 0;
         
+        // Beritahu pemanggil bahwa iklan telah selesai ditutup
+        if (onAdDismissed != null) {
+          onAdDismissed();
+        }
+
         // [BEST PRACTICE]: Langsung siapkan iklan baru di latar belakang agar selalu ready
         loadInterstitial();
       },
@@ -98,6 +110,11 @@ class AdService {
         _interstitialAd = null;
         _retryAttempt = 0;
         
+        // Jika gagal tayang, tetap beritahu pemanggil agar alur aplikasi tidak macet
+        if (onAdDismissed != null) {
+          onAdDismissed();
+        }
+
         loadInterstitial();
       },
     );
@@ -107,8 +124,17 @@ class AdService {
 //No ke-3: LOGIKA TAMPILKAN IKLAN (COOLDOWN 2 MENIT)......//
 //.......................................................//
   /// Menampilkan iklan Interstitial dengan pengunci Cooldown 2 Menit (120 detik)
-  void showInterstitial({bool force = false, VoidCallback? onAdClicked}) {
-    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return;
+  /// Mendukung callback [onAdClicked] dan [onAdDismissed] (saat iklan ditutup atau gagal tayang)
+  /// Mengembalikan nilai [bool] true jika iklan berhasil diluncurkan ke layar
+  bool showInterstitial({
+    bool force = false,
+    VoidCallback? onAdClicked,
+    VoidCallback? onAdDismissed,
+  }) {
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) {
+      onAdDismissed?.call();
+      return false;
+    }
 
     final now = DateTime.now();
     const int minCooldownSeconds = 120; // Wajib minimal 2 Menit antar-iklan
@@ -118,19 +144,27 @@ class AdService {
       if (difference < minCooldownSeconds) {
         final remainingSeconds = minCooldownSeconds - difference;
         debugPrint("⏱️ AdMob: Iklan ditahan cooldown 2 menit. Sisa waktu: ${remainingSeconds}s.");
-        return; 
+        onAdDismissed?.call();
+        return false; 
       }
     }
 
     if (_interstitialAd != null) {
       debugPrint("🚀 AdMob: Menayangkan iklan Interstitial...");
-      _setFullScreenCallbacks(_interstitialAd!, onAdClicked: onAdClicked);
+      _setFullScreenCallbacks(
+        _interstitialAd!,
+        onAdClicked: onAdClicked,
+        onAdDismissed: onAdDismissed,
+      );
       _interstitialAd!.show();
       _lastAdShownTime = now;
       _interstitialAd = null; // Dikosongkan, callback dismiss akan auto-reload
+      return true;
     } else {
       debugPrint("ℹ️ AdMob: Iklan belum tersedia di memori. Memulai pengunduhan tanpa mengganggu pembaca...");
       loadInterstitial();
+      onAdDismissed?.call();
+      return false;
     }
   }
 }

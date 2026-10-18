@@ -1,24 +1,25 @@
-﻿// [RILIS UTUH - INTEGRASI AUTH TOKEN]
-// KATEGORI_NARAKU_TOKEN NO_URUT_05
-// Lokasi: lib/view_model_naraku/generator_konten_umum_view_model.dart
-// TUJUAN:
-// - [FITUR] Mengirimkan Firebase Auth ID Token (JWT) di header
-// - panggilan http.post ke Cloud Function 'generatorKontenUmum'.
-// - [REFAKTOR] Menyuntikkan 'Ref' ke ViewModel untuk mengakses provider auth.
+﻿//................................................................//
+// NAMA FILE: GENERATOR_KONTEN_UMUM_VIEW_MODEL.DART               //
+// PATH: LIB/VIEW_MODEL_NARAKU/GENERATOR_KONTEN_UMUM_VIEW_MODEL.DART //
+//................................................................//
 
+//No ke-1.........................................................//
+//IMPORT MODULE & DEPENDENCIES....................................//
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'dart:ui';
 
-// --- [IMPOR BARU UNTUK OTENTIKASI] ---
+// Import Auth
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
-import '../view_model/auth_view_model.dart'; // Untuk authStateChangesProvider
-// --- [AKHIR IMPOR BARU] ---
+import '../view_model/auth_view_model.dart';
+//................................................................//
 
-// --- KATEGORI_INTEGRASI_KONTEN_UMUM NO_URUT_01: Data Localization ---
-// (Tidak Berubah)
+//No ke-2.........................................................//
+//LOCALIZATION HELPER.............................................//
 class KontenUmumLocalizationHelper {
   static const Map<String, Map<String, String>> translations = {
     'id': {
@@ -65,10 +66,10 @@ class KontenUmumLocalizationHelper {
     return translationMap[key] ?? key;
   }
 }
-// --- AKHIR DATA LOKALISASI ---
+//................................................................//
 
-/// KATEGORI_INTEGRASI_KONTEN_UMUM NO_URUT_02
-// (State Class Tidak Berubah)
+//No ke-3.........................................................//
+//STATE MODEL (GENERATOR KONTEN UMUM STATE).......................//
 @immutable
 class GeneratorKontenUmumState {
   final bool isLoading;
@@ -98,22 +99,21 @@ class GeneratorKontenUmumState {
     );
   }
 }
+//................................................................//
 
-/// KATEGORI_INTEGRASI_KONTEN_UMUM NO_URUT_03 (DIMODIFIKASI)
+//No ke-4.........................................................//
+//VIEW MODEL & GENERATION LOGIC (ROBUST NETWORK CLIENT)...........//
 class GeneratorKontenUmumViewModel
     extends StateNotifier<GeneratorKontenUmumState> {
   final TextEditingController promptController = TextEditingController();
-
-  // [BARU] Tambahkan Ref untuk mengakses provider lain
   final Ref _ref;
 
-  // [MODIFIKASI] Terima Ref di constructor
-  GeneratorKontenUmumViewModel(this._ref)
-      : super(const GeneratorKontenUmumState());
-
-  // (URL Cloud Function Tidak Berubah)
+  // Endpoint Cloud Function
   final String _cloudFunctionUrl =
       "https://asia-southeast2-majiku-5b07e.cloudfunctions.net/generatorKontenUmum";
+
+  GeneratorKontenUmumViewModel(this._ref)
+      : super(const GeneratorKontenUmumState());
 
   Future<void> generateStory() async {
     if (state.isLoading) return;
@@ -129,58 +129,107 @@ class GeneratorKontenUmumViewModel
         isLoading: true, clearError: true, loadingText: 'GENERATING');
 
     try {
-      // --- [LOGIKA TOKEN BARU - LANGKAH 2A] ---
       // 1. Dapatkan user saat ini dari provider auth
       final authUser = _ref.read(authStateChangesProvider).value;
-
       if (authUser == null) {
         throw Exception("Sesi pengguna tidak ditemukan. Harap login ulang.");
       }
 
-      // 2. Dapatkan ID Token (JWT) pengguna.
+      // 2. Dapatkan ID Token (JWT) pengguna
       final idToken = await authUser.getIdToken(true);
-      // --- [AKHIR LOGIKA TOKEN BARU] ---
 
-      // Siapkan body (sesuai PHP 'promptValue')
+      // 3. Siapkan body (kunci 'promptValue')
       final body = jsonEncode({
         'data': {
-          'promptValue': prompt, // Kunci harus 'promptValue'
+          'promptValue': prompt,
         }
       });
 
-      final response = await http.post(
-        Uri.parse(_cloudFunctionUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          // [MODIFIKASI] Kirim token otentikasi
-          'Authorization': 'Bearer $idToken',
-        },
-        body: body,
-      ).timeout(const Duration(seconds: 300)); // 5 menit timeout
+      // 4. Header dengan Connection: close untuk mencegah Socket Reuse Error (Errno 104)
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $idToken',
+        'Connection': 'close',
+      };
 
-      if (response.statusCode == 200) {
-        final responseBody = jsonDecode(response.body);
-        final resultText = responseBody['data'];
+      // 5. Eksekusi pemanggilan dengan client mandiri & auto-retry 1x khusus socket reset
+      http.Response? response;
+      int attempts = 0;
+      const int maxAttempts = 2;
 
-        if (resultText != null) {
-          state = state.copyWith(
-            isLoading: false,
-            generatedStory: resultText as String,
-            loadingText: '',
-          );
+      while (attempts < maxAttempts) {
+        attempts++;
+        final client = http.Client();
+        try {
+          response = await client.post(
+            Uri.parse(_cloudFunctionUrl),
+            headers: headers,
+            body: body,
+          ).timeout(const Duration(seconds: 300)); // 5 menit timeout
+          break; // Berhasil terkirim dan menerima respons
+        } on SocketException catch (socketErr) {
+          if (attempts < maxAttempts) {
+            print("--- [KONTEN_UMUM] Socket reset terdeteksi, mencoba ulang koneksi (attempt $attempts): $socketErr ---");
+            await Future.delayed(const Duration(milliseconds: 600));
+            continue;
+          }
+          rethrow;
+        } on http.ClientException catch (clientErr) {
+          final isConnectionReset = clientErr.message.toLowerCase().contains('connection reset') ||
+              clientErr.message.toLowerCase().contains('socketexception');
+          if (isConnectionReset && attempts < maxAttempts) {
+            print("--- [KONTEN_UMUM] ClientException reset, mencoba ulang koneksi (attempt $attempts): $clientErr ---");
+            await Future.delayed(const Duration(milliseconds: 600));
+            continue;
+          }
+          rethrow;
+        } finally {
+          client.close();
+        }
+      }
+
+      if (response != null) {
+        if (response.statusCode == 200) {
+          final responseBody = jsonDecode(response.body);
+          final resultText = responseBody['data'];
+
+          if (resultText != null) {
+            state = state.copyWith(
+              isLoading: false,
+              generatedStory: resultText as String,
+              loadingText: '',
+            );
+          } else {
+            throw Exception(
+                "Respons sukses, namun 'data' tidak ditemukan di body.");
+          }
         } else {
-          throw Exception(
-              "Respons sukses, namun 'data' tidak ditemukan di body.");
+          // Safe JSON error decoding
+          String errorMessage = 'Error HTTP ${response.statusCode}';
+          try {
+            final errorBody = jsonDecode(response.body);
+            if (errorBody is Map && errorBody.containsKey('error')) {
+              final err = errorBody['error'];
+              if (err is Map && err.containsKey('message')) {
+                errorMessage = err['message'];
+              } else if (err is String) {
+                errorMessage = err;
+              }
+            }
+          } catch (_) {
+            if (response.body.isNotEmpty) {
+              errorMessage = response.body;
+            }
+          }
+
+          if (response.statusCode == 402) {
+            throw Exception(errorMessage); // Menampilkan pesan Token Tidak Cukup
+          }
+          throw Exception(errorMessage);
         }
       } else {
-        final errorBody = jsonDecode(response.body);
-        final errorMessage =
-            errorBody['error']?['message'] ?? 'Error HTTP ${response.statusCode}';
-        // [PERBAIKAN] Jika token tidak cukup (402), tampilkan pesan
-        if (response.statusCode == 402) {
-          throw Exception(errorMessage); // Tampilkan pesan dari server (misal: "Token Tidak Cukup")
-        }
-        throw Exception(errorMessage);
+        throw Exception("Gagal mendapatkan respons dari server.");
       }
     } catch (e) {
       state = state.copyWith(
@@ -193,25 +242,25 @@ class GeneratorKontenUmumViewModel
     }
   }
 
-  // (Metode clearAll Tidak Berubah)
   void clearAll() {
     promptController.clear();
     state = state.copyWith(generatedStory: '', clearError: true);
   }
 
-  // (Metode dispose Tidak Berubah)
   @override
   void dispose() {
     promptController.dispose();
     super.dispose();
   }
 }
+//................................................................//
 
-/// KATEGORI_INTEGRASI_KONTEN_UMUM NO_URUT_04 (DIMODIFIKASI)
+//No ke-5.........................................................//
+//PROVIDER DECLARATION............................................//
 final generatorKontenUmumViewModelProvider = StateNotifierProvider.autoDispose<
     GeneratorKontenUmumViewModel, GeneratorKontenUmumState>(
   (ref) {
-    // [MODIFIKASI] Suntikkan 'ref' ke ViewModel
     return GeneratorKontenUmumViewModel(ref);
   },
 );
+//................................................................//

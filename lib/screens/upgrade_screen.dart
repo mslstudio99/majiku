@@ -9,6 +9,7 @@
 import 'dart:io'; 
 import 'package:flutter/foundation.dart' show kIsWeb; 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // [BARU]: Mendukung fitur Clipboard / Copy Text
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -71,6 +72,115 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
 
 // No ke-3: LOGIKA PEMBAYARAN & BOTTOM SHEET             //
 //.......................................................//
+  // --- [HELPER: DIALOG PELACAK ERROR RINCI & TOMBOL COPY] ---
+  void _showDetailedErrorDialog({
+    required String title,
+    required dynamic error,
+  }) {
+    String errorCode = 'UNKNOWN';
+    String errorMessage = error.toString();
+    String? errorDetails;
+
+    if (error is FirebaseFunctionsException) {
+      errorCode = error.code;
+      errorMessage = error.message ?? 'Tidak ada pesan deskripsi dari server.';
+      if (error.details != null) {
+        errorDetails = error.details.toString();
+      }
+    }
+
+    final String fullReport = """
+=== LAPORAN ERROR PEMBAYARAN MAJIKU ===
+Judul: $title
+Waktu: ${DateTime.now().toIso8601String()}
+Error Code: $errorCode
+Pesan Server: $errorMessage
+Detail Tambahan: ${errorDetails ?? 'Tidak ada'}
+Raw Error: $error
+========================================
+""";
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E1E1E),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Colors.redAccent, size: 28),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  errorMessage,
+                  style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Code: $errorCode", style: const TextStyle(color: Colors.amberAccent, fontSize: 12, fontFamily: 'monospace')),
+                      if (errorDetails != null) ...[
+                        const SizedBox(height: 6),
+                        Text("Details: $errorDetails", style: const TextStyle(color: Colors.grey, fontSize: 11, fontFamily: 'monospace')),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            ElevatedButton.icon(
+              icon: const Icon(Icons.copy, size: 16),
+              label: const Text("Salin Log Error"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueGrey.shade800,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: fullReport));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Log error berhasil disalin ke clipboard!'),
+                    backgroundColor: Colors.green,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(),
+              child: const Text("Tutup", style: TextStyle(color: Colors.grey)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // --- [LOGIKA BACKEND: WEB (DUITKU BANK VA) - CLOUD RUN GEN 2 DIRECT] ---
   Future<void> _handlePaymentWeb(String packageId, String paymentMethod) async {
     if (_isLoading) return; 
 
@@ -83,8 +193,10 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
     );
 
     try {
-      final functions = FirebaseFunctions.instanceFor(region: "asia-southeast2");
-      final callable = functions.httpsCallable('createDuitkuTransaction');
+      // Jalur resmi Cloud Run Gen 2 langsung (Bebas dari TLS reset router lama)
+      final callable = FirebaseFunctions.instance.httpsCallableFromUrl(
+        'https://createduitkutransaction-l2jn5d37pa-et.a.run.app',
+      );
       
       final result = await callable.call<Map<String, dynamic>>({
         'packageId': packageId, 
@@ -114,18 +226,46 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
         _showWaitingPaymentDialog(merchantOrderId);
       }
       
-    } on FirebaseFunctionsException catch (e) {
+    } catch (e) {
       if (mounted) {
-        Navigator.of(context).pop(); 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error Server: ${e.message ?? e.toString()}'), backgroundColor: Colors.red),
-        );
+        if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+        _showDetailedErrorDialog(title: 'Kendala Transaksi Duitku', error: e);
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // --- [LOGIKA BACKEND: WEB (NOWPAYMENTS CRYPTO USDT)] ---
+  Future<void> _handlePaymentNowPayments(String packageId) async {
+    if (_isLoading) return;
+
+    setState(() => _isLoading = true);
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final merchantOrderId = await PaymentHybridService().payWithNowPayments(
+        packageId: packageId,
+        quantity: 1,
+      );
+
+      if (mounted) Navigator.of(context).pop();
+
+      // [PELACAKAN TRANSAKSI SENTRAL REAL-TIME]
+      if (merchantOrderId != null && mounted) {
+        _showWaitingPaymentDialog(merchantOrderId);
       }
     } catch (e) {
       if (mounted) {
-        if (Navigator.of(context).canPop()) Navigator.of(context).pop(); 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: Colors.red),
+        if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+        _showDetailedErrorDialog(
+          title: 'Kendala Transaksi Crypto (NOWPayments)',
+          error: e,
         );
       }
     } finally {
@@ -258,6 +398,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
     );
   }
 
+  // --- [LOGIKA BACKEND: ANDROID (GOOGLE PLAY) - 100% UTUH & TERLINDUNGI] ---
   Future<void> _handlePaymentAndroid(String packageId) async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
@@ -276,15 +417,116 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memuat Google Billing: ${e.toString()}'), backgroundColor: Colors.red),
-        );
+        _showDetailedErrorDialog(title: 'Kendala Google Play Billing', error: e);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  // --- [UI BOTTOM SHEET GATEWAY SELECTOR (DUITKU VS NOWPAYMENTS)] ---
+  Future<void> _showPaymentGatewaySelectorWeb(String packageId, String packageTitle, bool isIndo) async {
+    String t(String en, String id) => isIndo ? id : en;
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (BuildContext bContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 16.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: Text(
+                    '${t("Select Payment Gateway", "Pilih Jalur Pembayaran")} ($packageTitle)',
+                    style: Theme.of(bContext).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: Text(
+                    t("Choose your preferred payment method type.", "Pilih jenis metode pembayaran yang Anda inginkan."),
+                    style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Divider(height: 1, thickness: 1, color: Colors.grey.shade800),
+                const SizedBox(height: 8),
+
+                // Opsi 1: Bank Transfer / Virtual Account (Duitku)
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.blueAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.account_balance, color: Colors.blueAccent),
+                  ),
+                  title: Text(
+                    t("Bank Virtual Account (IDR)", "Duitku (Transfer Bank / VA)"),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  subtitle: Text(
+                    "Mandiri, BNI, BRI, BSI",
+                    style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
+                  onTap: () {
+                    Navigator.of(bContext).pop();
+                    _showPaymentMethodsWeb(packageId, packageTitle, isIndo);
+                  },
+                ),
+
+                const SizedBox(height: 6),
+
+                // Opsi 2: Crypto (NOWPayments USDT)
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.tealAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.currency_bitcoin, color: Colors.tealAccent),
+                  ),
+                  title: Text(
+                    t("Crypto Currency (USDT)", "Nowpayment (Crypto USDT)"),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  subtitle: Text(
+                    "USDT Instant Crypto Payment",
+                    style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 16),
+                  onTap: () {
+                    Navigator.of(bContext).pop();
+                    _handlePaymentNowPayments(packageId);
+                  },
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Sub-menu Daftar Bank Duitku
   Future<void> _showPaymentMethodsWeb(String packageId, String packageTitle, bool isIndo) async {
     String t(String en, String id) => isIndo ? id : en;
 
@@ -307,7 +549,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20.0, 24.0, 20.0, 8.0),
                 child: Text(
-                  '${t("Select Payment", "Pilih Pembayaran")} ($packageTitle)', 
+                  '${t("Select Bank", "Pilih Bank")} ($packageTitle)', 
                   style: Theme.of(bContext).textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
@@ -317,7 +559,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20.0, 0, 20.0, 16.0),
                 child: Text(
-                  t("Please select your preferred payment method.", "Silakan pilih metode pembayaran yang Anda inginkan."),
+                  t("Please select your preferred Virtual Account bank.", "Silakan pilih Bank Virtual Account yang Anda inginkan."),
                   style: TextStyle(color: Colors.grey.shade400),
                 ),
               ),
@@ -523,7 +765,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor, 
-                      foregroundColor: Colors.black, // <-- WARNA DASAR TEKS DIUBAH KE HITAM
+                      foregroundColor: Colors.black, // Tetap hitam mutlak
                       elevation: badgeText != null ? 8 : 2,
                       shadowColor: primaryColor.withOpacity(0.5),
                       shape: RoundedRectangleBorder(
@@ -536,13 +778,13 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                             if (_isAndroidNative) {
                               _handlePaymentAndroid(packageId);
                             } else {
-                              _showPaymentMethodsWeb(packageId, title, isIndo); 
+                              // Mengarahkan ke Gateway Selector (Duitku vs NOWPayments)
+                              _showPaymentGatewaySelectorWeb(packageId, title, isIndo); 
                             }
                           },
                     child: _isLoading
                         ? const SizedBox( 
                             height: 24, width: 24,
-                            // Warna indikator loading diubah ke Hitam
                             child: CircularProgressIndicator(color: Colors.black, strokeWidth: 3),
                           )
                         : Row(
@@ -551,7 +793,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                               Icon(
                                 _isAndroidNative ? Icons.shop : Icons.verified_rounded, 
                                 size: 20, 
-                                color: Colors.black // <-- IKON DIBUAT HITAM MUTLAK
+                                color: Colors.black 
                               ),
                               const SizedBox(width: 10),
                               Text( 
@@ -561,7 +803,7 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                                 style: const TextStyle(
                                   fontSize: 16, 
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.black // <-- TEKS DIBUAT HITAM MUTLAK
+                                  color: Colors.black
                                 ),
                               ),
                             ],
@@ -595,7 +837,6 @@ class _UpgradeScreenState extends ConsumerState<UpgradeScreen> {
                 child: Text(
                   badgeText,
                   style: TextStyle(
-                    // Badge Text tetap kondisional karena badge tidak ada masalah kontras warna di awal
                     color: title == 'Professional' ? Colors.black87 : Colors.white,
                     fontWeight: FontWeight.w900,
                     fontSize: 11,

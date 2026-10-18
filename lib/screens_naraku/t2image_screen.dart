@@ -20,6 +20,7 @@ import '../theme/app_theme.dart';
 //......................................................//
 
 // No ke-2: STATEFUL WIDGET & INITIALIZATION            //
+// Manajemen state, lifecycle controller, dan pembersihan listener anti-memory leak //
 //......................................................//
 class T2ImageScreen extends ConsumerStatefulWidget {
   const T2ImageScreen({super.key});
@@ -31,6 +32,7 @@ class T2ImageScreen extends ConsumerStatefulWidget {
 class _T2ImageScreenState extends ConsumerState<T2ImageScreen> {
   final int _maxPromptLength = 1000;
   final _formKey = GlobalKey<FormState>();
+  TextEditingController? _promptController;
 
   @override
   void initState() {
@@ -38,7 +40,8 @@ class _T2ImageScreenState extends ConsumerState<T2ImageScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final viewModel = ref.read(t2ImageViewModelProvider.notifier);
-        viewModel.promptController.addListener(() => setState(() {}));
+        _promptController = viewModel.promptController;
+        _promptController?.addListener(_onTextChanged);
 
         // --- [LOG AKTIVITAS: KUNJUNGAN OTHER TOOLS -> T2IMAGE] ---
         ref.read(firestoreServiceProvider).logFeatureActivity(
@@ -51,8 +54,18 @@ class _T2ImageScreenState extends ConsumerState<T2ImageScreen> {
     });
   }
 
+  void _onTextChanged() {
+    // [PENGAMAN MOUNTED]: Mencegah pemanggilan setState pada widget yang unmounted
+    if (mounted) {
+      setState(() {}); 
+    }
+  }
+
   @override
   void dispose() {
+    // [PEMBERSIHAN MUTLAK ANTI-MEMORY LEAK]: Melepas listener controller secara aman sebelum element dihancurkan
+    _promptController?.removeListener(_onTextChanged);
+    _promptController = null;
     super.dispose();
   }
 //......................................................//
@@ -134,6 +147,7 @@ class _T2ImageScreenState extends ConsumerState<T2ImageScreen> {
 //......................................................//
 
 // No ke-4: MAIN BUILDER & FORM UI                      //
+// Render UI Form, Dropdown Style, & Pelacak Error Copyable //
 //......................................................//
   @override
   Widget build(BuildContext context) {
@@ -147,10 +161,31 @@ class _T2ImageScreenState extends ConsumerState<T2ImageScreen> {
 
     ref.listen<T2ImageState>(t2ImageViewModelProvider, (previous, next) {
       if (next.errorMessage != null && previous?.errorMessage == null) {
+        // [PELACAK ERROR INTERAKTIF]: Teks Bisa Diblok & Memiliki Tombol SALIN Langsung
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(next.errorMessage!),
-            backgroundColor: Theme.of(context).colorScheme.error,
+            backgroundColor: Colors.red.shade900,
+            duration: const Duration(seconds: 15),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            content: SelectableText(
+              next.errorMessage!,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+            ),
+            action: SnackBarAction(
+              label: 'SALIN',
+              textColor: Colors.amberAccent,
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: next.errorMessage!));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Pesan error berhasil disalin ke clipboard!"),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+            ),
           ),
         );
       }
@@ -188,7 +223,8 @@ class _T2ImageScreenState extends ConsumerState<T2ImageScreen> {
     });
 
     configAsync.whenData((config) {
-      requiredTokens = config.costs.t2imageCost;
+      // [PENGAMAN TIPE DATA]: Konversi eksplisit nilai token ke integer
+      requiredTokens = config.costs.t2imageCost.round();
       configReady = true;
     });
 

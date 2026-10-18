@@ -106,17 +106,19 @@ class PaymentHybridService {
   }
 //Akhir Blok 3........................................................................................//
 
-//No ke-4: EKSEKUSI PEMBAYARAN (DUITKU & GOOGLE PLAY).................................................//
-//Sub-judul: Alur pemicu transaksi Web (Duitku) dan Android dengan standar IAP terbaru................//
+//No ke-4: EKSEKUSI PEMBAYARAN (DUITKU, GOOGLE PLAY & NOWPAYMENTS)....................................//
+//Sub-judul: Alur pemicu transaksi Web (Duitku & NOWPayments) dan Android (Google Play)...............//
   
-  // --- JALUR PEMBAYARAN: DUITKU (WEB) ---
+  // --- JALUR PEMBAYARAN: DUITKU (WEB - CLOUD RUN GEN 2 DIRECT) ---
   Future<void> payWithDuitku({
     required String packageId,
     required String paymentMethod,
     required int quantity,
   }) async {
-    final functions = FirebaseFunctions.instanceFor(region: "asia-southeast2");
-    final callable = functions.httpsCallable('createDuitkuTransaction');
+    // Jalur langsung ke Cloud Run Gen 2 Duitku untuk menghindari TLS reset router lama
+    final callable = FirebaseFunctions.instance.httpsCallableFromUrl(
+      'https://createduitkutransaction-l2jn5d37pa-et.a.run.app',
+    );
 
     final result = await callable.call<Map<String, dynamic>>({
       'packageId': packageId,
@@ -135,7 +137,36 @@ class PaymentHybridService {
     }
   }
 
-  // --- JALUR PEMBAYARAN: GOOGLE PLAY (ANDROID) ---
+  // --- JALUR PEMBAYARAN: NOWPAYMENTS CRYPTO (WEB USDT - CLOUD RUN GEN 2 DIRECT) ---
+  Future<String?> payWithNowPayments({
+    required String packageId,
+    required int quantity,
+  }) async {
+    final callable = FirebaseFunctions.instance.httpsCallableFromUrl(
+      'https://createnptransaction-l2jn5d37pa-et.a.run.app',
+    );
+
+    final result = await callable.call<Map<String, dynamic>>({
+      'packageId': packageId,
+      'quantity': quantity,
+    });
+
+    final paymentUrl = result.data['paymentUrl'] as String?;
+    final merchantOrderId = result.data['merchantOrderId'] as String?;
+
+    if (paymentUrl == null) {
+      throw Exception("Payment URL tidak diterima dari server NOWPayments.");
+    }
+
+    final uri = Uri.parse(paymentUrl);
+    if (!await launchUrl(uri, webOnlyWindowName: '_blank')) {
+      throw Exception('Tidak dapat membuka URL: $paymentUrl');
+    }
+
+    return merchantOrderId;
+  }
+
+  // --- JALUR PEMBAYARAN: GOOGLE PLAY (ANDROID) - 100% AMAN & TANPA REGRESI ---
   Future<void> payWithGooglePlay({
     required String productId, 
   }) async {
@@ -154,16 +185,13 @@ class PaymentHybridService {
       _productCache[productId] = product; // Update cache
     }
 
-    // [PERBAIKAN]: Mengamankan inisialisasi PurchaseParam untuk kompatibilitas Billing v8/v9
+    // Mengamankan inisialisasi PurchaseParam untuk kompatibilitas Billing v8/v9
     final PurchaseParam purchaseParam = PurchaseParam(productDetails: product);
     
     // Logika Langganan vs Beli Putus (Consumable)
     if (productId.contains("monthly")) {
-      // Subscription (Non-Consumable). Play Billing API terbaru mengharuskan handling BasePlan jika ada,
-      // namun Plugin in_app_purchase akan otomatis menangani pemetaan ini menggunakan productDetails dasar.
       await _iap.buyNonConsumable(purchaseParam: purchaseParam);
     } else {
-      // Top-Up & Varian _x (Consumable)
       await _iap.buyConsumable(purchaseParam: purchaseParam);
     }
   }

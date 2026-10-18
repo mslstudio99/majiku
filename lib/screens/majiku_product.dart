@@ -29,11 +29,11 @@ class ProductAttribute {
   });
 }
 
-// --- [STRUKTUR DATA] Model Produk Utama (DIMODIFIKASI UNTUK GAMBAR ASSET) ---
+// --- [STRUKTUR DATA] Model Produk Utama (Dengan Dukungan Gambar & Ikon) ---
 class MajikuProduct {
   final String title;
-  final IconData? icon; // Dibuat nullable agar bisa diganti gambar
-  final String? imageAsset; // Menampung path gambar PNG dari dashboard
+  final IconData? icon;
+  final String? imageAsset;
   final Color highlightColor;
   final List<ProductAttribute> attributes;
 
@@ -48,219 +48,139 @@ class MajikuProduct {
 //........//
 
 //No ke-2 : STATELESS WIDGET UTAMA & DATA PRODUK//
-//Berisi daftar lengkap 10 produk Majiku beserta terjemahannya//
+//Berisi daftar lengkap 8 produk resmi Majiku beserta terjemahannya (Default Inggris)//
 //.......................................................//
 class MajikuProductScreen extends ConsumerWidget {
   const MajikuProductScreen({super.key});
 
-  // --- Helper Penerjemah Sederhana ---
+  // --- Helper Penerjemah (Default: Bahasa Inggris) ---
   String _t(bool isIndo, String en, String id) => isIndo ? id : en;
 
-  // --- Sumber Data Produk Majiku ---
+  // --- Sumber Data 8 Produk Majiku Terupdate ---
   List<MajikuProduct> _getProducts() {
     return [
+      // 1. AUTO NARRATIVE
       MajikuProduct(
         title: '1. AUTO NARRATIVE',
         imageAsset: 'assets/tombol-dashboard/narrative.png',
+        icon: Icons.auto_stories_rounded,
         highlightColor: Colors.amber,
         attributes: [
           ProductAttribute(
-            labelId: 'Deskripsi', labelEn: 'Description',
-            valueId: 'Fitur pembuatan narasi konten otomatis.', 
-            valueEn: 'Automatic content narrative generation feature.'
-          ),
-          ProductAttribute(
-            labelId: 'Cara Pakai', labelEn: 'How to Use',
-            valueId: 'Cukup masukkan judul atau kata kunci maka Majiku akan membuatkanmu narasi lengkap siap pakai untuk berbagai kebutuhan naskah konten, misal: short, storytelling, umum, islami, sejarah, legenda, pengalaman horror, dongeng custom dan sebagainya.', 
-            valueEn: 'Simply enter a title or keyword, and Majiku will create a complete ready-to-use narrative for various content script needs, e.g., shorts, storytelling, general, Islamic, history, legends, horror experiences, custom fairy tales, etc.'
-          ),
-          ProductAttribute(
-            labelId: 'Integrasi', labelEn: 'Integration',
-            valueId: 'Kamu bisa copy atau langsung send ke fitur pembuatan video otomatis seperti auto naramotion, naracinema, auto movie dan sebagainya.', 
-            valueEn: 'You can copy or directly send it to automatic video generation features like auto naramotion, naracinema, auto movie, and so on.'
+            labelId: 'Deskripsi',
+            labelEn: 'Description',
+            valueId: 'Fitur untuk merubah ide menjadi teks cerita atau narasi konten otomatis. Bisa untuk pembuatan teks narasi konten shorts, umum, islami, sejarah, legenda, horor, hingga dongeng custom. Teks hasil narasi bisa di-salin (copy) atau dikirim (send) langsung ke modul pembuatan video otomatis (seperti Naramotion, Naracinema, Naracinema + Character, Automovie, dll.).',
+            valueEn: 'Feature to transform ideas into automatic story texts or content narratives. Can be used for creating narrative scripts for shorts, general, Islamic, history, legends, horror, to custom fairy tales. Narrative outputs can be copied or sent directly to automatic video creation modules (such as Naramotion, Naracinema, Naracinema + Character, Automovie, etc.).',
           ),
         ],
       ),
+
+      // 2. NARAMOTION
       MajikuProduct(
-        title: '2. TEXT TO IMAGE',
-        imageAsset: 'assets/tombol-dashboard/t2image.png',
-        highlightColor: Colors.blueAccent,
-        attributes: [
-          ProductAttribute(
-            labelId: 'Deskripsi', labelEn: 'Description',
-            valueId: 'Fitur pembuatan gambar berkualitas AI.', 
-            valueEn: 'AI-quality image generation feature.'
-          ),
-          ProductAttribute(
-            labelId: 'Cara Pakai', labelEn: 'How to Use',
-            valueId: 'Cukup masukkan teks prompt atau narasi paragraph.', 
-            valueEn: 'Simply enter a text prompt or narrative paragraph.'
-          ),
-        ],
-      ),
-      MajikuProduct(
-        title: '3. TEXT TO VIDEO',
-        imageAsset: 'assets/tombol-dashboard/t2video.png',
-        highlightColor: Colors.purpleAccent,
-        attributes: [
-          ProductAttribute(
-            labelId: 'Deskripsi', labelEn: 'Description',
-            valueId: 'Fitur pembuatan VIDEO AI berkualitas.', 
-            valueEn: 'Quality AI VIDEO generation feature.'
-          ),
-          ProductAttribute(
-            labelId: 'Cara Pakai', labelEn: 'How to Use',
-            valueId: 'Cukup masukkan teks prompt atau narasi paragraph.', 
-            valueEn: 'Simply enter a text prompt or narrative paragraph.'
-          ),
-          ProductAttribute(
-            labelId: 'Durasi', labelEn: 'Duration',
-            valueId: 'OUTPUT VIDEO hingga 12 detik.', 
-            valueEn: 'VIDEO OUTPUT up to 12 seconds.'
-          ),
-        ],
-      ),
-      MajikuProduct(
-        title: '4. TEXT TO VIDEO PLUS',
-        imageAsset: 'assets/tombol-dashboard/t2videoplus.png',
-        highlightColor: Colors.deepPurpleAccent,
-        attributes: [
-          ProductAttribute(
-            labelId: 'Deskripsi', labelEn: 'Description',
-            valueId: 'Fitur pembuatan VIDEO AI berkualitas lebih tinggi.', 
-            valueEn: 'Higher quality AI VIDEO generation feature.'
-          ),
-          ProductAttribute(
-            labelId: 'Cara Pakai', labelEn: 'How to Use',
-            valueId: 'Cukup masukkan teks prompt atau narasi paragraph.', 
-            valueEn: 'Simply enter a text prompt or narrative paragraph.'
-          ),
-          ProductAttribute(
-            labelId: 'Durasi', labelEn: 'Duration',
-            valueId: 'OUTPUT VIDEO hingga 12 detik.', 
-            valueEn: 'VIDEO OUTPUT up to 12 seconds.'
-          ),
-        ],
-      ),
-      MajikuProduct(
-        title: '5. IMAGE TO VIDEO',
-        imageAsset: 'assets/tombol-dashboard/i2video.png',
-        highlightColor: Colors.cyanAccent,
-        attributes: [
-          ProductAttribute(
-            labelId: 'Deskripsi', labelEn: 'Description',
-            valueId: 'Fitur pembuatan VIDEO AI berkualitas.', 
-            valueEn: 'Quality AI VIDEO generation feature.'
-          ),
-          ProductAttribute(
-            labelId: 'Cara Pakai', labelEn: 'How to Use',
-            valueId: 'Cukup masukkan gambar atau foto dan teks prompt atau narasi paragraph (opsional).', 
-            valueEn: 'Simply enter an image or photo and a text prompt or narrative paragraph (optional).'
-          ),
-          ProductAttribute(
-            labelId: 'Durasi', labelEn: 'Duration',
-            valueId: 'OUTPUT VIDEO hingga 12 detik.', 
-            valueEn: 'VIDEO OUTPUT up to 12 seconds.'
-          ),
-        ],
-      ),
-      MajikuProduct(
-        title: '6. AUTO NARA MOTION',
+        title: '2. NARAMOTION',
         imageAsset: 'assets/tombol-dashboard/vstorimotion.png',
+        icon: Icons.movie_filter_rounded,
         highlightColor: Colors.orangeAccent,
         attributes: [
           ProductAttribute(
-            labelId: 'Deskripsi', labelEn: 'Description',
-            valueId: 'Fitur pembuatan video konten, storytelling dan film otomatis berbasis motion (image) dilengkapi dengan audio narasi.', 
-            valueEn: 'Automatic video content, storytelling, and movie generation feature based on motion (images) equipped with audio narrative.'
-          ),
-          ProductAttribute(
-            labelId: 'Keunggulan', labelEn: 'Advantage',
-            valueId: 'Cukup masukkan narasi paragraph konten atau teks cerita (tidak perlu prompt).', 
-            valueEn: 'Simply enter a narrative paragraph or story text (no prompt needed).'
-          ),
-          ProductAttribute(
-            labelId: 'Efisiensi', labelEn: 'Efficiency',
-            valueId: 'Sangat ekonomis, mendukung panjang video hingga lebih dari 15 menit.', 
-            valueEn: 'Highly economical, supports video lengths of over 15 minutes.'
+            labelId: 'Deskripsi',
+            labelEn: 'Description',
+            valueId: 'Fitur untuk merubah teks cerita atau narasi menjadi video konten storytelling berbasis gambar bergerak (motion image) dengan audio narasi (voiceover) secara otomatis. Biaya sangat efisien, mendukung berbagai style gambar, rasio, bahasa, tipe vocal, dengan durasi video hingga 20 menit.',
+            valueEn: 'Feature to transform story texts or narratives into storytelling video content based on motion images with automatic narrative audio (voiceover). Highly cost-efficient, supports various image styles, aspect ratios, languages, vocal types, with video durations up to 20 minutes.',
           ),
         ],
       ),
+
+      // 3. MARKETING-VIDEO
       MajikuProduct(
-        title: '7. AUTO NARA CINEMA',
+        title: '3. MARKETING-VIDEO',
+        imageAsset: 'assets/tombol-dashboard/marketting.png',
+        icon: Icons.campaign_rounded,
+        highlightColor: Colors.blueAccent,
+        attributes: [
+          ProductAttribute(
+            labelId: 'Deskripsi',
+            labelEn: 'Description',
+            valueId: 'Fitur untuk merubah gambar produk menjadi narasi dan video promosi menarik berbasis klip (footage) dengan audio narasi (voiceover) secara otomatis. Mendukung berbagai style gambar, rasio, bahasa, dan tipe vocal.',
+            valueEn: 'Feature to transform product images into engaging narratives and promotional videos based on footage clips with automatic narrative audio (voiceover). Supports various image styles, aspect ratios, languages, and vocal types.',
+          ),
+        ],
+      ),
+
+      // 4. NARACINEMA
+      MajikuProduct(
+        title: '4. NARACINEMA',
         imageAsset: 'assets/tombol-dashboard/vstorinema.png',
+        icon: Icons.movie_creation_rounded,
         highlightColor: Colors.redAccent,
         attributes: [
           ProductAttribute(
-            labelId: 'Deskripsi', labelEn: 'Description',
-            valueId: 'Fitur pembuatan video konten, storytelling dan film otomatis berbasis video AI dilengkapi dengan audio narasi.', 
-            valueEn: 'Automatic video content, storytelling, and movie generation feature based on AI video equipped with audio narrative.'
-          ),
-          ProductAttribute(
-            labelId: 'Keunggulan', labelEn: 'Advantage',
-            valueId: 'Cukup masukkan narasi paragraph konten atau teks cerita (tidak perlu prompt).', 
-            valueEn: 'Simply enter a narrative paragraph or story text (no prompt needed).'
-          ),
-          ProductAttribute(
-            labelId: 'Efisiensi', labelEn: 'Efficiency',
-            valueId: 'Cukup ekonomis, mendukung panjang video hingga lebih dari 15 menit.', 
-            valueEn: 'Quite economical, supports video lengths of over 15 minutes.'
+            labelId: 'Deskripsi',
+            labelEn: 'Description',
+            valueId: 'Fitur untuk merubah teks cerita atau narasi menjadi video konten storytelling berbasis klip (footage) dengan audio narasi (voiceover) secara otomatis. Mendukung berbagai style gambar, rasio, bahasa, tipe vocal, dengan durasi video hingga 20 menit.',
+            valueEn: 'Feature to transform story texts or narratives into storytelling video content based on footage clips with automatic narrative audio (voiceover). Supports various image styles, aspect ratios, languages, vocal types, with video durations up to 20 minutes.',
           ),
         ],
       ),
+
+      // 5. NARACINEMA + CHARACTER
       MajikuProduct(
-        title: '8. AUTO NARACINEMA-PLUS',
+        title: '5. NARACINEMA + CHARACTER',
         imageAsset: 'assets/tombol-dashboard/vcinema.png',
+        icon: Icons.person_pin_rounded,
         highlightColor: Colors.pinkAccent,
         attributes: [
           ProductAttribute(
-            labelId: 'Deskripsi', labelEn: 'Description',
-            valueId: 'Fitur pembuatan film/cinema otomatis berbasis video AI dan audio narasi berkualitas.', 
-            valueEn: 'Quality AI video-based automatic movie/cinema generation feature equipped with narrative audio.'
-          ),
-          ProductAttribute(
-            labelId: 'Keunggulan', labelEn: 'Advantage',
-            valueId: 'Cukup masukkan teks narasi konten atau naskah cerita (tidak perlu prompt).', 
-            valueEn: 'Simply enter a narrative or story script (no prompt needed).'
-          ),
-          ProductAttribute(
-            labelId: 'Efisiensi', labelEn: 'Efficiency',
-            valueId: 'Cukup ekonomis, mendukung panjang video hingga lebih dari 15 menit.', 
-            valueEn: 'Quite economical, supports video lengths of over 15 minutes.'
+            labelId: 'Deskripsi',
+            labelEn: 'Description',
+            valueId: 'Fitur untuk merubah teks cerita atau narasi menjadi video konten storytelling berbasis klip (footage), bisa custom, auto dan konsistensi character dengan audio narasi (voiceover) secara otomatis. Mendukung berbagai style gambar, rasio, bahasa, tipe vocal, dengan durasi video hingga 20 menit.',
+            valueEn: 'Feature to transform story texts or narratives into storytelling video content based on footage clips, supporting custom, automatic, and consistent characters with automatic narrative audio (voiceover). Supports various image styles, aspect ratios, languages, vocal types, with video durations up to 20 minutes.',
           ),
         ],
       ),
+
+      // 6. AUTOMOVIE
       MajikuProduct(
-        title: '9. AUTO MOVIE',
+        title: '6. AUTOMOVIE',
         imageAsset: 'assets/tombol-dashboard/vmovie.png',
+        icon: Icons.videocam_rounded,
         highlightColor: Colors.tealAccent,
         attributes: [
           ProductAttribute(
-            labelId: 'Deskripsi', labelEn: 'Description',
-            valueId: 'Fitur pembuatan film otomatis berbasis video AI kualitas tinggi dilengkapi dengan audio sync, dialog karakter dan backsound.', 
-            valueEn: 'High-quality AI video-based automatic movie generation feature equipped with audio sync, character dialogue, and background music.'
-          ),
-          ProductAttribute(
-            labelId: 'Keunggulan', labelEn: 'Advantage',
-            valueId: 'Cukup masukkan narasi paragraph konten atau teks atau naskah cerita (tidak perlu prompt).', 
-            valueEn: 'Simply enter a narrative paragraph or story script (no prompt needed).'
-          ),
-          ProductAttribute(
-            labelId: 'Kapasitas', labelEn: 'Capacity',
-            valueId: 'Mendukung panjang video hingga lebih dari 15 menit.', 
-            valueEn: 'Supports video lengths of over 15 minutes.'
+            labelId: 'Deskripsi',
+            labelEn: 'Description',
+            valueId: 'Fitur untuk merubah teks cerita atau narasi menjadi film, bisa custom, auto dan konsistensi character, dengan sync audio speech dan suara latar. Mendukung berbagai style gambar, rasio, bahasa, dengan durasi hingga 20 menit.',
+            valueEn: 'Feature to transform story texts or narratives into full movies, supporting custom, automatic, and consistent characters, with audio speech synchronization and background sound. Supports various image styles, aspect ratios, languages, with durations up to 20 minutes.',
           ),
         ],
       ),
+
+      // 7. OTHER TOOLS
       MajikuProduct(
-        title: '10. OTHERS',
-        icon: Icons.stars, // Tetap menggunakan Icon bawaan
-        highlightColor: Colors.yellowAccent,
+        title: '7. OTHER TOOLS',
+        icon: Icons.widgets_rounded,
+        highlightColor: Colors.cyanAccent,
         attributes: [
           ProductAttribute(
-            labelId: 'Deskripsi', labelEn: 'Description',
-            valueId: 'Masih banyak fitur menarik lainnya yang terus kami kembangkan untuk memenuhi kebutuhan kreator.', 
-            valueEn: 'Many other exciting features that we continuously develop to meet creators\' needs.'
+            labelId: 'Deskripsi',
+            labelEn: 'Description',
+            valueId: 'Majiku memiliki alat bantu produksi audio visual lainnya yang terus dikembangkan secara berkala, seperti: t2video, t2speech, t2image, image2video, dan lainnya.',
+            valueEn: 'Majiku provides other audio-visual production tools that are continuously developed, such as: t2video, t2speech, t2image, image2video, and others.',
+          ),
+        ],
+      ),
+
+      // 8. DAILY-FREE
+      MajikuProduct(
+        title: '8. DAILY-FREE',
+        icon: Icons.card_giftcard_rounded,
+        highlightColor: Colors.purpleAccent,
+        attributes: [
+          ProductAttribute(
+            labelId: 'Deskripsi',
+            labelEn: 'Description',
+            valueId: 'Fitur harian gratis untuk user, seperti; free t2image, freet2speech, daily_quotes, dan lainnya.',
+            valueEn: 'Daily free features for users, such as: free t2image, free t2speech, daily quotes, and others.',
           ),
         ],
       ),
@@ -269,23 +189,27 @@ class MajikuProductScreen extends ConsumerWidget {
 //........//
 
 //No ke-3 : BUILD UTAMA & PENGATURAN UI//
-//Merender halaman Scaffold dan Grid/List tampilan modern//
+//Merender halaman Scaffold dan daftar kartu produk dengan scroll halus//
 //.......................................................//
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Memantau state bahasa aplikasi secara real-time
+    // Memantau state bahasa aplikasi (Jika bukan 'id', maka default Bahasa Inggris)
     final currentLocale = ref.watch(appLanguageProvider);
     final isIndo = currentLocale.languageCode == 'id';
-    
+
     final products = _getProducts();
 
     return Theme(
-      data: AppTheme.darkTheme, // Paksa tema gelap yang elegan
+      data: AppTheme.darkTheme,
       child: Scaffold(
         appBar: AppBar(
           title: Text(
             _t(isIndo, 'Majiku Products & Features', 'Produk & Fitur Majiku'),
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+              letterSpacing: 0.5,
+            ),
           ),
           backgroundColor: const Color(0xFF121212),
           elevation: 0,
@@ -298,7 +222,7 @@ class MajikuProductScreen extends ConsumerWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [Color(0xFF121212), Color(0xFF000000)], // Gradasi gelap modern
+              colors: [Color(0xFF121212), Color(0xFF000000)],
             ),
           ),
           child: ListView.builder(
@@ -316,13 +240,13 @@ class MajikuProductScreen extends ConsumerWidget {
 //........//
 
 //No ke-4 : WIDGET KARTU PRODUK (GLASSMORPHISM)//
-//Membangun desain kartu yang memuat rincian fitur secara dinamis//
+//Membangun desain kartu yang memuat rincian fitur secara dinamis dan teks jelas//
 //.......................................................//
   Widget _buildProductCard(MajikuProduct product, bool isIndo) {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.04), // Efek transparan kaca
+        color: Colors.white.withOpacity(0.04),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white12, width: 1),
         boxShadow: [
@@ -334,7 +258,7 @@ class MajikuProductScreen extends ConsumerWidget {
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(18.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -342,58 +266,75 @@ class MajikuProductScreen extends ConsumerWidget {
             Row(
               children: [
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: 52,
+                  height: 52,
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: product.highlightColor.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: product.highlightColor.withOpacity(0.3)),
+                    border: Border.all(color: product.highlightColor.withOpacity(0.35)),
                   ),
                   child: Center(
                     child: product.imageAsset != null
-                        ? Image.asset(product.imageAsset!, fit: BoxFit.contain)
-                        : Icon(product.icon, color: product.highlightColor, size: 28),
+                        ? Image.asset(
+                            product.imageAsset!,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) => Icon(
+                              product.icon ?? Icons.auto_awesome,
+                              color: product.highlightColor,
+                              size: 28,
+                            ),
+                          )
+                        : Icon(
+                            product.icon ?? Icons.auto_awesome,
+                            color: product.highlightColor,
+                            size: 28,
+                          ),
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Text(
                     product.title,
-                    style: TextStyle(
-                      fontSize: 18,
+                    style: const TextStyle(
+                      fontSize: 19,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white.withOpacity(0.95),
+                      color: Colors.white,
                       letterSpacing: 0.5,
                     ),
                   ),
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 16),
-            const Divider(color: Colors.white10, height: 1, thickness: 1),
+            const Divider(color: Colors.white12, height: 1, thickness: 1),
             const SizedBox(height: 16),
-            
-            // --- DAFTAR ATRIBUT (Deskripsi, Cara Pakai, dll) ---
+
+            // --- DAFTAR ATRIBUT TEKS (Tipografi Jelas & Mudah Dibaca) ---
             ...product.attributes.map((attr) {
               return Padding(
-                padding: const EdgeInsets.only(bottom: 12.0),
+                padding: const EdgeInsets.only(bottom: 8.0),
                 child: RichText(
                   text: TextSpan(
-                    style: const TextStyle(height: 1.3, fontSize: 16),
+                    style: const TextStyle(
+                      height: 1.5,
+                      fontSize: 15.5,
+                      letterSpacing: 0.2,
+                    ),
                     children: [
                       TextSpan(
                         text: '• ${_t(isIndo, attr.labelEn, attr.labelId)}: ',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: product.highlightColor.withOpacity(0.9), // Warna label sesuai tema ikon
+                          color: product.highlightColor,
                         ),
                       ),
                       TextSpan(
                         text: _t(isIndo, attr.valueEn, attr.valueId),
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.75),
+                          fontWeight: FontWeight.normal,
+                          color: Colors.white.withOpacity(0.88),
                         ),
                       ),
                     ],
