@@ -16,6 +16,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../providers/config_provider.dart';
+import '../models/video_mytube_model.dart'; // [BARU]: Mengakses MytubeLocationDatabase
 import '../services/firestore_mytube_service.dart';
 import '../view_model/mytube_admin_view_model.dart';
 
@@ -54,6 +55,7 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
   final TextEditingController _actionRouteController = TextEditingController();
 
   User? _currentUser;
+  String _channelId = ''; // [JANGKAR RESMI]: Channel ID Auto-ID Firestore
   String _channelName = 'Majiku Official';
   String _channelAvatarUrl = '';
 
@@ -61,7 +63,10 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
   String _selectedCategory = 'Comedy & Funny';
   String _selectedLanguage = 'English (US)';
 
-  // [KATEGORI KONTEN]: 16 Kategori Resmi Diurutkan Berdasarkan Abjad A-Z (Default English)
+  // [BARU - TOPIC LOCATION]: Default 'Global' selalu aktif tercentang
+  List<String> _selectedLocations = [MytubeLocationDatabase.globalLocation];
+
+  // [KATEGORI KONTEN]: 17 Kategori Resmi Diurutkan Berdasarkan Abjad A-Z (Default English & Bilingual ID)
   static const List<Map<String, String>> _categories = [
     {'en': 'Cartoons & Anime', 'id': 'Kartun & Anime'},
     {'en': 'Comedy & Funny', 'id': 'Lucu'},
@@ -69,6 +74,7 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
     {'en': 'Faith & Religion', 'id': 'Religi'},
     {'en': 'Finance & Investment', 'id': 'Keuangan'},
     {'en': 'Food & Culinary', 'id': 'Kuliner'},
+    {'en': 'Health & Wellness', 'id': 'Kesehatan'}, // [BARU]: Kategori Kesehatan
     {'en': 'History', 'id': 'Sejarah'},
     {'en': 'Horror & Mystery', 'id': 'Horor & Misteri'},
     {'en': 'Music & Artists', 'id': 'Musik & Artis'},
@@ -143,6 +149,9 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
     final profile = await _service.getCreatorProfile(email, userId: uid);
     if (profile != null && mounted) {
       setState(() {
+        if (profile.channelId.isNotEmpty) {
+          _channelId = profile.channelId;
+        }
         if (profile.channelName.isNotEmpty) {
           _channelName = profile.channelName;
         }
@@ -174,6 +183,12 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
       );
 
       if (picked == null) return;
+
+      // [KUNCI ANTI-FREEZE WEB]: Segera baca bytes ke memori SEBELUM VideoPlayerController menyentuh file
+      Uint8List? preloadedBytes;
+      if (kIsWeb) {
+        preloadedBytes = await picked.readAsBytes();
+      }
 
       // 1. Ekstraksi otomatis nama file video menjadi judul kapital
       String rawName = picked.name;
@@ -239,6 +254,7 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
 
       final isValid = _viewModel.setVideoFile(
         file: picked,
+        bytes: preloadedBytes,
         durationInSeconds: durationSeconds,
       );
 
@@ -322,7 +338,11 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
         imageQuality: 85,
       );
       if (picked != null) {
-        _viewModel.setThumbnailFile(picked);
+        Uint8List? thumbBytes;
+        if (kIsWeb) {
+          thumbBytes = await picked.readAsBytes();
+        }
+        _viewModel.setThumbnailFile(picked, bytes: thumbBytes);
       }
     } catch (_) {}
   }
@@ -333,9 +353,15 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
   Future<void> _submitUpload(bool isIndo) async {
     if (_currentUser == null) return;
 
+    // Pastikan minimal ada 1 target lokasi (jika kosong, kembalikan ke Global)
+    final effectiveLocations = _selectedLocations.isNotEmpty
+        ? _selectedLocations
+        : [MytubeLocationDatabase.globalLocation];
+
     final success = await _viewModel.uploadAndPublishVideo(
       uploaderId: _currentUser!.uid,
       uploaderEmail: _currentUser!.email ?? '',
+      channelId: _channelId, // [TERIKAT RESMI KE CHANNEL ID]
       channelName: _channelName.trim().isNotEmpty ? _channelName.trim() : 'Majiku Official',
       channelAvatarUrl: _channelAvatarUrl,
       title: _titleController.text.trim(),
@@ -344,6 +370,7 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
       category: _selectedCategory,
       language: _selectedLanguage,
       videoType: 'SHORT',
+      targetLocations: effectiveLocations, // [BARU]: Meneruskan target geografis konten
       actionButtonText: _actionTextController.text.trim(),
       actionButtonRoute: _actionRouteController.text.trim(),
     );
@@ -508,15 +535,15 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
                 ),
                 const SizedBox(height: 22),
 
-                // Video Picker Card (DIPERBARUI: Tombol Solid Biru Studio)
+                // Video Picker Card
                 _buildVideoPickerCard(t, isIndo),
                 const SizedBox(height: 16),
 
-                // Thumbnail Picker Card (DIPERBARUI: Tombol Solid Biru Studio)
+                // Thumbnail Picker Card
                 _buildThumbnailPickerCard(t),
                 const SizedBox(height: 22),
 
-                // --- SEKSI 1: 10 KATEGORI KONTEN TERURUT A-Z (HIGH CONTRAST CHIPS) ---
+                // --- SEKSI 1: 17 KATEGORI KONTEN TERURUT A-Z (HIGH CONTRAST CHIPS) ---
                 Text(
                   t('CONTENT CATEGORY (A-Z)', 'KATEGORI KONTEN (A-Z)'),
                   style: const TextStyle(
@@ -604,6 +631,10 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
                     ),
                   ),
                 ),
+                const SizedBox(height: 22),
+
+                // --- SEKSI 3: TOPIC LOCATION (LOKASI TOPIK KONTEN: GLOBAL + 100 NEGARA) ---
+                _buildTopicLocationCard(t),
                 const Divider(color: Colors.white12, height: 36),
 
                 // Input Judul Video (Maksimal 50 Karakter, Huruf Kapital Otomatis)
@@ -665,7 +696,7 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
                   const SizedBox(height: 20),
                 ],
 
-                // [TOMBOL UPLOAD EKSEKUSI OPSIA: ROYAL BLUE STUDIO + TEKS PUTIH TEBAL]
+                // [TOMBOL UPLOAD EKSEKUSI: ROYAL BLUE STUDIO]
                 Container(
                   width: double.infinity,
                   height: 52,
@@ -682,8 +713,8 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
                   ),
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB), // Biru Elektrik Studio
-                      foregroundColor: Colors.white, // Putih Murni Sangat Kontras
+                      backgroundColor: const Color(0xFF2563EB),
+                      foregroundColor: Colors.white,
                       disabledBackgroundColor: const Color(0xFF2A2A38),
                       disabledForegroundColor: Colors.white38,
                       elevation: 0,
@@ -718,7 +749,534 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
       ),
     );
   }
+//............................................................................//
 
+//No ke-7....................................................................//
+//MODAL SELECTORS (TOPIC LOCATION ADAPTIF & LANGUAGE SELECTOR)               //
+  // --- KARTU INTERAKTIF TOPIC LOCATION ---
+  Widget _buildTopicLocationCard(String Function(String, String) t) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              t('TOPIC LOCATION', 'LOKASI TOPIK KONTEN'),
+              style: const TextStyle(
+                color: Colors.amberAccent,
+                fontSize: 13.5,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.1,
+              ),
+            ),
+            Text(
+              '${_selectedLocations.length} ${t('Selected', 'Dipilih')}',
+              style: const TextStyle(color: Colors.white60, fontSize: 12),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          t(
+            'Target audience geography for intelligent recommendation feed.',
+            'Pemetaan target geografis konten untuk rekomendasi algoritma.',
+          ),
+          style: const TextStyle(color: Colors.white38, fontSize: 11.5),
+        ),
+        const SizedBox(height: 10),
+
+        InkWell(
+          onTap: () => _showLocationSelectionModal(t),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E1E24),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white24),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: _selectedLocations.map((loc) {
+                    final isGlobal = loc == MytubeLocationDatabase.globalLocation;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: isGlobal ? Colors.amberAccent.withOpacity(0.18) : Colors.white10,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isGlobal ? Colors.amberAccent : Colors.white24,
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isGlobal ? Icons.public : Icons.location_on_outlined,
+                            color: isGlobal ? Colors.amberAccent : Colors.white70,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            loc,
+                            style: TextStyle(
+                              color: isGlobal ? Colors.amberAccent : Colors.white,
+                              fontSize: 12,
+                              fontWeight: isGlobal ? FontWeight.bold : FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      t('Manage / Add Location (100 Countries)', 'Atur / Tambah Lokasi (100 Negara)'),
+                      style: const TextStyle(
+                        color: Colors.amberAccent,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.arrow_forward_ios_rounded, color: Colors.amberAccent, size: 12),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- SMART MODAL SELECTOR (GLOBAL, SEARCH, 6 BENUA DENGAN ADAPTIVE SCROLL & 100 NEGARA) ---
+  void _showLocationSelectionModal(String Function(String, String) t) {
+    String selectedContinent = 'Asia';
+    String searchQuery = '';
+    final searchController = TextEditingController();
+    final continentScrollController = ScrollController();
+
+    // Salinan sementara saat modal aktif
+    List<String> tempLocations = List.from(_selectedLocations);
+
+    // Indikator panah geser benua
+    bool canScrollLeft = false;
+    bool canScrollRight = true;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1E1E24),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (modalContext, setModalState) {
+            void updateContinentIndicators() {
+              if (!continentScrollController.hasClients) return;
+              final maxScroll = continentScrollController.position.maxScrollExtent;
+              final currentScroll = continentScrollController.offset;
+              final left = currentScroll > 5;
+              final right = currentScroll < maxScroll - 5;
+              if (left != canScrollLeft || right != canScrollRight) {
+                setModalState(() {
+                  canScrollLeft = left;
+                  canScrollRight = right;
+                });
+              }
+            }
+
+            void scrollContinents(bool right) {
+              if (!continentScrollController.hasClients) return;
+              final target = right
+                  ? (continentScrollController.offset + 140.0)
+                  : (continentScrollController.offset - 140.0);
+              continentScrollController.animateTo(
+                target.clamp(0.0, continentScrollController.position.maxScrollExtent),
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+            }
+
+            final isGlobalActive = tempLocations.contains(MytubeLocationDatabase.globalLocation);
+
+            // Filter negara berdasarkan pencarian atau benua yang aktif
+            List<String> displayedCountries = [];
+            if (searchQuery.trim().isNotEmpty) {
+              displayedCountries = MytubeLocationDatabase.allCountries
+                  .where((c) => c.toLowerCase().contains(searchQuery.trim().toLowerCase()))
+                  .toList();
+            } else {
+              displayedCountries = MytubeLocationDatabase.continentCountries[selectedContinent] ?? [];
+            }
+
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final bool isWideScreen = constraints.maxWidth >= 700;
+
+                return Container(
+                  height: MediaQuery.of(context).size.height * 0.85,
+                  padding: EdgeInsets.fromLTRB(
+                    18, 14, 18,
+                    MediaQuery.of(context).padding.bottom + 12,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 44,
+                          height: 4,
+                          decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            t('Select Topic Location', 'Pilih Lokasi Topik Konten'),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              setModalState(() {
+                                tempLocations = [MytubeLocationDatabase.globalLocation];
+                              });
+                            },
+                            child: Text(
+                              t('Reset Default', 'Reset Default'),
+                              style: const TextStyle(color: Colors.amberAccent, fontSize: 12.5),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Divider(color: Colors.white12, height: 16),
+
+                      // TINGKAT 1: SAKLAR KONTEN GLOBAL (UNIVERSAL AUDIENCE)
+                      InkWell(
+                        onTap: () {
+                          setModalState(() {
+                            if (isGlobalActive) {
+                              tempLocations.remove(MytubeLocationDatabase.globalLocation);
+                            } else {
+                              tempLocations.add(MytubeLocationDatabase.globalLocation);
+                            }
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isGlobalActive ? Colors.amberAccent.withOpacity(0.12) : const Color(0xFF141418),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isGlobalActive ? Colors.amberAccent : Colors.white12,
+                              width: 1.2,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Checkbox(
+                                value: isGlobalActive,
+                                activeColor: Colors.amberAccent,
+                                checkColor: Colors.black,
+                                onChanged: (val) {
+                                  setModalState(() {
+                                    if (val == true) {
+                                      if (!tempLocations.contains(MytubeLocationDatabase.globalLocation)) {
+                                        tempLocations.add(MytubeLocationDatabase.globalLocation);
+                                      }
+                                    } else {
+                                      tempLocations.remove(MytubeLocationDatabase.globalLocation);
+                                    }
+                                  });
+                                },
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Text('🌍 ', style: TextStyle(fontSize: 16)),
+                                        Text(
+                                          t('Global (Universal Audience)', 'Global (Audiens Universal)'),
+                                          style: TextStyle(
+                                            color: isGlobalActive ? Colors.amberAccent : Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      t(
+                                        'For general topics suitable for worldwide viewers (e.g. bananas, science, health)',
+                                        'Cocok untuk semua orang di dunia tanpa batas geografis (cth: pisang, sains, kesehatan)',
+                                      ),
+                                      style: const TextStyle(color: Colors.white38, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // TINGKAT 2: KOTAK PENCARIAN CEPAT (SEARCH BAR 100 NEGARA)
+                      TextField(
+                        controller: searchController,
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.search, color: Colors.white54, size: 20),
+                          hintText: t('Search from 100 countries... (e.g. Japan, France)', 'Cari dari 100 negara... (cth: Japan, France)'),
+                          hintStyle: const TextStyle(color: Colors.white24, fontSize: 12.5),
+                          filled: true,
+                          fillColor: const Color(0xFF141418),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          isDense: true,
+                          suffixIcon: searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, color: Colors.white54, size: 18),
+                                  onPressed: () {
+                                    setModalState(() {
+                                      searchController.clear();
+                                      searchQuery = '';
+                                    });
+                                  },
+                                )
+                              : null,
+                        ),
+                        onChanged: (val) {
+                          setModalState(() {
+                            searchQuery = val;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 10),
+
+                      // TINGKAT 3: NAVIGASI 6 BENUA (ADAPTIF: WRAP DI WEB/PC & BERPANAH DI HP)
+                      if (searchQuery.trim().isEmpty) ...[
+                        if (isWideScreen)
+                          // Tampilan Web/PC: Seluruh Benua Terhampar Lega dan Teks Bebas Terjepit
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: MytubeLocationDatabase.continents.map((continent) {
+                              final isCurrent = selectedContinent == continent;
+                              final count = MytubeLocationDatabase.continentCountries[continent]?.length ?? 0;
+
+                              return ChoiceChip(
+                                label: Text('$continent ($count)'),
+                                labelStyle: TextStyle(
+                                  color: isCurrent ? Colors.black : Colors.white70,
+                                  fontSize: 12,
+                                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                ),
+                                selected: isCurrent,
+                                selectedColor: Colors.amberAccent,
+                                backgroundColor: const Color(0xFF2B2B36),
+                                side: BorderSide(
+                                  color: isCurrent ? Colors.amberAccent : Colors.white12,
+                                ),
+                                onSelected: (selected) {
+                                  if (selected) {
+                                    setModalState(() {
+                                      selectedContinent = continent;
+                                    });
+                                  }
+                                },
+                              );
+                            }).toList(),
+                          )
+                        else
+                          // Tampilan HP: Scrollview Dilengkapi Panah Penunjuk di Kiri/Kanan
+                          NotificationListener<ScrollNotification>(
+                            onNotification: (notification) {
+                              updateContinentIndicators();
+                              return false;
+                            },
+                            child: Row(
+                              children: [
+                                if (canScrollLeft)
+                                  InkWell(
+                                    onTap: () => scrollContinents(false),
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      margin: const EdgeInsets.only(right: 4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF2B2B36),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: Colors.amberAccent.withOpacity(0.5), width: 0.8),
+                                      ),
+                                      child: const Icon(Icons.chevron_left_rounded, color: Colors.amberAccent, size: 18),
+                                    ),
+                                  ),
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    controller: continentScrollController,
+                                    scrollDirection: Axis.horizontal,
+                                    physics: const BouncingScrollPhysics(),
+                                    child: Row(
+                                      children: MytubeLocationDatabase.continents.map((continent) {
+                                        final isCurrent = selectedContinent == continent;
+                                        final count = MytubeLocationDatabase.continentCountries[continent]?.length ?? 0;
+
+                                        return Padding(
+                                          padding: const EdgeInsets.only(right: 8),
+                                          child: ChoiceChip(
+                                            label: Text('$continent ($count)'),
+                                            labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                            labelStyle: TextStyle(
+                                              color: isCurrent ? Colors.black : Colors.white70,
+                                              fontSize: 11.5,
+                                              fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                                            ),
+                                            selected: isCurrent,
+                                            selectedColor: Colors.amberAccent,
+                                            backgroundColor: const Color(0xFF2B2B36),
+                                            side: BorderSide(
+                                              color: isCurrent ? Colors.amberAccent : Colors.white12,
+                                            ),
+                                            onSelected: (selected) {
+                                              if (selected) {
+                                                setModalState(() {
+                                                  selectedContinent = continent;
+                                                });
+                                              }
+                                            },
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                ),
+                                if (canScrollRight)
+                                  InkWell(
+                                    onTap: () => scrollContinents(true),
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      margin: const EdgeInsets.only(left: 4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF2B2B36),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: Colors.amberAccent.withOpacity(0.5), width: 0.8),
+                                      ),
+                                      child: const Icon(Icons.chevron_right_rounded, color: Colors.amberAccent, size: 18),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        const SizedBox(height: 10),
+                      ],
+
+                      // TINGKAT 4: DAFTAR NEGARA DENGAN TANDA CENTANG (CHECKBOX)
+                      Expanded(
+                        child: displayedCountries.isEmpty
+                            ? Center(
+                                child: Text(
+                                  t('No countries found matching search.', 'Tidak ada negara yang cocok dengan pencarian.'),
+                                  style: const TextStyle(color: Colors.white38, fontSize: 13),
+                                ),
+                              )
+                            : ListView.separated(
+                                itemCount: displayedCountries.length,
+                                separatorBuilder: (_, __) => const Divider(color: Colors.white10, height: 1),
+                                itemBuilder: (cContext, idx) {
+                                  final country = displayedCountries[idx];
+                                  final isChecked = tempLocations.contains(country);
+
+                                  return CheckboxListTile(
+                                    dense: true,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                    activeColor: Colors.amberAccent,
+                                    checkColor: Colors.black,
+                                    title: Text(
+                                      country,
+                                      style: TextStyle(
+                                        color: isChecked ? Colors.amberAccent : Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: isChecked ? FontWeight.bold : FontWeight.w500,
+                                      ),
+                                    ),
+                                    value: isChecked,
+                                    onChanged: (val) {
+                                      setModalState(() {
+                                        if (val == true) {
+                                          if (!tempLocations.contains(country)) {
+                                            tempLocations.add(country);
+                                          }
+                                        } else {
+                                          tempLocations.remove(country);
+                                        }
+                                      });
+                                    },
+                                  );
+                                },
+                              ),
+                      ),
+
+                      const SizedBox(height: 10),
+                      // TOMBOL SIMPAN HASIL SELEKSI
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.amberAccent,
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _selectedLocations = tempLocations.isNotEmpty
+                                  ? tempLocations
+                                  : [MytubeLocationDatabase.globalLocation];
+                            });
+                            Navigator.of(ctx).pop();
+                          },
+                          child: Text(
+                            '${t('Save Topic Location', 'Simpan Lokasi Topik')} (${tempLocations.length})',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // --- MODAL PEMILIH BAHASA (37 BAHASA RESMI) ---
   void _showLanguageSelectionModal(String Function(String, String) t) {
     final searchController = TextEditingController();
     List<String> filteredLanguages = List.from(_languages);
@@ -811,7 +1369,10 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
       },
     );
   }
+//............................................................................//
 
+//No ke-8....................................................................//
+//HELPER WIDGETS, PICKER CARDS & TEXT FIELD BUILDER                          //
   Widget _buildAccessDenied(String Function(String, String) t) {
     return Center(
       child: Padding(
@@ -845,7 +1406,6 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
     );
   }
 
-  // [DIPERBARUI]: Tombol Solid Biru Studio Kontras Tinggi (Bukan TextButton Samar Lagi)
   Widget _buildVideoPickerCard(String Function(String, String) t, bool isIndo) {
     final hasVideo = _viewModel.selectedVideoFile != null;
 
@@ -887,8 +1447,8 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2563EB), // Biru Elektrik Solid
-              foregroundColor: Colors.white, // Teks Putih Tebal
+              backgroundColor: const Color(0xFF2563EB),
+              foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -904,7 +1464,6 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
     );
   }
 
-  // [DIPERBARUI]: Tombol Solid Biru Studio Kontras Tinggi (Bukan TextButton Samar Lagi)
   Widget _buildThumbnailPickerCard(String Function(String, String) t) {
     final hasThumb = _viewModel.selectedThumbnailFile != null;
 
@@ -937,8 +1496,8 @@ class _ShortUploadContentScreenState extends ConsumerState<ShortUploadContentScr
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2563EB), // Biru Elektrik Solid
-              foregroundColor: Colors.white, // Teks Putih Tebal
+              backgroundColor: const Color(0xFF2563EB),
+              foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),

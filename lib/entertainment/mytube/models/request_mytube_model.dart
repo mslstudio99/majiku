@@ -18,6 +18,7 @@ class RequestMytubeModel {
 
   // Data Video Target & Tautan Pemutaran untuk Verifikasi Admin
   final String videoId;
+  final String channelId; // [JANGKAR UTAMA]: ID Channel Resmi Saluran
   final String videoType; // 'SHORT' atau 'LONG'
   final String videoUrl; // [PENTING]: URL untuk admin memutar dan mengecek video
   final String thumbnailUrl;
@@ -35,6 +36,8 @@ class RequestMytubeModel {
   final String? newCategory;
   final String? oldLanguage;
   final String? newLanguage;
+  final List<String>? oldTargetLocations; // [BARU]: Riwayat target lokasi lama
+  final List<String>? newTargetLocations; // [BARU]: Usulan target lokasi baru
 
   // Data Alasan (Khusus Tipe 'DELETE')
   final String? deleteReason;
@@ -50,6 +53,7 @@ class RequestMytubeModel {
     required this.requestType,
     this.status = 'PENDING',
     required this.videoId,
+    this.channelId = '',
     required this.videoType,
     required this.videoUrl,
     required this.thumbnailUrl,
@@ -63,6 +67,8 @@ class RequestMytubeModel {
     this.newCategory,
     this.oldLanguage,
     this.newLanguage,
+    this.oldTargetLocations,
+    this.newTargetLocations,
     this.deleteReason,
     this.adminNotes,
     this.reviewedBy,
@@ -91,11 +97,28 @@ class RequestMytubeModel {
       parsedReviewedAt = (map['reviewed_at'] as Timestamp).toDate();
     }
 
+    // Deserialisasi target lokasi lama (Aman dari null pointer)
+    List<String>? parsedOldLocations;
+    if (map['old_target_locations'] != null && map['old_target_locations'] is List) {
+      parsedOldLocations = List<String>.from(
+        (map['old_target_locations'] as List).map((e) => e.toString()),
+      );
+    }
+
+    // Deserialisasi usulan target lokasi baru (Aman dari null pointer)
+    List<String>? parsedNewLocations;
+    if (map['new_target_locations'] != null && map['new_target_locations'] is List) {
+      parsedNewLocations = List<String>.from(
+        (map['new_target_locations'] as List).map((e) => e.toString()),
+      );
+    }
+
     return RequestMytubeModel(
       id: docId,
       requestType: map['request_type'] as String? ?? 'EDIT',
       status: map['status'] as String? ?? 'PENDING',
       videoId: map['video_id'] as String? ?? '',
+      channelId: map['channel_id'] as String? ?? map['channelId'] as String? ?? '',
       videoType: map['video_type'] as String? ?? 'SHORT',
       videoUrl: map['video_url'] as String? ?? '',
       thumbnailUrl: map['thumbnail_url'] as String? ?? '',
@@ -109,6 +132,8 @@ class RequestMytubeModel {
       newCategory: map['new_category'] as String?,
       oldLanguage: map['old_language'] as String?,
       newLanguage: map['new_language'] as String?,
+      oldTargetLocations: parsedOldLocations,
+      newTargetLocations: parsedNewLocations,
       deleteReason: map['delete_reason'] as String?,
       adminNotes: map['admin_notes'] as String?,
       reviewedBy: map['reviewed_by'] as String?,
@@ -125,6 +150,7 @@ class RequestMytubeModel {
       'request_type': requestType,
       'status': status,
       'video_id': videoId,
+      'channel_id': channelId,
       'video_type': videoType,
       'video_url': videoUrl,
       'thumbnail_url': thumbnailUrl,
@@ -138,6 +164,8 @@ class RequestMytubeModel {
       'new_category': newCategory,
       'old_language': oldLanguage,
       'new_language': newLanguage,
+      'old_target_locations': oldTargetLocations,
+      'new_target_locations': newTargetLocations,
       'delete_reason': deleteReason,
       'admin_notes': adminNotes,
       'reviewed_by': reviewedBy,
@@ -151,6 +179,7 @@ class RequestMytubeModel {
     String? requestType,
     String? status,
     String? videoId,
+    String? channelId,
     String? videoType,
     String? videoUrl,
     String? thumbnailUrl,
@@ -164,6 +193,8 @@ class RequestMytubeModel {
     String? newCategory,
     String? oldLanguage,
     String? newLanguage,
+    List<String>? oldTargetLocations,
+    List<String>? newTargetLocations,
     String? deleteReason,
     String? adminNotes,
     String? reviewedBy,
@@ -175,6 +206,7 @@ class RequestMytubeModel {
       requestType: requestType ?? this.requestType,
       status: status ?? this.status,
       videoId: videoId ?? this.videoId,
+      channelId: channelId ?? this.channelId,
       videoType: videoType ?? this.videoType,
       videoUrl: videoUrl ?? this.videoUrl,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
@@ -188,6 +220,8 @@ class RequestMytubeModel {
       newCategory: newCategory ?? this.newCategory,
       oldLanguage: oldLanguage ?? this.oldLanguage,
       newLanguage: newLanguage ?? this.newLanguage,
+      oldTargetLocations: oldTargetLocations ?? this.oldTargetLocations,
+      newTargetLocations: newTargetLocations ?? this.newTargetLocations,
       deleteReason: deleteReason ?? this.deleteReason,
       adminNotes: adminNotes ?? this.adminNotes,
       reviewedBy: reviewedBy ?? this.reviewedBy,

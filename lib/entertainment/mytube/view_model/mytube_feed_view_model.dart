@@ -1,7 +1,7 @@
 //============================================================================//
 // DIREKTORI: lib/entertainment/mytube/view_model/                           //
 // FILE: MYTUBE_FEED_VIEW_MODEL.DART                                         //
-// VIEW MODEL FEED MYTUBE (SHORTS, LONGS, SEARCH, FILTER, POSITION-AWARE CC) //
+// VIEW MODEL FEED MYTUBE (SHORTS, LONGS, CC SUBTITLE & MLA DUBBING SYNC)    //
 //============================================================================//
 
 //No ke-1....................................................................//
@@ -12,13 +12,48 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 import '../models/video_mytube_model.dart';
 import '../services/firestore_mytube_service.dart';
 //............................................................................//
 
 //No ke-2....................................................................//
-//STATE PROPERTIES, CONTROLLER MAPS & SUBTITLE STATE                         //
+//STATE PROPERTIES, CONTROLLER MAPS, SUBTITLE & DUBBING STATE                //
+
+class MytubeLanguageDatabase {
+  static const List<String> languageList = [
+    'English (US)', 'Indonesian', 'Hindi', 'English (UK)', 'English (Australia)',
+    'English (India)', 'Arabic', 'Bengali (India)', 'Danish', 'Dutch (Netherlands)',
+    'Dutch (Belgium)', 'Finnish', 'French (France)', 'French (Canada)', 'German',
+    'Gujarati', 'Italian', 'Japanese', 'Kannada', 'Korean', 'Malayalam',
+    'Mandarin Chinese', 'Marathi', 'Norwegian', 'Polish', 'Portuguese (Brazil)',
+    'Russian', 'Spanish (Spain)', 'Spanish (US)', 'Swedish', 'Tamil', 'Telugu',
+    'Thai', 'Turkish', 'Ukrainian', 'Urdu', 'Vietnamese',
+  ];
+
+  static const Map<String, String> languageToCodeMap = {
+    'English (US)': 'en', 'Indonesian': 'id', 'Hindi': 'hi', 'English (UK)': 'en-gb',
+    'English (Australia)': 'en-au', 'English (India)': 'en-in', 'Arabic': 'ar',
+    'Bengali (India)': 'bn', 'Danish': 'da', 'Dutch (Netherlands)': 'nl',
+    'Dutch (Belgium)': 'nl-be', 'Finnish': 'fi', 'French (France)': 'fr',
+    'French (Canada)': 'fr-ca', 'German': 'de', 'Gujarati': 'gu', 'Italian': 'it',
+    'Japanese': 'ja', 'Kannada': 'kn', 'Korean': 'ko', 'Malayalam': 'ml',
+    'Mandarin Chinese': 'zh', 'Marathi': 'mr', 'Norwegian': 'no', 'Polish': 'pl',
+    'Portuguese (Brazil)': 'pt', 'Russian': 'ru', 'Spanish (Spain)': 'es',
+    'Spanish (US)': 'es-us', 'Swedish': 'sv', 'Tamil': 'ta', 'Telugu': 'te',
+    'Thai': 'th', 'Turkish': 'tr', 'Ukrainian': 'uk', 'Urdu': 'ur', 'Vietnamese': 'vi',
+  };
+
+  static String getCode(String languageName) => languageToCodeMap[languageName] ?? 'en';
+  static String getName(String code) {
+    for (final entry in languageToCodeMap.entries) {
+      if (entry.value == code) return entry.key;
+    }
+    return 'English (US)';
+  }
+}
+
 class MytubeFeedViewModel extends ChangeNotifier {
   final FirestoreMytubeService _service;
 
@@ -52,7 +87,6 @@ class MytubeFeedViewModel extends ChangeNotifier {
   bool _isAdActive = false;
   bool get isAdActive => _isAdActive;
 
-  // [SMART LITE-MODE (QoS)]: Pengawas & Pengunci Resolusi 360p (Durasi 1 Jam)
   bool _isLiteModeLocked = false;
   bool get isLiteModeLocked => _isLiteModeLocked;
   DateTime? _bufferingStartTime;
@@ -80,13 +114,18 @@ class MytubeFeedViewModel extends ChangeNotifier {
   String? _selectedLanguage;
   String? get selectedLanguage => _selectedLanguage;
 
+  String? _selectedLocation;
+  String? get selectedLocation => _selectedLocation;
+
   bool get isFilterActive =>
       _appliedSearchQuery.trim().isNotEmpty ||
       _selectedCategory != null ||
-      _selectedLanguage != null;
+      _selectedLanguage != null ||
+      _selectedLocation != null;
 
-  String get filterKey => '${_currentVideoType}_${_appliedSearchQuery}_${_selectedCategory}_${_selectedLanguage}';
+  String get filterKey => '${_currentVideoType}_${_appliedSearchQuery}_${_selectedCategory}_${_selectedLanguage}_${_selectedLocation}';
 
+  // --- SUBTITLE PROPERTIES ---
   static const String _prefSubCodeKey = 'mytube_pref_sub_lang_code';
   static const String _prefSubNameKey = 'mytube_pref_sub_lang_name';
 
@@ -109,6 +148,64 @@ class MytubeFeedViewModel extends ChangeNotifier {
   List<SubtitleCue> _currentCues = [];
   List<SubtitleCue> get currentCues => _currentCues;
 
+  // --- [SMART & PERSISTENT MLA DUBBING & H+1 PRECACHE PROPERTIES] ---
+  static const String _prefAudioCodeKey = 'mytube_pref_audio_lang_code';
+  static const String _prefAudioNameKey = 'mytube_pref_audio_lang_name';
+
+  String? _activeAudioLangCode; 
+  String? get activeAudioLangCode => _activeAudioLangCode;
+  bool get isDubbingActive => _activeAudioLangCode != null;
+
+  String? _activeAudioLangName;
+  String? get activeAudioLangName => _activeAudioLangName;
+
+  bool _isDubbingLoading = false;
+  bool get isDubbingLoading => _isDubbingLoading;
+
+  String? _dubbingLoadingMessage;
+  String? get dubbingLoadingMessage => _dubbingLoadingMessage;
+
+  // Pemutar Utama (Video H)
+  AudioPlayer? _dubbingAudioPlayer;
+  Duration _lastSyncedVideoPosition = Duration.zero;
+  DateTime? _lastDriftCheckTime; 
+  bool _isDubbingSyncing = false; 
+
+  // [BARU - SMART PRECACHE AUDIO DUBBING H+1]:
+  AudioPlayer? _nextDubbingAudioPlayer;      // Pemutar cadangan yang di-buffer di latar belakang untuk video H+1
+  String? _nextDubbingAudioUrl;             // URL audio H+1 yang sudah standby di memori
+  int? _nextDubbingPrecachedIndex;          // Indeks video yang berhasil di-precache
+
+  // [KUNCI ANTI-BOCOR & GERBANG TUNGGU FALLBACK GATE]:
+  int _dubbingSessionId = 0;
+  String? _currentDubbingAudioUrl;
+  bool _isWaitingForDubbingAudio = false;    // Status menahan video di frame 0 sampai audio siap
+  bool get isWaitingForDubbingAudio => _isWaitingForDubbingAudio;
+  Timer? _dubbingTimeoutTimer;              // Batas waktu darurat 5 detik agar video tidak membeku selamanya
+
+  static List<String> get supportedLanguages => MytubeLanguageDatabase.languageList;
+  static String getLanguageCode(String name) => MytubeLanguageDatabase.getCode(name);
+  static String getLanguageName(String code) => MytubeLanguageDatabase.getName(code);
+
+  bool isVideoLanguageMatchingTarget(VideoMytubeModel video, String? targetCode, String? targetName) {
+    if (targetCode == null || targetName == null) return false;
+    final vLang = video.language.trim().toLowerCase();
+    final tCode = targetCode.trim().toLowerCase();
+    final tName = targetName.trim().toLowerCase();
+
+    if (vLang == tCode || vLang == tName) return true;
+    if ((vLang.contains('indonesia') || vLang == 'id') && (tCode == 'id' || tName.contains('indonesia'))) return true;
+    if ((vLang.contains('english') || vLang.startsWith('en')) && (tCode.startsWith('en') || tName.contains('english'))) return true;
+    if ((vLang.contains('hindi') || vLang == 'hi') && (tCode == 'hi' || tName.contains('hindi'))) return true;
+
+    return false;
+  }
+
+  bool isCurrentVideoAudioBypassed(VideoMytubeModel video) {
+    if (!isDubbingActive) return false;
+    return isVideoLanguageMatchingTarget(video, _activeAudioLangCode, _activeAudioLangName);
+  }
+
   List<VideoMytubeModel> get filteredVideos {
     return _videos.where((video) {
       if (_appliedSearchQuery.trim().isNotEmpty) {
@@ -124,6 +221,12 @@ class MytubeFeedViewModel extends ChangeNotifier {
       if (_selectedLanguage != null && _selectedLanguage!.isNotEmpty) {
         if (video.language.toLowerCase() != _selectedLanguage!.toLowerCase()) return false;
       }
+      if (_selectedLocation != null && _selectedLocation!.isNotEmpty) {
+        final locQuery = _selectedLocation!.trim().toLowerCase();
+        final matchesGlobal = video.targetLocations.any((l) => l.trim().toLowerCase() == 'global');
+        final matchesSpecific = video.targetLocations.any((l) => l.trim().toLowerCase() == locQuery);
+        if (!matchesGlobal && !matchesSpecific) return false;
+      }
       return true;
     }).toList();
   }
@@ -137,10 +240,11 @@ class MytubeFeedViewModel extends ChangeNotifier {
           controller.pause();
         } catch (_) {}
       }
+      _dubbingAudioPlayer?.pause();
+      _nextDubbingAudioPlayer?.pause();
     } else {
       final active = currentController;
       if (active != null && active.value.isInitialized) {
-        active.setVolume(_isMuted ? 0.0 : 1.0);
         _safePlay(active);
       }
     }
@@ -155,11 +259,11 @@ class MytubeFeedViewModel extends ChangeNotifier {
     _currentVideoType = videoType.toUpperCase();
     _isUserPaused = false;
     await _loadSubtitlePreferences();
-    await _loadNetworkPreferences(); // [BARU]: Periksa status sinyal sebelumnya
+    await _loadAudioPreferences();
+    await _loadNetworkPreferences();
     _startFeedStream();
   }
 
-  // [PENGINGAT KONEKSI]: Memeriksa apakah user sedang dalam masa penalti 1 jam Lite Mode
   Future<void> _loadNetworkPreferences() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -169,12 +273,9 @@ class MytubeFeedViewModel extends ChangeNotifier {
         final expiryTime = DateTime.parse(expiryIso);
         if (DateTime.now().isBefore(expiryTime)) {
           _isLiteModeLocked = true;
-          debugPrint('[MYTUBE QoS] Sinyal terdeteksi buruk sebelumnya. Lite Mode (360p) dikunci sampai $expiryTime');
         } else {
-          // Jika waktu 1 jam sudah lewat, kembalikan ke mode kualitas tinggi (Adaptif)
           _isLiteModeLocked = false;
           await prefs.remove(_prefLiteModeExpiryKey);
-          debugPrint('[MYTUBE QoS] Batas 1 jam selesai. Kembali ke Mode Adaptif Resolusi Tinggi.');
         }
       }
     } catch (_) {}
@@ -204,11 +305,31 @@ class MytubeFeedViewModel extends ChangeNotifier {
     }
   }
 
+  Future<void> _loadAudioPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedCode = prefs.getString(_prefAudioCodeKey);
+      final savedName = prefs.getString(_prefAudioNameKey);
+
+      if (savedCode == null || savedCode.isEmpty || savedCode == 'off') {
+        _activeAudioLangCode = null;
+        _activeAudioLangName = null;
+      } else {
+        _activeAudioLangCode = savedCode;
+        _activeAudioLangName = savedName ?? MytubeLanguageDatabase.getName(savedCode);
+      }
+    } catch (e) {
+      _activeAudioLangCode = null;
+      _activeAudioLangName = null;
+    }
+  }
+
   void switchVideoType(String newType) {
     final cleanType = newType.toUpperCase();
     if (_currentVideoType == cleanType && !_isLoading) return;
 
     _cancelOnDemandSubtitleTimer();
+    _stopDubbingAudio();
     _currentVideoType = cleanType;
     _isUserPaused = false;
     _searchQuery = '';
@@ -246,6 +367,7 @@ class MytubeFeedViewModel extends ChangeNotifier {
           _recordView(0);
           _precacheAdjacentVideos(0);
           _syncActiveSubtitleForCurrentVideo(0);
+          _syncDubbingAudioForCurrentVideo(0);
         });
       }
       notifyListeners();
@@ -264,7 +386,94 @@ class MytubeFeedViewModel extends ChangeNotifier {
 //............................................................................//
 
 //No ke-4....................................................................//
-//VIDEO PLAYER MANAGEMENT, SMART ROUTING & HYBRID FALLBACK                   //
+//VIDEO & DUBBING PLAYER MANAGEMENT & AUDIO SYNCHRONIZATION (H+1 PRECACHE)   //
+  AudioPlayer _getOrCreateAudioPlayer() {
+    if (_dubbingAudioPlayer == null) {
+      _dubbingAudioPlayer = AudioPlayer();
+      _dubbingAudioPlayer!.setReleaseMode(ReleaseMode.stop);
+
+      if (!kIsWeb) {
+        _dubbingAudioPlayer!.setAudioContext(
+          AudioContext(
+            android: const AudioContextAndroid(
+              isSpeakerphoneOn: true,
+              stayAwake: true,
+              contentType: AndroidContentType.music,
+              usageType: AndroidUsageType.media,
+              audioFocus: AndroidAudioFocus.none, 
+            ),
+            iOS: AudioContextIOS(
+              category: AVAudioSessionCategory.playback,
+              options: {
+                AVAudioSessionOptions.mixWithOthers,
+              },
+            ),
+          ),
+        );
+      }
+    }
+    return _dubbingAudioPlayer!;
+  }
+
+  AudioPlayer _getOrCreateNextAudioPlayer() {
+    if (_nextDubbingAudioPlayer == null) {
+      _nextDubbingAudioPlayer = AudioPlayer();
+      _nextDubbingAudioPlayer!.setReleaseMode(ReleaseMode.stop);
+
+      if (!kIsWeb) {
+        _nextDubbingAudioPlayer!.setAudioContext(
+          AudioContext(
+            android: const AudioContextAndroid(
+              isSpeakerphoneOn: true,
+              stayAwake: true,
+              contentType: AndroidContentType.music,
+              usageType: AndroidUsageType.media,
+              audioFocus: AndroidAudioFocus.none, 
+            ),
+            iOS: AudioContextIOS(
+              category: AVAudioSessionCategory.playback,
+              options: {
+                AVAudioSessionOptions.mixWithOthers,
+              },
+            ),
+          ),
+        );
+      }
+    }
+    return _nextDubbingAudioPlayer!;
+  }
+
+  void _startDubbingTimeout(VideoPlayerController controller) {
+    _dubbingTimeoutTimer?.cancel();
+    _dubbingTimeoutTimer = Timer(const Duration(seconds: 5), () {
+      if (_isWaitingForDubbingAudio) {
+        debugPrint('[MYTUBE TIMEOUT] Dubbing timeout 5s tercapai. Melepas gerbang video agar tidak beku.');
+        _isWaitingForDubbingAudio = false;
+        controller.play();
+        notifyListeners();
+      }
+    });
+  }
+
+  void _cancelDubbingTimeout() {
+    _dubbingTimeoutTimer?.cancel();
+    _dubbingTimeoutTimer = null;
+  }
+
+  Future<void> _stopDubbingAudio() async {
+    _dubbingSessionId++; 
+    _currentDubbingAudioUrl = null; 
+    _isWaitingForDubbingAudio = false;
+    _cancelDubbingTimeout();
+
+    if (_dubbingAudioPlayer != null) {
+      try {
+        await _dubbingAudioPlayer!.setVolume(0.0);
+        await _dubbingAudioPlayer!.stop();
+      } catch (_) {}
+    }
+  }
+
   Future<void> _initControllerAtIndex(int index) async {
     final list = filteredVideos;
     if (index < 0 || index >= list.length) return;
@@ -281,9 +490,6 @@ class MytubeFeedViewModel extends ChangeNotifier {
 
     if (hlsUrl.isEmpty && mp4Url.isEmpty) return;
 
-    // [PEMBAJAKAN URL (URL HIJACKING) UNTUK LITE MODE]:
-    // Jika Lite Mode aktif (karena sinyal buruk), jangan berikan master.m3u8
-    // Tembak langsung ke playlist 360p agar HP tidak pernah mencoba melompat ke 480p/720p!
     if (_isLiteModeLocked && !kIsWeb) {
       if (hlsUrl.contains('master.m3u8')) {
         hlsUrl = hlsUrl.replaceAll('master.m3u8', '360p/index.m3u8');
@@ -300,7 +506,10 @@ class MytubeFeedViewModel extends ChangeNotifier {
     VideoPlayerController? controller;
 
     try {
-      controller = VideoPlayerController.networkUrl(Uri.parse(primaryUrl));
+      controller = VideoPlayerController.networkUrl(
+        Uri.parse(primaryUrl),
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+      );
       _controllers[index] = controller;
       await controller.initialize();
     } catch (e) {
@@ -313,7 +522,10 @@ class MytubeFeedViewModel extends ChangeNotifier {
 
       if (fallbackUrl.isNotEmpty && fallbackUrl != primaryUrl) {
         try {
-          controller = VideoPlayerController.networkUrl(Uri.parse(fallbackUrl));
+          controller = VideoPlayerController.networkUrl(
+            Uri.parse(fallbackUrl),
+            videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+          );
           _controllers[index] = controller;
           await controller.initialize();
         } catch (_) { return; }
@@ -326,41 +538,133 @@ class MytubeFeedViewModel extends ChangeNotifier {
     }
 
     controller!.setLooping(true);
-    controller.setVolume((_isMuted || _isAdActive) ? 0.0 : 1.0);
+
+    final bool isActiveVideo = index == _currentIndex;
+    final bool isBypassed = isCurrentVideoAudioBypassed(video);
+    final bool hasValidDubbingData = isDubbingActive && !isBypassed && video.dubbing?[_activeAudioLangCode] != null;
+    
+    // Video tetangga / precache WAJIB 0.0 agar tidak ada kebocoran suara
+    final double initialVolume = (isActiveVideo && (!hasValidDubbingData || isBypassed))
+        ? ((_isMuted || _isAdActive) ? 0.0 : 1.0)
+        : 0.0;
+        
+    controller.setVolume(initialVolume);
 
     controller.addListener(() {
-      if (!_controllers.containsKey(index)) return;
+      if (!_controllers.containsKey(index) || controller == null) return;
+      final activeCtrl = controller;
+      if (activeCtrl == null || !activeCtrl.value.isInitialized) return;
+
+      // [KUNCI MATI VIDEO LAMA]: Jika bukan video aktif di layar, wajib pause dan bisu 0.0
+      if (index != _currentIndex) {
+        if (activeCtrl.value.isPlaying) {
+          activeCtrl.pause();
+        }
+        if (activeCtrl.value.volume > 0.0) {
+          activeCtrl.setVolume(0.0);
+        }
+        return;
+      }
       
-      // [PENGAWAS SINYAL 1 DETIK (THE WATCHDOG)]:
-      // Memantau kestabilan koneksi saat memutar video
-      if (controller!.value.isBuffering) {
+      if (activeCtrl.value.isBuffering) {
         _bufferingStartTime ??= DateTime.now();
-        
-        // Jika buffering lebih dari 1000 milidetik (1 detik penuh) & Lite Mode belum aktif:
         if (!_isLiteModeLocked && DateTime.now().difference(_bufferingStartTime!).inMilliseconds > 1000) {
           _isLiteModeLocked = true;
-          debugPrint('⚠️ [MYTUBE QoS] Video macet > 1 detik! Sinyal buruk terdeteksi.');
-          
           SharedPreferences.getInstance().then((prefs) {
-            final expiry = DateTime.now().add(const Duration(hours: 1)); // Kunci selama 1 Jam
+            final expiry = DateTime.now().add(const Duration(hours: 1));
             prefs.setString(_prefLiteModeExpiryKey, expiry.toIso8601String());
-            debugPrint('[MYTUBE QoS] Lite Mode (360p murni) dikunci selama 1 jam ke depan.');
           });
         }
+        if (isDubbingActive && _dubbingAudioPlayer != null) {
+          if (_dubbingAudioPlayer!.state == PlayerState.playing && !_isDubbingSyncing) {
+            _dubbingAudioPlayer!.pause();
+          }
+        }
       } else {
-        // Reset stopwatch jika video lancar kembali
         _bufferingStartTime = null; 
       }
 
-      // Perintah Pemutaran Normal
+      final currentList = filteredVideos;
+      final currentVideo = (index >= 0 && index < currentList.length) ? currentList[index] : null;
+      final bool currentBypassed = currentVideo != null && isCurrentVideoAudioBypassed(currentVideo);
+      
+      final bool currentHasValidDubbingData = isDubbingActive && !currentBypassed && currentVideo?.dubbing?[_activeAudioLangCode] != null;
+      final bool isDubbingReady = currentHasValidDubbingData && _currentDubbingAudioUrl == currentVideo!.dubbing![_activeAudioLangCode];
+
+      if (index == _currentIndex && isDubbingReady) {
+        if (activeCtrl.value.volume > 0.0) {
+          activeCtrl.setVolume(0.0);
+        }
+
+        final currentPos = activeCtrl.value.position;
+        final bool isRealLoop = _lastSyncedVideoPosition.inMilliseconds > 1500 && currentPos.inMilliseconds < 500;
+
+        if (isRealLoop) {
+          _lastSyncedVideoPosition = Duration.zero;
+          _dubbingAudioPlayer!.seek(Duration.zero);
+          if (activeCtrl.value.isPlaying && !_isUserPaused && !_isAdActive) {
+            _dubbingAudioPlayer!.resume();
+          }
+        } else {
+          if ((currentPos.inMilliseconds - _lastSyncedVideoPosition.inMilliseconds).abs() < 1000 || 
+              currentPos.inMilliseconds > _lastSyncedVideoPosition.inMilliseconds) {
+            _lastSyncedVideoPosition = currentPos;
+          }
+        }
+
+        // [SMART DRIFT CORRECTOR: SINKRONISASI JEDA JARINGAN]:
+        final now = DateTime.now();
+        if (_lastDriftCheckTime == null || now.difference(_lastDriftCheckTime!).inMilliseconds > 500) {
+          _lastDriftCheckTime = now;
+          _dubbingAudioPlayer!.getCurrentPosition().then((audioPos) {
+            if (audioPos != null && activeCtrl.value.isInitialized && activeCtrl.value.isPlaying && !activeCtrl.value.isBuffering) {
+              final videoPos = activeCtrl.value.position;
+              final diff = (videoPos.inMilliseconds - audioPos.inMilliseconds).abs();
+              if (diff > 400 && audioPos.inMilliseconds > 0) {
+                _dubbingAudioPlayer!.seek(videoPos);
+              }
+            }
+          }).catchError((_) {});
+        }
+
+        if (activeCtrl.value.isPlaying && !activeCtrl.value.isBuffering && !_isUserPaused && !_isAdActive) {
+          if (_dubbingAudioPlayer!.state != PlayerState.playing && !_isDubbingSyncing) {
+            _isDubbingSyncing = true;
+            _dubbingAudioPlayer!.resume().then((_) {
+              _isDubbingSyncing = false;
+            }).catchError((_) {
+              _isDubbingSyncing = false;
+            });
+          }
+        } else if (!activeCtrl.value.isPlaying || activeCtrl.value.isBuffering) {
+          if (_dubbingAudioPlayer!.state == PlayerState.playing && !_isDubbingSyncing) {
+            _isDubbingSyncing = true;
+            _dubbingAudioPlayer!.pause().then((_) {
+              _isDubbingSyncing = false;
+            }).catchError((_) {
+              _isDubbingSyncing = false;
+            });
+          }
+        }
+      } else if (index == _currentIndex && (!isDubbingActive || currentBypassed) && _dubbingAudioPlayer != null) {
+        if (!activeCtrl.value.isBuffering && activeCtrl.value.volume == 0.0 && !_isMuted && !_isAdActive) {
+          activeCtrl.setVolume(1.0);
+        }
+        if (_dubbingAudioPlayer!.state == PlayerState.playing) {
+          _dubbingAudioPlayer!.setVolume(0.0);
+          _dubbingAudioPlayer!.stop();
+        }
+      }
+
+      // Pemutaran normal hanya diizinkan jika TIDAK sedang dalam gerbang tunggu dubbing
       if (index == _currentIndex &&
+          !_isWaitingForDubbingAudio &&
+          !activeCtrl.value.isPlaying &&
+          !activeCtrl.value.isBuffering &&
           !_isUserPaused &&
-          !_isAdActive && 
-          controller.value.isInitialized &&
-          !controller.value.isPlaying &&
-          !controller.value.isBuffering &&
-          controller.value.position < controller.value.duration) {
-        controller.play();
+          !_isAdActive &&
+          activeCtrl.value.position < activeCtrl.value.duration) {
+        activeCtrl.play();
       }
     });
 
@@ -375,13 +679,46 @@ class MytubeFeedViewModel extends ChangeNotifier {
 
   Future<void> _safePlay(VideoPlayerController? controller) async {
     if (controller == null || !controller.value.isInitialized) return;
-    
     if (_isAdActive) return; 
 
     try {
       _isUserPaused = false;
-      await controller.setVolume(_isMuted ? 0.0 : 1.0);
-      await controller.play();
+      
+      final list = filteredVideos;
+      final currentVideo = (list.isNotEmpty && _currentIndex < list.length) ? list[_currentIndex] : null;
+      final bool currentBypassed = currentVideo != null && isCurrentVideoAudioBypassed(currentVideo);
+      
+      final bool hasValidDubbingData = isDubbingActive && !currentBypassed && currentVideo?.dubbing?[_activeAudioLangCode] != null;
+      final bool isDubbingReady = hasValidDubbingData && _currentDubbingAudioUrl == currentVideo!.dubbing![_activeAudioLangCode];
+
+      if (hasValidDubbingData) {
+        await controller.setVolume(0.0);
+
+        if (isDubbingReady && _dubbingAudioPlayer != null) {
+          // [KASUS 1 - PRECACHE H+1 SUKSES]: Audio sudah matang di memori -> Langsung main serentak 0 detik!
+          _isWaitingForDubbingAudio = false;
+          _cancelDubbingTimeout();
+          await _dubbingAudioPlayer!.setVolume((_isMuted || _isAdActive) ? 0.0 : 1.0);
+          await _dubbingAudioPlayer!.resume();
+          await controller.play();
+        } else {
+          // [KASUS 2 - GERBANG TUNGGU FALLBACK GATE]: Audio belum selesai di-download -> Tahan video di frame 0!
+          _isWaitingForDubbingAudio = true;
+          controller.pause();
+          _startDubbingTimeout(controller);
+          notifyListeners();
+        }
+      } else {
+        // Video bermain dengan audio asli
+        _isWaitingForDubbingAudio = false;
+        _cancelDubbingTimeout();
+        await controller.setVolume(_isMuted ? 0.0 : 1.0);
+        if (_dubbingAudioPlayer != null) {
+          await _dubbingAudioPlayer!.setVolume(0.0);
+          await _dubbingAudioPlayer!.stop();
+        }
+        await controller.play();
+      }
     } catch (e) {
       if (kIsWeb && !_isMuted) {
         try {
@@ -401,11 +738,39 @@ class MytubeFeedViewModel extends ChangeNotifier {
     _cancelOnDemandSubtitleTimer();
     _isSubtitleLoading = false;
     _subtitleLoadingMessage = null;
+    _isDubbingSyncing = false;
+    
+    // [SMART TRANSISI PRECACHE H+1]:
+    // Jika audio dubbing video baru sudah di-precache di _nextDubbingAudioPlayer, transfer instan!
+    if (_nextDubbingPrecachedIndex == newIndex &&
+        _nextDubbingAudioPlayer != null &&
+        _nextDubbingAudioUrl != null) {
+      _dubbingAudioPlayer?.dispose();
+      _dubbingAudioPlayer = _nextDubbingAudioPlayer;
+      _currentDubbingAudioUrl = _nextDubbingAudioUrl;
+      _nextDubbingAudioPlayer = null;
+      _nextDubbingAudioUrl = null;
+      _nextDubbingPrecachedIndex = null;
+      _dubbingSessionId++;
+    } else {
+      _stopDubbingAudio();
+    }
+
+    // Pause dan bisukan volume 0.0 seluruh controller video lama serentak
+    for (final entry in _controllers.entries) {
+      if (entry.key != newIndex) {
+        try {
+          entry.value.pause();
+          entry.value.setVolume(0.0);
+        } catch (_) {}
+      }
+    }
 
     _isUserPaused = false;
     _currentCues = [];
+    _lastSyncedVideoPosition = Duration.zero;
+    _lastDriftCheckTime = null; 
 
-    _controllers[_currentIndex]?.pause();
     _currentIndex = newIndex;
 
     if (_isAutoplaySoundBlocked) {
@@ -418,12 +783,14 @@ class MytubeFeedViewModel extends ChangeNotifier {
       _safePlay(newController);
       _recordView(_currentIndex);
       _syncActiveSubtitleForCurrentVideo(_currentIndex);
+      _syncDubbingAudioForCurrentVideo(_currentIndex);
       _precacheAdjacentVideos(_currentIndex);
     } else {
       _initControllerAtIndex(_currentIndex).then((_) {
         _safePlay(_controllers[_currentIndex]);
         _recordView(_currentIndex);
         _syncActiveSubtitleForCurrentVideo(_currentIndex);
+        _syncDubbingAudioForCurrentVideo(_currentIndex);
         _precacheAdjacentVideos(_currentIndex);
       });
     }
@@ -434,8 +801,13 @@ class MytubeFeedViewModel extends ChangeNotifier {
 
   void _precacheAdjacentVideos(int index) {
     final list = filteredVideos;
-    if (index + 1 < list.length && !_controllers.containsKey(index + 1)) {
-      _initControllerAtIndex(index + 1);
+    if (index + 1 < list.length) {
+      // 1. Precache Video H+1 (ExoPlayer)
+      if (!_controllers.containsKey(index + 1)) {
+        _initControllerAtIndex(index + 1);
+      }
+      // 2. [SMART PRECACHE DUBBING H+1]: Ikutkan audio dubbing dalam irama precache!
+      _precacheDubbingForIndex(index + 1);
     }
   }
 
@@ -443,12 +815,26 @@ class MytubeFeedViewModel extends ChangeNotifier {
     final keysToRemove = <int>[];
     _controllers.forEach((index, controller) {
       if ((index - activeIndex).abs() > 1) {
-        controller.dispose();
+        try {
+          controller.pause();
+          controller.setVolume(0.0);
+          controller.dispose();
+        } catch (_) {}
         keysToRemove.add(index);
       }
     });
     for (final key in keysToRemove) {
       _controllers.remove(key);
+    }
+
+    // Bersihkan juga player precache jika jaraknya sudah jauh
+    if (_nextDubbingPrecachedIndex != null && (_nextDubbingPrecachedIndex! - activeIndex).abs() > 1) {
+      try {
+        _nextDubbingAudioPlayer?.dispose();
+      } catch (_) {}
+      _nextDubbingAudioPlayer = null;
+      _nextDubbingAudioUrl = null;
+      _nextDubbingPrecachedIndex = null;
     }
   }
 
@@ -458,14 +844,39 @@ class MytubeFeedViewModel extends ChangeNotifier {
       if (_isAutoplaySoundBlocked) {
         _isAutoplaySoundBlocked = false;
         _isMuted = false;
-        controller.setVolume(1.0);
       }
+
+      final list = filteredVideos;
+      final currentVideo = (list.isNotEmpty && _currentIndex < list.length) ? list[_currentIndex] : null;
+      final bool currentBypassed = currentVideo != null && isCurrentVideoAudioBypassed(currentVideo);
+      
+      final bool hasValidDubbingData = isDubbingActive && !currentBypassed && currentVideo?.dubbing?[_activeAudioLangCode] != null;
+      final bool isDubbingReady = hasValidDubbingData && _currentDubbingAudioUrl == currentVideo!.dubbing![_activeAudioLangCode];
+
       if (controller.value.isPlaying) {
         _isUserPaused = true;
         controller.pause();
+        _dubbingAudioPlayer?.pause();
       } else {
         _isUserPaused = false;
-        controller.play();
+        if (hasValidDubbingData) {
+          controller.setVolume(0.0);
+          if (isDubbingReady) {
+            controller.play();
+            _dubbingAudioPlayer?.setVolume((_isMuted || _isAdActive) ? 0.0 : 1.0);
+            _dubbingAudioPlayer?.resume();
+          } else {
+            // Jika belum ready saat user unpause, aktifkan gerbang tunggu
+            _isWaitingForDubbingAudio = true;
+            controller.pause();
+            _startDubbingTimeout(controller);
+          }
+        } else {
+          controller.setVolume((_isMuted || _isAdActive) ? 0.0 : 1.0);
+          controller.play();
+          _dubbingAudioPlayer?.setVolume(0.0);
+          _dubbingAudioPlayer?.stop();
+        }
       }
       notifyListeners();
     }
@@ -475,6 +886,7 @@ class MytubeFeedViewModel extends ChangeNotifier {
     if (currentController != null && currentController!.value.isInitialized && currentController!.value.isPlaying) {
       _isUserPaused = true;
       currentController!.pause();
+      _dubbingAudioPlayer?.pause();
       notifyListeners();
     }
   }
@@ -483,22 +895,57 @@ class MytubeFeedViewModel extends ChangeNotifier {
     _isAutoplaySoundBlocked = false;
     _isMuted = false;
     _isUserPaused = false;
-    currentController?.setVolume(1.0);
+
+    final list = filteredVideos;
+    final currentVideo = (list.isNotEmpty && _currentIndex < list.length) ? list[_currentIndex] : null;
+    final bool currentBypassed = currentVideo != null && isCurrentVideoAudioBypassed(currentVideo);
+    
+    final bool hasValidDubbingData = isDubbingActive && !currentBypassed && currentVideo?.dubbing?[_activeAudioLangCode] != null;
+    final bool isDubbingReady = hasValidDubbingData && _currentDubbingAudioUrl == currentVideo!.dubbing![_activeAudioLangCode];
+
+    if (hasValidDubbingData) {
+      currentController?.setVolume(0.0);
+      if (isDubbingReady) {
+        _dubbingAudioPlayer?.setVolume(1.0);
+        _dubbingAudioPlayer?.resume();
+      }
+    } else {
+      currentController?.setVolume(1.0);
+      _dubbingAudioPlayer?.setVolume(0.0);
+      _dubbingAudioPlayer?.stop();
+    }
     notifyListeners();
   }
 
   void toggleMute() {
     _isMuted = !_isMuted;
     _isAutoplaySoundBlocked = false;
+
+    final list = filteredVideos;
+    final currentVideo = (list.isNotEmpty && _currentIndex < list.length) ? list[_currentIndex] : null;
+    final bool currentBypassed = currentVideo != null && isCurrentVideoAudioBypassed(currentVideo);
+    
+    final bool hasValidDubbingData = isDubbingActive && !currentBypassed && currentVideo?.dubbing?[_activeAudioLangCode] != null;
+    final bool isDubbingReady = hasValidDubbingData && _currentDubbingAudioUrl == currentVideo!.dubbing![_activeAudioLangCode];
+
     _controllers.forEach((_, controller) {
-      controller.setVolume(_isMuted ? 0.0 : 1.0);
+      controller.setVolume((hasValidDubbingData || _isMuted) ? 0.0 : 1.0);
     });
+
+    if (hasValidDubbingData) {
+      if (isDubbingReady) {
+        _dubbingAudioPlayer?.setVolume(_isMuted ? 0.0 : 1.0);
+      }
+    } else {
+      _dubbingAudioPlayer?.setVolume(0.0);
+      _dubbingAudioPlayer?.stop();
+    }
     notifyListeners();
   }
 //............................................................................//
 
 //No ke-5....................................................................//
-//FILTER, SEARCH, HOME RESET & PERSISTENT WEBVTT SUBTITLE PARSER             //
+//FILTER, SEARCH, HOME RESET & SUBTITLE / DUBBING ACTION HANDLERS            //
   void setSearchQuery(String query) {
     if (_searchQuery == query) return;
     _searchQuery = query;
@@ -536,11 +983,18 @@ class MytubeFeedViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setLocationFilter(String? location) {
+    _selectedLocation = location;
+    _resetControllersForFilteredList();
+    notifyListeners();
+  }
+
   void clearAllFilters() {
     _searchQuery = '';
     _appliedSearchQuery = '';
     _selectedCategory = null;
     _selectedLanguage = null;
+    _selectedLocation = null;
     _resetControllersForFilteredList();
     notifyListeners();
   }
@@ -550,6 +1004,7 @@ class MytubeFeedViewModel extends ChangeNotifier {
     _appliedSearchQuery = '';
     _selectedCategory = null;
     _selectedLanguage = null;
+    _selectedLocation = null;
 
     if (_currentVideoType != 'SHORT') {
       switchVideoType('SHORT');
@@ -561,10 +1016,10 @@ class MytubeFeedViewModel extends ChangeNotifier {
 
   void _resetControllersForFilteredList() {
     _cancelOnDemandSubtitleTimer();
+    _stopDubbingAudio();
     _currentIndex = 0;
     _currentCues = [];
     
-    // [HARD STOP WEB AUDIO]: Wajib dipause paksa agar browser melepas pipeline suara
     for (final controller in _controllers.values) {
       controller.pause(); 
       controller.dispose();
@@ -578,6 +1033,7 @@ class MytubeFeedViewModel extends ChangeNotifier {
         _recordView(0);
         _precacheAdjacentVideos(0);
         _syncActiveSubtitleForCurrentVideo(0);
+        _syncDubbingAudioForCurrentVideo(0);
       });
     }
   }
@@ -599,9 +1055,7 @@ class MytubeFeedViewModel extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_prefSubCodeKey, 'off');
-    } catch (e) {
-      debugPrint('[MYTUBE PREF] Gagal menyimpan status off subtitle: $e');
-    }
+    } catch (e) {}
   }
 
   Future<void> selectSubtitleLanguage({
@@ -667,6 +1121,7 @@ class MytubeFeedViewModel extends ChangeNotifier {
         final newUrl = await _service.requestOnDemandSubtitle(
           videoId: video.id,
           creatorEmail: video.uploaderEmail,
+          channelId: video.channelId,
           videoType: video.videoType,
           targetLanguageCode: langCode,
           targetLanguageName: langName,
@@ -803,17 +1258,268 @@ class MytubeFeedViewModel extends ChangeNotifier {
     }
     return Duration(hours: hours, minutes: minutes, seconds: seconds, milliseconds: milliseconds);
   }
+
+  Future<void> selectAudioLanguage({
+    required String langCode,
+    required String langName,
+  }) async {
+    final list = filteredVideos;
+    if (_currentIndex < 0 || _currentIndex >= list.length) return;
+
+    if (_activeAudioLangCode == langCode) {
+      return; 
+    }
+
+    _activeAudioLangCode = langCode;
+    _activeAudioLangName = langName;
+    notifyListeners();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefAudioCodeKey, langCode);
+      await prefs.setString(_prefAudioNameKey, langName);
+    } catch (e) {}
+
+    await _syncDubbingAudioForCurrentVideo(_currentIndex, immediate: true);
+    // Segera mulai precache video tetangga H+1 dengan bahasa baru ini!
+    _precacheDubbingForIndex(_currentIndex + 1);
+  }
+
+  Future<void> resetAudioToOriginal() async {
+    _activeAudioLangCode = null;
+    _activeAudioLangName = null;
+    _isDubbingLoading = false;
+    _dubbingLoadingMessage = null;
+    _isDubbingSyncing = false;
+    _isWaitingForDubbingAudio = false;
+    _cancelDubbingTimeout();
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefAudioCodeKey, 'off');
+      await prefs.remove(_prefAudioNameKey);
+    } catch (e) {}
+
+    await _stopDubbingAudio();
+
+    final active = currentController;
+    if (active != null && active.value.isInitialized) {
+      await active.setVolume((_isMuted || _isAdActive) ? 0.0 : 1.0);
+      if (!active.value.isPlaying && !_isUserPaused && !_isAdActive) {
+        await active.play();
+      }
+    }
+    notifyListeners();
+  }
+
+  // --- [BARU - SMART PRECACHE DUBBING H+1 DI LATAR BELAKANG] ---
+  Future<void> _precacheDubbingForIndex(int targetIndex) async {
+    if (!isDubbingActive || _activeAudioLangCode == null) return;
+    final list = filteredVideos;
+    if (targetIndex < 0 || targetIndex >= list.length) return;
+
+    final video = list[targetIndex];
+    if (isCurrentVideoAudioBypassed(video)) return;
+
+    final langCode = _activeAudioLangCode!;
+    String? audioUrl = video.dubbing?[langCode];
+
+    // Jika video H+1 belum memiliki file dubbing, panggil Cloud Function secara diam-diam di background!
+    if (audioUrl == null || audioUrl.isEmpty) {
+      try {
+        final result = await _service.requestOnDemandDubbing(
+          videoId: video.id,
+          creatorEmail: video.uploaderEmail,
+          channelId: video.channelId,
+          videoType: video.videoType,
+          targetLanguageCode: langCode,
+          targetLanguageName: _activeAudioLangName ?? '',
+        );
+
+        if (result != null && result['url'] != null) {
+          audioUrl = result['url'] as String?;
+          final updatedDubbing = Map<String, String>.from(video.dubbing ?? {});
+          updatedDubbing[langCode] = audioUrl!;
+
+          final rawIdx = _videos.indexWhere((v) => v.id == video.id);
+          if (rawIdx != -1) {
+            _videos[rawIdx] = _videos[rawIdx].copyWith(dubbing: updatedDubbing);
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Jika URL sudah siap, siapkan AudioPlayer cadangan di memori HP!
+    if (audioUrl != null && audioUrl.isNotEmpty) {
+      try {
+        final player = _getOrCreateNextAudioPlayer();
+        await player.setVolume(0.0);
+        await player.setSource(UrlSource(audioUrl));
+        _nextDubbingAudioUrl = audioUrl;
+        _nextDubbingPrecachedIndex = targetIndex;
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _syncDubbingAudioForCurrentVideo(
+    int targetIndex, {
+    bool immediate = false,
+  }) async {
+    if (_activeAudioLangCode == null || _activeAudioLangName == null) {
+      await _stopDubbingAudio();
+      final active = currentController;
+      if (active != null && active.value.isInitialized) {
+        await active.setVolume((_isMuted || _isAdActive) ? 0.0 : 1.0);
+      }
+      return;
+    }
+
+    final list = filteredVideos;
+    if (targetIndex < 0 || targetIndex >= list.length) return;
+    if (targetIndex != _currentIndex) return;
+
+    final video = list[targetIndex];
+    final langCode = _activeAudioLangCode!;
+    final langName = _activeAudioLangName!;
+
+    if (isVideoLanguageMatchingTarget(video, langCode, langName)) {
+      await _stopDubbingAudio();
+      final active = currentController;
+      if (active != null && active.value.isInitialized) {
+        await active.setVolume((_isMuted || _isAdActive) ? 0.0 : 1.0);
+      }
+      notifyListeners();
+      return;
+    }
+
+    final existingUrl = video.dubbing?[langCode];
+    if (existingUrl != null && existingUrl.isNotEmpty) {
+      await _applyDubbingAudioToController(existingUrl);
+      return;
+    }
+
+    if (_currentIndex == targetIndex) {
+      _isDubbingLoading = true;
+      _dubbingLoadingMessage = 'Preparing audio dubbing, wait a minute...';
+      notifyListeners();
+    }
+
+    try {
+      final result = await _service.requestOnDemandDubbing(
+        videoId: video.id,
+        creatorEmail: video.uploaderEmail,
+        channelId: video.channelId,
+        videoType: video.videoType,
+        targetLanguageCode: langCode,
+        targetLanguageName: langName,
+      );
+
+      if (_currentIndex != targetIndex) return;
+
+      if (result != null) {
+        if (result['isOriginal'] == true) {
+          await _stopDubbingAudio();
+          final active = currentController;
+          if (active != null && active.value.isInitialized) {
+            await active.setVolume((_isMuted || _isAdActive) ? 0.0 : 1.0);
+          }
+          return;
+        }
+
+        final newUrl = result['url'] as String?;
+        if (newUrl != null && newUrl.isNotEmpty) {
+          final updatedDubbing = Map<String, String>.from(video.dubbing ?? {});
+          updatedDubbing[langCode] = newUrl;
+
+          final rawIndex = _videos.indexWhere((v) => v.id == video.id);
+          if (rawIndex != -1) {
+            _videos[rawIndex] = _videos[rawIndex].copyWith(dubbing: updatedDubbing);
+          }
+
+          if (_currentIndex == targetIndex && _activeAudioLangCode == langCode) {
+            await _applyDubbingAudioToController(newUrl);
+          }
+        }
+      }
+    } catch (e) {
+    } finally {
+      if (_currentIndex == targetIndex) {
+        _isDubbingLoading = false;
+        _dubbingLoadingMessage = null;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> _applyDubbingAudioToController(String audioUrl) async {
+    final controller = currentController;
+    if (controller == null || !controller.value.isInitialized) return;
+
+    final list = filteredVideos;
+    final currentVideo = (_currentIndex >= 0 && _currentIndex < list.length) ? list[_currentIndex] : null;
+
+    if (!isDubbingActive || (currentVideo != null && isCurrentVideoAudioBypassed(currentVideo))) {
+      await _stopDubbingAudio();
+      await controller.setVolume((_isMuted || _isAdActive) ? 0.0 : 1.0);
+      return;
+    }
+
+    _dubbingSessionId++;
+    final int currentSession = _dubbingSessionId;
+
+    final player = _getOrCreateAudioPlayer();
+    await controller.setVolume(0.0);
+
+    try {
+      final currentPos = controller.value.position;
+      final double volume = (_isMuted || _isAdActive) ? 0.0 : 1.0;
+
+      await player.setVolume(volume);
+      await player.play(
+        UrlSource(audioUrl),
+        position: currentPos,
+        volume: volume,
+      );
+
+      // Jika user sudah geser selama proses buffering MP3:
+      if (currentSession != _dubbingSessionId) {
+        await player.stop();
+        return;
+      }
+
+      _currentDubbingAudioUrl = audioUrl;
+
+      // [PELEPASAN GERBANG TUNGGU]: Audio dubbing sudah 100% siap memutar!
+      _isWaitingForDubbingAudio = false;
+      _cancelDubbingTimeout();
+
+      // Lepas pemutaran video dan dubbing serentak dari detik awal!
+      if (!controller.value.isPlaying && !_isUserPaused && !_isAdActive) {
+        await controller.play();
+      }
+
+      if (!controller.value.isPlaying || _isUserPaused || _isAdActive) {
+        await player.pause();
+      }
+    } catch (e) {
+      debugPrint('[MYTUBE AUDIO ERROR] Gagal apply audio dubbing: $e');
+    }
+    notifyListeners();
+  }
 //............................................................................//
+
 //No ke-6....................................................................//
 //USER SOCIAL INTERACTIONS WITH TASTE PROFILE SIGNAL INTEGRATION             //
   Future<void> checkInitialInteractionStatus(String videoId) async {
     if (_currentUserId == null || _currentUserId!.isEmpty) return;
 
+    String? channelId;
     String? uploaderEmail;
     String? uploaderId;
     String videoType = 'SHORT';
     try {
       final vid = _videos.firstWhere((v) => v.id == videoId);
+      channelId = vid.channelId;
       uploaderEmail = vid.uploaderEmail;
       uploaderId = vid.uploaderId;
       videoType = vid.videoType;
@@ -822,6 +1528,7 @@ class MytubeFeedViewModel extends ChangeNotifier {
     final isLiked = await _service.checkIsVideoLiked(
       videoId: videoId,
       userId: _currentUserId!,
+      channelId: channelId,
       uploaderEmail: uploaderEmail,
       uploaderId: uploaderId,
       videoType: videoType,
@@ -868,12 +1575,14 @@ class MytubeFeedViewModel extends ChangeNotifier {
     final success = await _service.toggleLikeVideo(
       videoId: videoId,
       userId: _currentUserId!,
+      channelId: currentVideo.channelId,
       uploaderEmail: currentVideo.uploaderEmail,
       uploaderId: currentVideo.uploaderId,
       videoType: currentVideo.videoType,
       category: currentVideo.category,
       language: currentVideo.language,
       channelName: currentVideo.channelName,
+      topicLocations: currentVideo.targetLocations, 
     );
 
     if (success != !wasLiked) {
@@ -911,12 +1620,14 @@ class MytubeFeedViewModel extends ChangeNotifier {
     final success = await _service.toggleSaveVideo(
       videoId: videoId,
       userId: _currentUserId!,
+      channelId: currentVideo.channelId,
       uploaderEmail: currentVideo.uploaderEmail,
       uploaderId: currentVideo.uploaderId,
       videoType: currentVideo.videoType,
       category: currentVideo.category,
       language: currentVideo.language,
       channelName: currentVideo.channelName,
+      topicLocations: currentVideo.targetLocations, 
     );
 
     if (success != !wasSaved) {
@@ -944,6 +1655,7 @@ class MytubeFeedViewModel extends ChangeNotifier {
 
     await _service.incrementShareCount(
       currentVideo.id,
+      channelId: currentVideo.channelId,
       uploaderEmail: currentVideo.uploaderEmail,
       uploaderId: currentVideo.uploaderId,
       videoType: currentVideo.videoType,
@@ -951,6 +1663,7 @@ class MytubeFeedViewModel extends ChangeNotifier {
       category: currentVideo.category,
       language: currentVideo.language,
       channelName: currentVideo.channelName,
+      topicLocations: currentVideo.targetLocations, 
     );
   }
 
@@ -960,6 +1673,7 @@ class MytubeFeedViewModel extends ChangeNotifier {
       final video = list[index];
       _service.incrementViewCount(
         video.id,
+        channelId: video.channelId,
         uploaderEmail: video.uploaderEmail,
         uploaderId: video.uploaderId,
         videoType: video.videoType,
@@ -967,6 +1681,7 @@ class MytubeFeedViewModel extends ChangeNotifier {
         category: video.category,
         language: video.language,
         channelName: video.channelName,
+        topicLocations: video.targetLocations, 
       );
     }
   }
@@ -977,6 +1692,10 @@ class MytubeFeedViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _cancelOnDemandSubtitleTimer();
+    _stopDubbingAudio();
+    _dubbingAudioPlayer?.dispose();
+    _dubbingAudioPlayer = null;
+
     _feedSubscription?.cancel();
     for (final controller in _controllers.values) {
       controller.dispose();
@@ -986,7 +1705,6 @@ class MytubeFeedViewModel extends ChangeNotifier {
   }
 } // <--- PENUTUP RESMI KELAS MytubeFeedViewModel
 
-// MODEL DATA SUBTITLE CUE INDEPENDEN (DI LUAR CLASS)
 class SubtitleCue {
   final Duration start;
   final Duration end;

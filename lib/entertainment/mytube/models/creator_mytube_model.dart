@@ -1,7 +1,7 @@
 //============================================================================//
 // DIREKTORI: lib/entertainment/mytube/models/                               //
 // FILE: CREATOR_MYTUBE_MODEL.DART                                            //
-// MODEL DATA PROFIL CREATOR / ADMIN MYTUBE RESMI                             //
+// MODEL DATA PROFIL CREATOR MYTUBE BERBASIS CHANNEL ID IMMUTABLE             //
 //============================================================================//
 
 //No ke-1....................................................................//
@@ -12,9 +12,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 //No ke-2....................................................................//
 //MODEL PROPERTIES & CONSTRUCTOR                                             //
 class CreatorMytubeModel {
-  final String id; // UID Admin
-  final String email;
-  final String channelName; // Maksimal 30 karakter
+  final String id; // [KUNCI ABADI]: Unique Channel ID (Auto-ID Firestore)
+  final String creatorId; // UID Akun Pemilik (Bisa ditransfer jika berganti akun)
+  final String email; // Email Akun (Bisa diedit sewaktu-waktu)
+  final String channelName; // Nama Channel (Bisa diedit sewaktu-waktu, maks 30 karakter)
   final String handle; // Otomatis terisi (@nama_channel)
   final String creatorLegalName; // Nama KTP / Identitas resmi
   final String address; // Maksimal 100 karakter
@@ -39,11 +40,12 @@ class CreatorMytubeModel {
   final bool isVerified;
   final int totalVideos;
   final int totalViews;
-  final DateTime? createdAt;
+  final DateTime? createdAt; // [TANGGAL RESMI]: Kapan channel ini pertama kali dibuat
   final DateTime? updatedAt;
 
   const CreatorMytubeModel({
     required this.id,
+    this.creatorId = '',
     this.email = '',
     required this.channelName,
     this.handle = '',
@@ -68,6 +70,9 @@ class CreatorMytubeModel {
     this.createdAt,
     this.updatedAt,
   });
+
+  // Getter pembantu agar pemanggilan channelId di kode UI seragam dan jelas
+  String get channelId => id;
 //............................................................................//
 
 //No ke-3....................................................................//
@@ -79,7 +84,11 @@ class CreatorMytubeModel {
 
   factory CreatorMytubeModel.fromMap(Map<String, dynamic> map, String docId) {
     return CreatorMytubeModel(
-      id: docId,
+      // Prioritaskan field channel_id jika ada, fallback ke Document ID
+      id: (map['channel_id'] as String?)?.isNotEmpty == true
+          ? map['channel_id'] as String
+          : docId,
+      creatorId: map['creator_id'] as String? ?? map['owner_uid'] as String? ?? '',
       email: map['email'] as String? ?? '',
       channelName: map['channel_name'] as String? ?? '',
       handle: map['handle'] as String? ?? '',
@@ -107,7 +116,8 @@ class CreatorMytubeModel {
   }
 
   factory CreatorMytubeModel.empty(
-    String uid, {
+    String channelId, {
+    String ownerUid = '',
     String defaultEmail = '',
     String defaultName = '',
     String defaultAvatar = '',
@@ -118,12 +128,14 @@ class CreatorMytubeModel {
         .replaceAll(RegExp(r'[^a-z0-9_]'), '');
 
     return CreatorMytubeModel(
-      id: uid,
+      id: channelId,
+      creatorId: ownerUid,
       email: defaultEmail,
       channelName: defaultName,
       handle: cleanHandle.isNotEmpty ? '@$cleanHandle' : '',
       avatarUrl: defaultAvatar,
       isVerified: true,
+      createdAt: DateTime.now(),
     );
   }
 //............................................................................//
@@ -132,6 +144,8 @@ class CreatorMytubeModel {
 //SERIALIZATION & COPYWITH UTILITIES                                         //
   Map<String, dynamic> toMap() {
     return {
+      'channel_id': id, // Kunci utama dokumen selalu tersimpan di dalam data
+      'creator_id': creatorId.isNotEmpty ? creatorId : id,
       'email': email,
       'channel_name': channelName,
       'handle': handle.startsWith('@') ? handle : (handle.isNotEmpty ? '@$handle' : ''),
@@ -141,6 +155,7 @@ class CreatorMytubeModel {
       'city': city,
       'phone_number': phoneNumber,
       'avatar_url': avatarUrl,
+      'bankName': bankName,
       'bank_name': bankName,
       'bank_account_holder': bankAccountHolder,
       'bank_account_number': bankAccountNumber,
@@ -160,6 +175,7 @@ class CreatorMytubeModel {
 
   CreatorMytubeModel copyWith({
     String? id,
+    String? creatorId,
     String? email,
     String? channelName,
     String? handle,
@@ -186,6 +202,7 @@ class CreatorMytubeModel {
   }) {
     return CreatorMytubeModel(
       id: id ?? this.id,
+      creatorId: creatorId ?? this.creatorId,
       email: email ?? this.email,
       channelName: channelName ?? this.channelName,
       handle: handle ?? this.handle,

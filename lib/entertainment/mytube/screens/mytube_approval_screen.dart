@@ -209,7 +209,7 @@ class _MytubeApprovalScreenState extends ConsumerState<MytubeApprovalScreen>
     }
   }
 
-  // --- APPROVE & REJECT HANDLERS (ORIGINAL INTACT) ---
+  // --- APPROVE & REJECT HANDLERS (DILENGKAPI INFO TARGET LOKASI) ---
   Future<void> _handleApprove(RequestMytubeModel request, bool isIndo) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -231,8 +231,8 @@ class _MytubeApprovalScreenState extends ConsumerState<MytubeApprovalScreen>
         content: Text(
           request.requestType == 'EDIT'
               ? (isIndo
-                  ? 'Perubahan judul, kategori, dan bahasa akan langsung diterapkan ke video di database.'
-                  : 'Changes to title, category, and language will be applied to the video immediately.')
+                  ? 'Perubahan judul, kategori, bahasa, dan target lokasi akan langsung diterapkan ke video di database.'
+                  : 'Changes to title, category, language, and target locations will be applied to the video immediately.')
               : (isIndo
                   ? 'Video ini akan dihapus secara permanen dari saluran kreator dan database.'
                   : 'This video will be permanently deleted from the creator channel and database.'),
@@ -882,6 +882,17 @@ class _MytubeApprovalScreenState extends ConsumerState<MytubeApprovalScreen>
                   _buildDiffRow('Kategori', req.oldCategory ?? '-', req.newCategory ?? '-'),
                   const SizedBox(height: 6),
                   _buildDiffRow('Bahasa', req.oldLanguage ?? '-', req.newLanguage ?? '-'),
+                  // [KOMPARASI USULAN LOKASI TARGET LAMA VS BARU]
+                  if (req.newTargetLocations != null && req.newTargetLocations!.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    _buildDiffRow(
+                      'Lokasi',
+                      (req.oldTargetLocations != null && req.oldTargetLocations!.isNotEmpty)
+                          ? req.oldTargetLocations!.join(', ')
+                          : 'Global',
+                      req.newTargetLocations!.join(', '),
+                    ),
+                  ],
                 ],
               ),
             ),

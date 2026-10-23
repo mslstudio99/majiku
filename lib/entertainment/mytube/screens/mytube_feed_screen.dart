@@ -4,6 +4,12 @@
 // LAYAR FEED MYTUBE (BOTTOM: HOME, CC, KOLEKSI; TOP: MINIMAL ICON; SUBTITLE)//
 //============================================================================//
 
+//============================================================================//
+// DIREKTORI: lib/entertainment/mytube/screens/                              //
+// FILE: MYTUBE_FEED_SCREEN.DART                                             //
+// LAYAR FEED MYTUBE (BOTTOM: HOME, CC, KOLEKSI; TOP: MINIMAL ICON; SUBTITLE)//
+//============================================================================//
+
 //No ke-1....................................................................//
 //IMPORTS & DEPENDENCIES                                                     //
 import 'package:flutter/foundation.dart';
@@ -19,8 +25,10 @@ import '../../../services/ad_service.dart'; // [BARU]: Pengelola Iklan AdMob
 import '../../../services/firestore_service.dart';
 import '../models/video_mytube_model.dart';
 import '../services/firestore_mytube_service.dart';
+import '../services/user_device_service.dart'; // [INTEGRASI WAKELOCK / PERANGKAT]
 import '../view_model/mytube_feed_view_model.dart';
 import 'mytube_comment_sheet.dart';
+import 'mytube_filter_sheet.dart';
 //............................................................................//
 
 //No ke-2....................................................................//
@@ -32,7 +40,8 @@ class MytubeFeedScreen extends ConsumerStatefulWidget {
   ConsumerState<MytubeFeedScreen> createState() => _MytubeFeedScreenState();
 }
 
-class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
+// [DITAMBAHKAN]: mixin WidgetsBindingObserver untuk mendeteksi App Background/Minimize
+class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> with WidgetsBindingObserver {
   late final MytubeFeedViewModel _viewModel;
   final FirestoreMytubeService _service = FirestoreMytubeService();
   final PageController _pageController = PageController();
@@ -49,7 +58,10 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
   DateTime? _nextAdEligibleTime;
   bool _isAdShowing = false;
 
-  // Daftar 16 Kategori Resmi Terurut A-Z (Default English)
+  // [SMART LAZY CACHE RAM]: Menyimpan foto profil saluran di memori agar 0 Read Firestore berulang kali
+  static final Map<String, String> _channelAvatarCache = {};
+
+  // Daftar 17 Kategori Resmi Terurut A-Z (Default English & Bilingual ID)
   static const List<Map<String, String>> _categories = [
     {'en': 'Cartoons & Anime', 'id': 'Kartun & Anime'},
     {'en': 'Comedy & Funny', 'id': 'Lucu'},
@@ -57,6 +69,7 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
     {'en': 'Faith & Religion', 'id': 'Religi'},
     {'en': 'Finance & Investment', 'id': 'Keuangan'},
     {'en': 'Food & Culinary', 'id': 'Kuliner'},
+    {'en': 'Health & Wellness', 'id': 'Kesehatan'}, // [BARU]: Kategori Kesehatan
     {'en': 'History', 'id': 'Sejarah'},
     {'en': 'Horror & Mystery', 'id': 'Horor & Misteri'},
     {'en': 'Music & Artists', 'id': 'Musik & Artis'},
@@ -69,46 +82,8 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
     {'en': 'Technology & Gadgets', 'id': 'Teknologi'},
   ];
 
-  // Daftar 37 Bahasa & Negara Resmi (#1 English US, #2 Indonesian)
-  static const List<String> _languages = [
-    'English (US)',
-    'Indonesian',
-    'Hindi',
-    'English (UK)',
-    'English (Australia)',
-    'English (India)',
-    'Arabic',
-    'Bengali (India)',
-    'Danish',
-    'Dutch (Netherlands)',
-    'Dutch (Belgium)',
-    'Finnish',
-    'French (France)',
-    'French (Canada)',
-    'German',
-    'Gujarati',
-    'Italian',
-    'Japanese',
-    'Kannada',
-    'Korean',
-    'Malayalam',
-    'Mandarin Chinese',
-    'Marathi',
-    'Norwegian',
-    'Polish',
-    'Portuguese (Brazil)',
-    'Russian',
-    'Spanish (Spain)',
-    'Spanish (US)',
-    'Swedish',
-    'Tamil',
-    'Telugu',
-    'Thai',
-    'Turkish',
-    'Ukrainian',
-    'Urdu',
-    'Vietnamese',
-  ];
+  // [LEAN DATABASE]: Daftar 37 Bahasa & Negara Resmi terhubung langsung ke ViewModel
+  static List<String> get _languages => MytubeFeedViewModel.supportedLanguages;
 //............................................................................//
 
 //No ke-3....................................................................//
@@ -116,7 +91,15 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
   @override
   void initState() {
     super.initState();
+    
+    // 1. Inisialisasi Observer Background agar Wakelock aman saat aplikasi di-minimize
+    WidgetsBinding.instance.addObserver(this);
+    
     _viewModel = MytubeFeedViewModel(service: _service);
+    
+    // [PENGHUBUNG CERDAS]: Daftarkan pemantau status video ke DeviceService
+    _viewModel.addListener(_syncWakeLockWithPlayer); 
+    
     _currentUser = FirebaseAuth.instance.currentUser;
     final uid = _currentUser?.uid ?? '';
     _viewModel.initFeed(uid, videoType: 'SHORT');
@@ -127,6 +110,17 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
 
     // [ADMOB]: 2. Jadwalkan iklan pertama berhak tayang setelah 1 Menit (60 detik)
     _nextAdEligibleTime = DateTime.now().add(const Duration(minutes: 1));
+  }
+
+  // [HELPER WAKELOCK]: Menitipkan controller yang sedang aktif ke UserDeviceService
+  void _syncWakeLockWithPlayer() {
+    UserDeviceService.instance.attachPlayer(_viewModel.currentController);
+  }
+
+  // [HELPER LIFECYCLE]: Melaporkan ke UserDeviceService saat HP keluar / minimize aplikasi
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    UserDeviceService.instance.handleAppLifecycle(state);
   }
 
   void _recordFeedVisit() {
@@ -166,6 +160,11 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
 
   @override
   void dispose() {
+    // [CABUT WAKELOCK]: Lepas pemantauan & kembalikan kecerahan/layar HP ke kondisi batas normal
+    WidgetsBinding.instance.removeObserver(this);
+    _viewModel.removeListener(_syncWakeLockWithPlayer);
+    UserDeviceService.instance.detachPlayer();
+
     // Kembalikan orientasi dan status bar HP ke kondisi normal saat keluar
     if (!kIsWeb) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -323,6 +322,10 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
                           _buildBaseVideoPlayer(controller, isVideoLandscape, isFullscreen, isDeviceLandscape, video, t),
 
                           if (_viewModel.isSubtitleLoading) _buildSubtitleLoadingOverlay(t),
+                          // [BARU - MLA DUBBING]: Overlay notifikasi real-time loading dubbing audio
+                          if (_viewModel.isDubbingLoading) _buildDubbingLoadingOverlay(t),
+                          // [BARU - DUAL READY GATE]: Indikator menunggu audio dubbing siap di detik 0
+                          if (_viewModel.isWaitingForDubbingAudio) _buildWaitingDubbingOverlay(t),
                           if (_viewModel.isAutoplaySoundBlocked) _buildUnmutePromptOverlay(t),
 
                           if (!isVideoLandscape)
@@ -593,7 +596,7 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
             controller,
             isCinema: false,
             alignment: Alignment.topLeft, // <-- KUNCI RATA ATAS SEJAJAR TOMBOL LIKE!
-            fontSize: 18.0,               // <-- FONT 18.0 PAS & LEBIH BESAR SESUAI PERMINTAAN
+            fontSize: 20.0,               // <-- FONT 18.0 PAS & LEBIH BESAR SESUAI PERMINTAAN
           ),
         ),
       );
@@ -727,7 +730,7 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
                     setState(() {
                       _isSearchOpen = !_isSearchOpen;
                       if (_isSearchOpen) {
-                        _viewModel.pauseCurrentVideoForSearch(); // [AUTO-PAUSE ANTI HANTU]
+                        _viewModel.pauseCurrentVideoForSearch();
                       } else if (_viewModel.searchQuery.isNotEmpty) {
                         _searchController.clear();
                         _viewModel.clearSearchQuery();
@@ -818,6 +821,7 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
+            // 1. BERANDA (HOME)
             InkWell(
               onTap: () {
                 _viewModel.resetToHomeDefault();
@@ -825,7 +829,7 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
               },
               borderRadius: BorderRadius.circular(12),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -837,11 +841,12 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
               ),
             ),
 
+            // 2. SUBTITLE (CC)
             InkWell(
               onTap: () => _showSubtitleModalSheet(t, isIndo),
               borderRadius: BorderRadius.circular(12),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -853,11 +858,40 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
               ),
             ),
 
+            // 3. [BARU - MLA DUBBING]: Tombol DUB Ringkas di Samping Kanan CC
+            InkWell(
+              onTap: () => _showAudioModalSheet(t, isIndo),
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      _viewModel.isDubbingActive ? Icons.record_voice_over_rounded : Icons.voice_over_off_rounded,
+                      color: _viewModel.isDubbingActive ? Colors.amberAccent : Colors.white70,
+                      size: 24,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _viewModel.isDubbingActive ? 'DUB (${_viewModel.activeAudioLangCode!.toUpperCase()})' : 'DUB',
+                      style: TextStyle(
+                        color: _viewModel.isDubbingActive ? Colors.amberAccent : Colors.white70,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // 4. KOLEKSI (LIBRARY)
             InkWell(
               onTap: () => _showLibraryModalSheet(t, isIndo),
               borderRadius: BorderRadius.circular(12),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -875,12 +909,11 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
   }
 
   // --- KUMPULAN HELPER WIDGETS ---
-  // [HELPER SUBTITLE MANDIRI]: Mendukung Alignment Kustom (Rata Atas) dan Pengaturan Font Terpisah
   Widget _buildSubtitleBox(
     VideoPlayerController controller, {
     required bool isCinema,
     AlignmentGeometry? alignment,
-    double fontSize = 18.0,
+    double fontSize = 20.0,
   }) {
     final effectiveAlignment = alignment ?? (isCinema ? Alignment.bottomCenter : Alignment.bottomLeft);
 
@@ -991,6 +1024,81 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
     );
   }
 
+  // [BARU - MLA DUBBING]: Overlay notifikasi visual proses pembuatan/pengambilan dubbing
+  Widget _buildDubbingLoadingOverlay(String Function(String, String) t) {
+    return Positioned(
+      top: 95, left: 24, right: 24,
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E24).withOpacity(0.92),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.amberAccent.withOpacity(0.6), width: 1),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amberAccent)),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  _viewModel.dubbingLoadingMessage ?? t('Preparing audio dubbing, wait a minute...', 'Menyiapkan dubbing audio, tunggu sebentar...'),
+                  style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w500),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // [BARU - GERBANG TUNGGU DUAL READY GATE]: Indikator menunggu audio dubbing siap di detik 0
+  Widget _buildWaitingDubbingOverlay(String Function(String, String) t) {
+    return Positioned(
+      top: 95,
+      left: 24,
+      right: 24,
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E24).withOpacity(0.92),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.amberAccent.withOpacity(0.8), width: 1),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, spreadRadius: 1),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 15,
+                height: 15,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amberAccent),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  t('Waiting audio dubbing...', 'Menyiapkan audio dubbing...'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildUnmutePromptOverlay(String Function(String, String) t) {
     return Positioned(
       top: 95, left: 0, right: 0,
@@ -1020,207 +1128,19 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
 //............................................................................//
 
 //No ke-5....................................................................//
-//MODAL BOTTOM SHEETS (FILTER, SUBTITLE CC 37 BAHASA & LIBRARY)              //
-  // --- A. MODAL FILTER KONTEN (DILENGKAPI PENGANGKAT TOMBOL SAFEAREA HP) ---
+//MODAL BOTTOM SHEETS (FILTER, SUBTITLE CC 37 BAHASA, DUBBING MLA & LIBRARY) //
+  // --- A. MODAL FILTER KONTEN (TERHUBUNG KE MytubeFilterSheet TERSEBAR) ---
   void _showFilterModalSheet(String Function(String, String) t, bool isIndo) {
-    showModalBottomSheet(
+    MytubeFilterSheet.show(
       context: context,
-      isScrollControlled: true,
-      useSafeArea: true, // [PROTEKSI HP]: Memastikan sheet berada di area aman layar HP
-      backgroundColor: const Color(0xFF1E1E24),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setModalState) {
-            final activeCat = _viewModel.selectedCategory;
-            final activeLang = _viewModel.selectedLanguage;
-
-            // Perhitungan batas aman navigasi bawah HP (gestur / 3 tombol)
-            final double bottomInset = MediaQuery.of(context).padding.bottom;
-
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.80, // Ketinggian 80% proporsional
-              padding: EdgeInsets.fromLTRB(20, 16, 20, 14.0 + bottomInset),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 44,
-                      height: 4,
-                      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        t('MyTube Content Filter', 'Filter Konten MyTube'),
-                        style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
-                      ),
-                      if (activeCat != null || activeLang != null)
-                        TextButton(
-                          onPressed: () {
-                            _viewModel.clearAllFilters();
-                            setModalState(() {});
-                            Navigator.of(ctx).pop();
-                          },
-                          child: Text(
-                            t('Reset', 'Reset'),
-                            style: const TextStyle(color: Colors.amberAccent, fontSize: 13),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const Divider(color: Colors.white12, height: 20),
-
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            t('CONTENT CATEGORY (A-Z)', 'KATEGORI KONTEN (A-Z)'),
-                            style: const TextStyle(color: Colors.amberAccent, fontSize: 12.5, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: _categories.map((cat) {
-                              final catEn = cat['en']!;
-                              final catLabel = isIndo ? cat['id']! : cat['en']!;
-                              final isSelected = activeCat == catEn;
-
-                              return ChoiceChip(
-                                label: Text(
-                                  catLabel,
-                                  style: TextStyle(
-                                    color: isSelected ? Colors.black : Colors.white,
-                                    fontSize: 12.5,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                  ),
-                                ),
-                                selected: isSelected,
-                                selectedColor: Colors.amberAccent,
-                                backgroundColor: const Color(0xFF2B2B36),
-                                side: BorderSide(color: isSelected ? Colors.amberAccent : Colors.white12),
-                                onSelected: (selected) {
-                                  _viewModel.setCategoryFilter(selected ? catEn : null);
-                                  setModalState(() {});
-                                },
-                              );
-                            }).toList(),
-                          ),
-                          const SizedBox(height: 24),
-
-                          Text(
-                            t('LANGUAGE & REGION', 'BAHASA & NEGARA'),
-                            style: const TextStyle(color: Colors.amberAccent, fontSize: 12.5, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: _languages.map((lang) {
-                              final isSelected = activeLang == lang;
-
-                              return ChoiceChip(
-                                label: Text(
-                                  lang,
-                                  style: TextStyle(
-                                    color: isSelected ? Colors.black : Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                  ),
-                                ),
-                                selected: isSelected,
-                                selectedColor: Colors.orangeAccent,
-                                backgroundColor: const Color(0xFF2B2B36),
-                                side: BorderSide(color: isSelected ? Colors.orangeAccent : Colors.white12),
-                                onSelected: (selected) {
-                                  _viewModel.setLanguageFilter(selected ? lang : null);
-                                  setModalState(() {});
-                                },
-                              );
-                            }).toList(),
-                          ),
-                          const SizedBox(height: 16),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // [TOMBOL TERAPKAN FILTER TERANGKAT LEGA DI ATAS BILAH NAVIGASI HP]
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.amberAccent,
-                        foregroundColor: Colors.black,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        elevation: 2,
-                      ),
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      child: Text(t('Apply Filter', 'Terapkan Filter'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+      viewModel: _viewModel,
+      t: t,
+      isIndo: isIndo,
     );
   }
 
   // --- B. MODAL PILIH SUBTITLE (CC) 37 BAHASA DUNIA ---
   void _showSubtitleModalSheet(String Function(String, String) t, bool isIndo) {
-    const Map<String, String> langCodeMap = {
-      'English (US)': 'en',
-      'Indonesian': 'id',
-      'Hindi': 'hi',
-      'English (UK)': 'en-gb',
-      'English (Australia)': 'en-au',
-      'English (India)': 'en-in',
-      'Arabic': 'ar',
-      'Bengali (India)': 'bn',
-      'Danish': 'da',
-      'Dutch (Netherlands)': 'nl',
-      'Dutch (Belgium)': 'nl-be',
-      'Finnish': 'fi',
-      'French (France)': 'fr',
-      'French (Canada)': 'fr-ca',
-      'German': 'de',
-      'Gujarati': 'gu',
-      'Italian': 'it',
-      'Japanese': 'ja',
-      'Kannada': 'kn',
-      'Korean': 'ko',
-      'Malayalam': 'ml',
-      'Mandarin Chinese': 'zh',
-      'Marathi': 'mr',
-      'Norwegian': 'no',
-      'Polish': 'pl',
-      'Portuguese (Brazil)': 'pt',
-      'Russian': 'ru',
-      'Spanish (Spain)': 'es',
-      'Spanish (US)': 'es-us',
-      'Swedish': 'sv',
-      'Tamil': 'ta',
-      'Telugu': 'te',
-      'Thai': 'th',
-      'Turkish': 'tr',
-      'Ukrainian': 'uk',
-      'Urdu': 'ur',
-      'Vietnamese': 'vi',
-    };
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1275,7 +1195,7 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
                   separatorBuilder: (_, __) => const Divider(color: Colors.white10, height: 1),
                   itemBuilder: (context, idx) {
                     final langName = _languages[idx];
-                    final code = langCodeMap[langName] ?? 'en';
+                    final code = MytubeFeedViewModel.getLanguageCode(langName);
                     final isCurrentActive = _viewModel.activeSubtitleLangCode == code;
 
                     return ListTile(
@@ -1307,7 +1227,123 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
     );
   }
 
-  // --- C. MODAL LEMBAR KOLEKSI SAYA (MYTUBE LIBRARY) ---
+  // --- C. [BARU - MLA DUBBING]: MODAL PILIH AUDIO DUBBING 37 BAHASA DUNIA ---
+  void _showAudioModalSheet(String Function(String, String) t, bool isIndo) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: const Color(0xFF1E1E24),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.75,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          child: Column(
+            children: [
+              Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.record_voice_over_rounded, color: Colors.amberAccent, size: 24),
+                      const SizedBox(width: 8),
+                      Text(
+                        t('Audio Language (Dubbing)', 'Bahasa Audio (Dubbing)'),
+                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  if (_viewModel.isDubbingActive)
+                    TextButton(
+                      onPressed: () {
+                        _viewModel.resetAudioToOriginal();
+                        Navigator.of(ctx).pop();
+                      },
+                      child: Text(
+                        t('Original Audio', 'Audio Asli'),
+                        style: const TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                ],
+              ),
+              const Divider(color: Colors.white12, height: 18),
+
+              // OPSI 1: AUDIO ASLI BAWAAN VIDEO (ORIGINAL)
+              ListTile(
+                dense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                leading: Icon(
+                  Icons.audiotrack_rounded,
+                  color: !_viewModel.isDubbingActive ? Colors.amberAccent : Colors.white54,
+                  size: 20,
+                ),
+                title: Text(
+                  t('Original Video Audio', 'Audio Asli Bawaan Video'),
+                  style: TextStyle(
+                    color: !_viewModel.isDubbingActive ? Colors.amberAccent : Colors.white,
+                    fontWeight: !_viewModel.isDubbingActive ? FontWeight.bold : FontWeight.normal,
+                    fontSize: 14,
+                  ),
+                ),
+                trailing: !_viewModel.isDubbingActive
+                    ? const Icon(Icons.check_circle_rounded, color: Colors.amberAccent, size: 20)
+                    : null,
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _viewModel.resetAudioToOriginal();
+                },
+              ),
+              const Divider(color: Colors.white12, height: 8),
+
+              // DAFTAR 37 BAHASA DUBBING DUNIA (TERHUBUNG KE DATABASE VIEWMODEL)
+              Expanded(
+                child: ListView.separated(
+                  itemCount: _languages.length,
+                  separatorBuilder: (_, __) => const Divider(color: Colors.white10, height: 1),
+                  itemBuilder: (context, idx) {
+                    final langName = _languages[idx];
+                    final code = MytubeFeedViewModel.getLanguageCode(langName);
+                    final isCurrentActive = _viewModel.activeAudioLangCode == code;
+
+                    return ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      title: Text(
+                        langName,
+                        style: TextStyle(
+                          color: isCurrentActive ? Colors.amberAccent : Colors.white,
+                          fontWeight: isCurrentActive ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 14,
+                        ),
+                      ),
+                      trailing: isCurrentActive
+                          ? const Icon(Icons.check_circle_rounded, color: Colors.amberAccent, size: 20)
+                          : null,
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        _viewModel.selectAudioLanguage(langCode: code, langName: langName);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // --- D. MODAL LEMBAR KOLEKSI SAYA (MYTUBE LIBRARY) ---
   void _showLibraryModalSheet(String Function(String, String) t, bool isIndo) {
     final uid = _currentUser?.uid ?? '';
     if (uid.isEmpty) return;
@@ -1552,9 +1588,12 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
     final isIndo = currentLocale.languageCode == 'id';
     String t(String en, String id) => isIndo ? id : en;
 
-    final creatorKey = video.uploaderEmail.trim().isNotEmpty
-        ? video.uploaderEmail.trim().toLowerCase()
-        : video.uploaderId.trim();
+    // [JANGKAR HIBRIDA]: Utamakan channelId resmi saluran, fallback ke email/uid untuk 8 video lama
+    final String creatorKey = video.channelId.trim().isNotEmpty
+        ? video.channelId.trim()
+        : (video.uploaderEmail.trim().isNotEmpty
+            ? video.uploaderEmail.trim().toLowerCase()
+            : video.uploaderId.trim());
 
     final isSelf = _currentUser != null && (
       (_currentUser!.uid.isNotEmpty && _currentUser!.uid == video.uploaderId) ||
@@ -1567,7 +1606,7 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // [TOMBOL FOLLOW RESMI]: Bertengger di puncak kolom aksi
+        // [TOMBOL FOLLOW RESMI]: Bertengger di puncak kolom aksi (Jangkar Channel ID dengan Fallback Email)
         if (!isSelf && _currentUser != null && creatorKey.isNotEmpty) ...[
           StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance
@@ -1595,7 +1634,7 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
                         if (isProcessing) return;
                         setBtnState(() => isProcessing = true);
 
-                        // [PIPA DATA LENGKAP]: Mengirim Nama, Avatar, & Email resmi penonton
+                        // [PIPA DATA LENGKAP & AUTO-RESOLVER]: Mengirim channelId (atau email legacy) beserta identitas penonton
                         final success = await _service.toggleFollowCreator(
                           userId: _currentUser!.uid,
                           creatorKey: creatorKey,
@@ -1811,23 +1850,17 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
 //No ke-7....................................................................//
 //BOTTOM METADATA OVERLAY, FOLLOW ATOMIC & EMPTY/ERROR STATES BILINGUAL       //
   Widget _buildBottomMetadata(VideoMytubeModel video, String Function(String, String) t) {
+    // Ambil daftar lokasi lengkap (default Global jika kosong)
+    final locations = video.targetLocations.isNotEmpty ? video.targetLocations : const ['Global'];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Row(
           children: [
-            // [FOTO PROFIL CHANNEL]: Pindah rapi ke sebelah kiri nama channel
-            CircleAvatar(
-              radius: 13,
-              backgroundColor: Colors.white24,
-              backgroundImage: video.channelAvatarUrl.isNotEmpty
-                  ? NetworkImage(video.channelAvatarUrl)
-                  : null,
-              child: video.channelAvatarUrl.isEmpty
-                  ? const Icon(Icons.person, color: Colors.white70, size: 15)
-                  : null,
-            ),
+            // [FOTO PROFIL CHANNEL CERDAS]: Lazy In-Memory Cache Fallback (0 Polling / Hemat Kuota)
+            _buildChannelAvatar(video),
             const SizedBox(width: 8),
 
             Flexible(
@@ -1862,8 +1895,13 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
         ),
 
         const SizedBox(height: 5),
-        Row(
+        // [FLEXIBLE WRAP]: Kategori, Bahasa & SELURUH Target Lokasi Berdampingan (Anti-Overflow)
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
+            // 1. Kategori Konten
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
               decoration: BoxDecoration(
@@ -1875,7 +1913,8 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
                 style: const TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold),
               ),
             ),
-            const SizedBox(width: 6),
+
+            // 2. Bahasa Konten
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
               decoration: BoxDecoration(
@@ -1887,6 +1926,30 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
                 style: const TextStyle(color: Colors.white70, fontSize: 10),
               ),
             ),
+
+            // 3. SELURUH TARGET LOKASI (Ditampilkan Semua di Samping Bahasa)
+            ...locations.map((loc) {
+              final isGlob = loc.toLowerCase() == 'global';
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                decoration: BoxDecoration(
+                  color: Colors.lightGreenAccent.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: Colors.lightGreenAccent.withOpacity(0.35),
+                    width: 0.8,
+                  ),
+                ),
+                child: Text(
+                  isGlob ? '🌐 Global' : '📍 $loc',
+                  style: const TextStyle(
+                    color: Colors.lightGreenAccent,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              );
+            }),
           ],
         ),
 
@@ -1923,6 +1986,88 @@ class _MytubeFeedScreenState extends ConsumerState<MytubeFeedScreen> {
           ),
         ],
       ],
+    );
+  }
+
+  // --- HELPER RENDERING FOTO PROFIL SALURAN CERDAS (HEMAT KUOTA & MEMORI) ---
+  Widget _buildChannelAvatar(VideoMytubeModel video) {
+    // 1. Prioritas Utama: Jika video sudah membawa channelAvatarUrl, gunakan langsung (0 Read Firestore)
+    if (video.channelAvatarUrl.trim().isNotEmpty) {
+      return _buildAvatarImage(video.channelAvatarUrl.trim());
+    }
+
+    final channelKey = video.channelId.trim().isNotEmpty
+        ? video.channelId.trim()
+        : (video.uploaderEmail.trim().isNotEmpty
+            ? video.uploaderEmail.trim().toLowerCase()
+            : video.uploaderId.trim());
+
+    if (channelKey.isEmpty) {
+      return _buildDefaultAvatarPlaceholder();
+    }
+
+    // 2. Prioritas Kedua: Cek apakah foto saluran sudah tersimpan di RAM aplikasi (0 Read Firestore)
+    if (_channelAvatarCache.containsKey(channelKey)) {
+      final cachedUrl = _channelAvatarCache[channelKey]!;
+      if (cachedUrl.isNotEmpty) {
+        return _buildAvatarImage(cachedUrl);
+      }
+      return _buildDefaultAvatarPlaceholder();
+    }
+
+    // 3. Fallback Hemat (1x Read saja): Ambil dari dokumen saluran, simpan ke RAM untuk selamanya
+    return FutureBuilder(
+      future: _service.getCreatorProfile(
+        video.uploaderEmail,
+        channelId: video.channelId,
+        userId: video.uploaderId,
+      ),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done && snapshot.hasData) {
+          final dynamic profile = snapshot.data;
+          final String avatarUrl = (profile?.avatarUrl ?? '').toString().trim();
+          _channelAvatarCache[channelKey] = avatarUrl;
+          if (avatarUrl.isNotEmpty) {
+            return _buildAvatarImage(avatarUrl);
+          }
+        }
+        return _buildDefaultAvatarPlaceholder();
+      },
+    );
+  }
+
+  Widget _buildAvatarImage(String url) {
+    return ClipOval(
+      child: Image.network(
+        url,
+        width: 26,
+        height: 26,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _buildDefaultAvatarPlaceholder(),
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            width: 26,
+            height: 26,
+            decoration: const BoxDecoration(
+              color: Colors.white12,
+              shape: BoxShape.circle,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDefaultAvatarPlaceholder() {
+    return Container(
+      width: 26,
+      height: 26,
+      decoration: const BoxDecoration(
+        color: Colors.white24,
+        shape: BoxShape.circle,
+      ),
+      child: const Icon(Icons.person, color: Colors.white70, size: 15),
     );
   }
 

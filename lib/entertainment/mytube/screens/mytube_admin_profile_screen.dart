@@ -1,7 +1,7 @@
 //============================================================================//
 // DIREKTORI: lib/entertainment/mytube/screens/                              //
 // FILE: MYTUBE_ADMIN_PROFILE_SCREEN.DART                                    //
-// LAYAR PENGATURAN PROFIL CREATOR / ADMIN MYTUBE LENGKAP                    //
+// LAYAR PENGATURAN PROFIL CREATOR / ADMIN MYTUBE (CHANNEL ID & CREATED AT)  //
 //============================================================================//
 
 //No ke-1....................................................................//
@@ -17,7 +17,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../providers/config_provider.dart';
 import '../models/creator_mytube_model.dart';
 import '../services/firestore_mytube_service.dart';
-import 'mytube_followers_screen.dart'; // [BARU]: Navigasi Halaman Khusus Pengikut
+import 'mytube_followers_screen.dart';
 //............................................................................//
 
 //No ke-2....................................................................//
@@ -36,6 +36,11 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
   User? _currentUser;
   bool _isLoading = true;
   bool _isSaving = false;
+
+  // [IDENTITAS UTAMA CHANNEL]: Channel ID Abadi, Tanggal Registrasi & Peran Akun
+  String _channelId = '';
+  DateTime? _createdAt;
+  String _accountRole = 'creator'; // 'admin' atau 'creator'
 
   // Checkbox: Pemilik Rekening Bank Sama dengan Nama Legal
   bool _isSameAsLegalName = false;
@@ -89,12 +94,27 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
       return;
     }
 
-    // [PERBAIKAN BUG]: Mengambil profil berdasarkan Email Creator resmi
+    // 1. [AMBIL ROLE RESMI AKUN DARI FIRESTORE]: Cek apakah Admin atau Creator
+    try {
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (userDoc.exists) {
+        final userData = userDoc.data();
+        final rawRole = userData?['userTier']?.toString().toLowerCase() ??
+            userData?['role']?.toString().toLowerCase() ??
+            'creator';
+        _accountRole = rawRole;
+      }
+    } catch (_) {}
+
+    // 2. Ambil data profil kreator
     final profile = await _service.getCreatorProfile(email, userId: uid);
-    
+
     if (mounted) {
       if (profile != null) {
         _existingProfile = profile;
+        _channelId = profile.channelId;
+        _createdAt = profile.createdAt;
+
         _channelNameController.text = profile.channelName;
         _handleController.text = profile.handle;
         _legalNameController.text = profile.creatorLegalName;
@@ -113,13 +133,13 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
         _tiktokController.text = profile.tiktokUrl;
         _otherLinkController.text = profile.otherUrl;
 
-        // Cek status centang kecocokan nama pemilik bank
         if (profile.bankAccountHolder.isNotEmpty &&
             profile.bankAccountHolder == profile.creatorLegalName) {
           _isSameAsLegalName = true;
         }
       } else {
-        // Hanya dikosongkan jika akun memang benar-benar baru pertama kali mendaftar
+        _channelId = '';
+        _createdAt = null;
         _channelNameController.text = '';
         _handleController.text = '';
         _legalNameController.text = '';
@@ -130,7 +150,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
     }
   }
 
-  // Auto-generate Handle ID Unik dari Nama Channel
   void _updateAutoHandle(String channelName) {
     String clean = channelName
         .toLowerCase()
@@ -178,7 +197,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
 
       if (picked == null) return;
 
-      // 1. Validasi Ekstensi Format File Gambar
       final String extension = picked.name.split('.').last.toLowerCase();
       const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
       if (!allowedExtensions.contains(extension)) {
@@ -200,7 +218,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
 
       final bytes = await picked.readAsBytes();
 
-      // 2. Validasi Batas Ukuran Maksimal File (Maksimal 3 MB)
       const int maxBytes = 3 * 1024 * 1024; // 3 MB
       if (bytes.lengthInBytes > maxBytes) {
         if (mounted) {
@@ -222,9 +239,11 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
 
       setState(() => _isSaving = true);
 
-      // Jalur Storage Baru: mytube/{creatorEmail}/profil/avatar.jpg
+      // [KUNCI STORAGE CHANNEL ID]: Folder foto profil diikat langsung ke Channel ID abadi
       final cleanEmail = _currentUser?.email?.trim().toLowerCase();
-      final folderKey = (cleanEmail != null && cleanEmail.isNotEmpty) ? cleanEmail : uid;
+      final folderKey = _channelId.isNotEmpty
+          ? _channelId
+          : ((cleanEmail != null && cleanEmail.isNotEmpty) ? cleanEmail : uid);
 
       final refStorage = FirebaseStorage.instance
           .ref()
@@ -272,7 +291,7 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
 //............................................................................//
 
 //No ke-5....................................................................//
-//SAVE PROFILE TO FIRESTORE WITH UNIQUE HANDLE CHECK                         //
+//SAVE PROFILE TO FIRESTORE WITH IMMUTABLE CHANNEL ID ANCHOR                 //
   Future<void> _saveProfile(bool isIndo) async {
     final uid = _currentUser?.uid ?? '';
     if (uid.isEmpty) return;
@@ -299,8 +318,16 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
         finalHandle = '@$finalHandle';
       }
 
+      // [KUNCI ABADI CHANNEL ID]: Mempertahankan ID saluran asli sekalipun email/nama diubah
+      final resolvedChannelId = _channelId.isNotEmpty
+          ? _channelId
+          : (_existingProfile?.channelId.isNotEmpty == true
+              ? _existingProfile!.channelId
+              : uid);
+
       final updatedModel = CreatorMytubeModel(
-        id: uid,
+        id: resolvedChannelId,
+        creatorId: uid, // UID Akun Pemilik (Bisa dialihkan kepemilikannya)
         email: _currentUser?.email ?? '',
         channelName: channelName,
         handle: finalHandle,
@@ -320,7 +347,7 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
         isVerified: true,
         totalVideos: _existingProfile?.totalVideos ?? 0,
         totalViews: _existingProfile?.totalViews ?? 0,
-        createdAt: _existingProfile?.createdAt,
+        createdAt: _createdAt ?? _existingProfile?.createdAt ?? DateTime.now(),
       );
 
       await _service.saveCreatorProfile(updatedModel);
@@ -433,22 +460,65 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(height: 20),
 
-                  // Info Akun Otomatis dari Auth
+                  // [KARTU IDENTITAS RESMI]: Channel ID, Status Akun (ADMIN/CREATOR), Created At, UID & Email
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
                       color: const Color(0xFF1E1E24),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white12),
+                      border: Border.all(color: Colors.amberAccent.withOpacity(0.35), width: 1.2),
                     ),
                     child: Column(
                       children: [
+                        // 1. Channel ID Utama (Dilengkapi Tombol Salin Cepat)
+                        _buildAlignedAccountRowWithAction(
+                          label: 'Channel ID',
+                          value: _channelId.isNotEmpty ? _channelId : t('Auto-Generated on Save', 'Dibuat Otomatis saat Simpan'),
+                          icon: Icons.tag_rounded,
+                          trailingAction: _channelId.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.copy_rounded, color: Colors.amberAccent, size: 18),
+                                  tooltip: t('Copy Channel ID', 'Salin Channel ID'),
+                                  onPressed: () {
+                                    Clipboard.setData(ClipboardData(text: _channelId));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(isIndo ? 'Channel ID berhasil disalin!' : 'Channel ID copied to clipboard!'),
+                                        duration: const Duration(seconds: 2),
+                                      ),
+                                    );
+                                  },
+                                )
+                              : null,
+                        ),
+                        const Divider(color: Colors.white12, height: 18),
+
+                        // 2. [BARU]: Status Peran Akun Resmi (ADMIN vs CREATOR Lencana Menyala)
+                        _buildAlignedAccountRowWithAction(
+                          label: t('Account Role', 'Status Akun'),
+                          value: _accountRole.toUpperCase(),
+                          icon: _accountRole == 'admin' ? Icons.shield_rounded : Icons.verified_user_rounded,
+                          trailingAction: _buildRoleBadge(_accountRole),
+                        ),
+                        const Divider(color: Colors.white12, height: 18),
+
+                        // 3. Tanggal Pembuatan Saluran (Created At)
                         _buildAlignedAccountRow(
-                          label: 'User ID (UID)',
+                          label: t('Created At', 'Dibuat Pada'),
+                          value: _formatDateBilingual(_createdAt, t),
+                          icon: Icons.calendar_today_rounded,
+                        ),
+                        const Divider(color: Colors.white12, height: 18),
+
+                        // 4. User ID Akun Pemilik (UID)
+                        _buildAlignedAccountRow(
+                          label: 'Owner UID',
                           value: _currentUser?.uid ?? '-',
                           icon: Icons.vpn_key_outlined,
                         ),
                         const Divider(color: Colors.white12, height: 18),
+
+                        // 5. Email Akun
                         _buildAlignedAccountRow(
                           label: 'Email',
                           value: _currentUser?.email ?? '-',
@@ -459,7 +529,7 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(height: 20),
 
-                  // [BARU]: KARTU PERFORMA CHANNEL & TOTAL PENGIKUT REAL-TIME
+                  // KARTU PERFORMA CHANNEL & TOTAL PENGIKUT REAL-TIME
                   _buildChannelStatsCard(t, isIndo),
                   const SizedBox(height: 26),
 
@@ -467,7 +537,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   _buildSectionHeader(t('CHANNEL & CREATOR IDENTITY', 'IDENTITAS CHANNEL & CREATOR')),
                   const SizedBox(height: 14),
 
-                  // Input Nama Channel (Maks 30 Karakter - Kosong Default)
                   _buildTextField(
                     label: t('Channel Name (Max 30 Chars)', 'Nama Channel (Maks 30 Karakter)'),
                     controller: _channelNameController,
@@ -479,7 +548,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(height: 14),
 
-                  // Input Handle ID Unik (Auto-filled)
                   _buildTextField(
                     label: t('Channel Handle (Auto-Generated)', 'ID Unik Handle (Otomatis)'),
                     controller: _handleController,
@@ -489,7 +557,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(height: 14),
 
-                  // Input Nama Creator Legal
                   _buildTextField(
                     label: t('Creator Legal Name (ID Card / Passport)', 'Nama Lengkap Creator (Sesuai KTP)'),
                     controller: _legalNameController,
@@ -497,7 +564,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(height: 14),
 
-                  // Input Alamat (Maks 100 Karakter)
                   _buildTextField(
                     label: t('Address (Max 100 Chars)', 'Alamat Domisili (Maks 100 Karakter)'),
                     controller: _addressController,
@@ -507,11 +573,9 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(height: 14),
 
-                  // Pemilihan Negara (Disinkronkan dengan 37 Negara dari input_script_screen)
                   _buildCountryPickerTile(t),
                   const SizedBox(height: 14),
 
-                  // Input Kota
                   _buildTextField(
                     label: t('City', 'Kota'),
                     controller: _cityController,
@@ -519,7 +583,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(height: 14),
 
-                  // Input Telepon / WhatsApp
                   _buildTextField(
                     label: t('WhatsApp / Phone Number', 'Nomor WhatsApp / Ponsel'),
                     controller: _phoneController,
@@ -532,7 +595,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   _buildSectionHeader(t('PAYOUT & BANK ACCOUNT DETAILS', 'DATA REKENING BANK & PENCAIRAN')),
                   const SizedBox(height: 14),
 
-                  // Nama Bank
                   _buildTextField(
                     label: t('Bank Name', 'Nama Bank'),
                     controller: _bankNameController,
@@ -540,7 +602,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(height: 14),
 
-                  // Nama Pemilik Rekening Bank (Kosong Default)
                   _buildTextField(
                     label: t('Bank Account Holder Name', 'Nama Pemilik Rekening Bank'),
                     controller: _bankHolderController,
@@ -549,7 +610,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(height: 6),
 
-                  // Opsi Centang: Sama dengan Nama Legal / KTP
                   Theme(
                     data: ThemeData(unselectedWidgetColor: Colors.white54),
                     child: CheckboxListTile(
@@ -574,7 +634,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(height: 8),
 
-                  // Nomor Rekening
                   _buildTextField(
                     label: t('Bank Account Number', 'Nomor Rekening Bank'),
                     controller: _bankNumberController,
@@ -583,11 +642,10 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(height: 28),
 
-                  // --- SEKSI 4: MEDIA SOSIAL RESMI (4 OPSI: YOUTUBE, FB, TIKTOK, OTHER) ---
+                  // --- SEKSI 4: MEDIA SOSIAL RESMI ---
                   _buildSectionHeader(t('OFFICIAL SOCIAL MEDIA LINKS', 'TAUTAN MEDIA SOSIAL RESMI')),
                   const SizedBox(height: 14),
 
-                  // 1. YouTube Channel
                   _buildTextField(
                     label: 'YouTube Channel',
                     controller: _youtubeController,
@@ -596,7 +654,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(height: 14),
 
-                  // 2. Facebook (FB)
                   _buildTextField(
                     label: 'Facebook (FB)',
                     controller: _facebookController,
@@ -605,7 +662,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(height: 14),
 
-                  // 3. TikTok
                   _buildTextField(
                     label: 'TikTok',
                     controller: _tiktokController,
@@ -614,7 +670,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(height: 14),
 
-                  // 4. Other (Tautan Bebas)
                   _buildTextField(
                     label: t('Other Link', 'Tautan Lainnya (Bebas)'),
                     controller: _otherLinkController,
@@ -623,7 +678,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(height: 36),
 
-                  // Tombol Simpan Bawah
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -652,15 +706,50 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
             ),
     );
   }
+
+  // [HELPER BADGE STATUS PERAN RESMI]: Tampilan Kontras Elegan
+  Widget _buildRoleBadge(String role) {
+    final isAdmin = role.toLowerCase() == 'admin';
+    final color = isAdmin ? const Color(0xFF6366F1) : const Color(0xFF10B981);
+    final label = isAdmin ? 'ADMIN' : 'CREATOR';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.18),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color, width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isAdmin ? Icons.shield_rounded : Icons.verified_rounded,
+            color: color,
+            size: 13,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.bold,
+              fontSize: 10.5,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 //............................................................................//
 
 //No ke-7....................................................................//
 //HELPER WIDGETS & SEARCHABLE COUNTRY PICKER MODAL                           //
-  // [BARU]: KARTU PERFORMA CHANNEL DENGAN NAVIGASI KE HALAMAN PENGIKUT LENGKAP
   Widget _buildChannelStatsCard(String Function(String, String) t, bool isIndo) {
     final cleanEmail = _currentUser?.email?.trim().toLowerCase() ?? '';
     final uid = _currentUser?.uid ?? '';
-    final docKey = cleanEmail.isNotEmpty ? cleanEmail : uid;
+    final docKey = _channelId.isNotEmpty ? _channelId : (cleanEmail.isNotEmpty ? cleanEmail : uid);
 
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('mytube').doc(docKey).snapshots(),
@@ -727,7 +816,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
               const Divider(color: Colors.white12, height: 18),
               Row(
                 children: [
-                  // 1. Pengikut (Buka Layar Khusus Pengikut)
                   Expanded(
                     child: InkWell(
                       onTap: () {
@@ -786,7 +874,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(width: 8),
 
-                  // 2. Total Tayangan (Views)
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -824,7 +911,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(width: 8),
 
-                  // 3. Total Video Aktif
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
@@ -878,6 +964,16 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
     return '$number';
   }
 
+  String _formatDateBilingual(DateTime? dt, String Function(String, String) t) {
+    if (dt == null) return t('Not set yet', 'Belum tercatat');
+    const monthsEn = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthsId = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    final m = t(monthsEn[dt.month - 1], monthsId[dt.month - 1]);
+    final h = dt.hour.toString().padLeft(2, '0');
+    final min = dt.minute.toString().padLeft(2, '0');
+    return '${dt.day} $m ${dt.year}, $h:$min';
+  }
+
   Widget _buildSectionHeader(String title) {
     return Text(
       title,
@@ -890,11 +986,24 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
     );
   }
 
-  // Baris Info Akun Rata Sejajar Persisi (Menggunakan Fixed Column Width)
   Widget _buildAlignedAccountRow({
     required String label,
     required String value,
     required IconData icon,
+  }) {
+    return _buildAlignedAccountRowWithAction(
+      label: label,
+      value: value,
+      icon: icon,
+      trailingAction: null,
+    );
+  }
+
+  Widget _buildAlignedAccountRowWithAction({
+    required String label,
+    required String value,
+    required IconData icon,
+    Widget? trailingAction,
   }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -905,22 +1014,23 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
           width: 105,
           child: Text(
             label,
-            style: const TextStyle(color: Colors.white70, fontSize: 13.5, fontWeight: FontWeight.w500),
+            style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
           ),
         ),
-        const Text(':', style: TextStyle(color: Colors.white38, fontSize: 13.5)),
-        const SizedBox(width: 10),
+        const Text(':', style: TextStyle(color: Colors.white38, fontSize: 13)),
+        const SizedBox(width: 8),
         Expanded(
           child: SelectableText(
             value,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 14,
+              fontSize: 13.5,
               fontWeight: FontWeight.w600,
               fontFamily: 'monospace',
             ),
           ),
         ),
+        if (trailingAction != null) trailingAction,
       ],
     );
   }
@@ -1038,7 +1148,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(height: 14),
 
-                  // Search Bar Input
                   TextField(
                     controller: searchController,
                     style: const TextStyle(color: Colors.white, fontSize: 14.5),
@@ -1061,7 +1170,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
                   ),
                   const SizedBox(height: 12),
 
-                  // Country List
                   Expanded(
                     child: ListView.separated(
                       itemCount: filteredCountries.length,
@@ -1099,7 +1207,6 @@ class _MytubeAdminProfileScreenState extends ConsumerState<MytubeAdminProfileScr
     );
   }
 
-  // 37 Negara Lengkap Mewakili Seluruh Variasi Bahasa & Kawasan Regional
   static const List<String> _allCountries = [
     'Indonesia 🇮🇩',
     'United States 🇺🇸',

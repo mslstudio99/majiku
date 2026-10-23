@@ -14,10 +14,11 @@ import '../providers/user_provider.dart';
 import '../view_model/auth_view_model.dart';
 import '../providers/config_provider.dart';
 
-// --- [MYTUBE] Impor Layar Portal Hub, Approval, & Account Upgrade Admin ---
+// --- [MYTUBE] Impor Layar Portal Hub, Approval, Upgrade & Content Management Admin ---
 import '../entertainment/mytube/screens/mytube_admin_portal_screen.dart';
 import '../entertainment/mytube/screens/mytube_approval_screen.dart';
 import '../entertainment/mytube/screens/mytube_account_upgrade.dart';
+import '../entertainment/mytube/screens/content_management_screen.dart';
 //............................................................................//
 
 //No ke-2....................................................................//
@@ -277,7 +278,7 @@ class UserAccountScreen extends ConsumerWidget {
     );
   }
 
-  // Tombol 2: Pusat Persetujuan & Moderasi Konten (DIPERBARUI: BEBAS OVERFLOW)
+  // Tombol 2: Pusat Persetujuan & Moderasi Konten
   Widget _buildApprovalPortalButton({
     required BuildContext context,
     required bool isIndo,
@@ -391,13 +392,13 @@ class UserAccountScreen extends ConsumerWidget {
     );
   }
 
-  // Tombol 3: Pendaftaran & Manajemen Akun Creator (DIPERBARUI: BEBAS OVERFLOW)
+  // Tombol 3: Pendaftaran & Manajemen Akun Creator
   Widget _buildUpgradePortalButton({
     required BuildContext context,
     required bool isIndo,
   }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 24),
+      margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
@@ -495,6 +496,120 @@ class UserAccountScreen extends ConsumerWidget {
                 const Icon(
                   Icons.arrow_forward_ios,
                   color: Color(0xFF34D399),
+                  size: 16,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Tombol 4 [BARU]: Manajemen Konten & Auditor Saluran (Khusus Admin)
+  Widget _buildContentManagementButton({
+    required BuildContext context,
+    required bool isIndo,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFF59E0B).withOpacity(0.6),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFF59E0B).withOpacity(0.2),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      child: Material(
+        color: const Color(0xFF241C12), // Deep Amber Dark Chocolate
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          splashColor: const Color(0xFFF59E0B).withOpacity(0.2),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const ContentManagementScreen(),
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.table_chart_rounded,
+                    color: Color(0xFFFBBF24),
+                    size: 26,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              _t(isIndo, 'Content Management', 'Manajemen Konten'),
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: Color(0xFFFBBF24),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF59E0B).withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'Admin Pusat',
+                              style: TextStyle(
+                                color: Color(0xFFFDE68A),
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _t(
+                          isIndo,
+                          'Monitor registered channels, audit videos & direct content control',
+                          'Pantau daftar channel, audit video & kendali konten langsung',
+                        ),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios,
+                  color: Color(0xFFFBBF24),
                   size: 16,
                 ),
               ],
@@ -671,6 +786,13 @@ class UserAccountScreen extends ConsumerWidget {
               // 3. Tombol Pendaftaran & Upgrade Akun (EMERALD GREEN: HANYA MUNCUL JIKA STATUS 'admin')
               if (isAdmin)
                 _buildUpgradePortalButton(
+                  context: context,
+                  isIndo: isIndo,
+                ),
+
+              // 4. Tombol Manajemen Konten & Audit Saluran (AMBER GOLD: HANYA MUNCUL JIKA STATUS 'admin')
+              if (isAdmin)
+                _buildContentManagementButton(
                   context: context,
                   isIndo: isIndo,
                 ),

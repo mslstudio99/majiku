@@ -1,7 +1,7 @@
 //============================================================================//
 // DIREKTORI: lib/entertainment/mytube/models/                                //
 // FILE: VIDEO_MYTUBE_MODEL.DART                                              //
-// MODEL DATA VIDEO MYTUBE (DUKUNGAN UPLOADER EMAIL, CATEGORY, LANGUAGE, CC)  //
+// MODEL DATA VIDEO MYTUBE (DUKUNGAN CHANNEL ID, EMAIL, CATEGORY, LANGUAGE)   //
 //============================================================================//
 
 //No ke-1....................................................................//
@@ -13,6 +13,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 //MODEL PROPERTIES & CONSTRUCTOR                                             //
 class VideoMytubeModel {
   final String id; // Document ID (titleSlug-uniqueSuffix)
+  final String channelId; // [JANGKAR UTAMA]: ID Channel Resmi (Auto-ID Firestore)
   final String title;
   final String description;
   final String videoUrl;
@@ -21,7 +22,7 @@ class VideoMytubeModel {
   final int durationSeconds;
   final bool isLandscape;
   final String uploaderId; // UID Firebase Auth
-  final String uploaderEmail; // Email Resmi Creator
+  final String uploaderEmail; // Email Resmi Creator (Fallback untuk 8 video lama)
   final String channelName;
   final String channelAvatarUrl;
   final bool isVerifiedAdmin;
@@ -39,13 +40,20 @@ class VideoMytubeModel {
   final String videoType; // 'SHORT' atau 'LONG'
   final Map<String, String>? subtitles; // Peta URL WebVTT {"en": "url...", "id": "url...", "hi": "url..."}
 
-  // [BARU]: Metadata Transcoding HLS Multi-Bitrate (360p, 480p, 720p)
+  // [BARU - MLA DUBBING]: Peta URL Audio MP3 Dubbing {"en": "url...", "id": "url...", "ja": "url..."}
+  final Map<String, String>? dubbing;
+
+  // [BARU - TOPIC LOCATION]: Target Geografis Konten (Default: ['Global'])
+  final List<String> targetLocations;
+
+  // Metadata Transcoding HLS Multi-Bitrate (360p, 480p, 720p)
   final int hlsVersion; // 1 = Format Legacy Tunggal, 2 = Format Multi-Bitrate Baru
   final String hlsStatus; // 'PENDING', 'PROCESSING', 'READY', 'ERROR_TRANSCODING'
   final List<String> availableResolutions; // ['360p', '480p', '720p']
 
   const VideoMytubeModel({
     required this.id,
+    this.channelId = '', // Default kosong: Menjamin 8 video lama tetap terbaca tanpa crash
     required this.title,
     required this.description,
     required this.videoUrl,
@@ -70,6 +78,8 @@ class VideoMytubeModel {
     this.language = 'English (US)',
     this.videoType = 'SHORT',
     this.subtitles,
+    this.dubbing,
+    this.targetLocations = const ['Global'], // [BARU]: Default selalu mencakup audiens Global
     this.hlsVersion = 1,
     this.hlsStatus = 'READY',
     this.availableResolutions = const [],
@@ -110,7 +120,31 @@ class VideoMytubeModel {
       );
     }
 
-    // [BARU]: Deserialisasi Resolusi HLS yang Tersedia (Multi-Bitrate 360p, 480p, 720p)
+    // Deserialisasi Peta Audio MP3 Dubbing (Aman dari null pointer)
+    Map<String, String>? parsedDubbing;
+    if (map['dubbing'] != null && map['dubbing'] is Map) {
+      parsedDubbing = Map<String, String>.from(
+        (map['dubbing'] as Map).map(
+          (key, value) => MapEntry(key.toString(), value.toString()),
+        ),
+      );
+    }
+
+    // [BARU]: Deserialisasi Target Lokasi Konten (Default: ['Global'])
+    List<String> parsedLocations = const ['Global'];
+    if (map['target_locations'] != null && map['target_locations'] is List) {
+      parsedLocations = List<String>.from(
+        (map['target_locations'] as List).map((e) => e.toString()),
+      );
+      if (parsedLocations.isEmpty) parsedLocations = const ['Global'];
+    } else if (map['targetLocations'] != null && map['targetLocations'] is List) {
+      parsedLocations = List<String>.from(
+        (map['targetLocations'] as List).map((e) => e.toString()),
+      );
+      if (parsedLocations.isEmpty) parsedLocations = const ['Global'];
+    }
+
+    // Deserialisasi Resolusi HLS yang Tersedia (Multi-Bitrate 360p, 480p, 720p)
     List<String> parsedResolutions = [];
     if (map['available_resolutions'] != null && map['available_resolutions'] is List) {
       parsedResolutions = List<String>.from(
@@ -120,6 +154,7 @@ class VideoMytubeModel {
 
     return VideoMytubeModel(
       id: docId,
+      channelId: map['channel_id']?.toString() ?? map['channelId']?.toString() ?? '',
       title: map['title'] ?? '',
       description: map['description'] ?? '',
       videoUrl: map['video_url'] ?? '',
@@ -144,6 +179,8 @@ class VideoMytubeModel {
       language: map['language'] as String? ?? 'English (US)',
       videoType: determinedType,
       subtitles: parsedSubtitles,
+      dubbing: parsedDubbing,
+      targetLocations: parsedLocations, // [BARU]
       hlsVersion: (map['hls_version'] as num?)?.toInt() ?? 1,
       hlsStatus: map['hls_status']?.toString() ?? 'READY',
       availableResolutions: parsedResolutions,
@@ -155,6 +192,7 @@ class VideoMytubeModel {
 //SERIALIZATION (toMap)                                                      //
   Map<String, dynamic> toMap() {
     return {
+      'channel_id': channelId,
       'title': title,
       'description': description,
       'video_url': videoUrl,
@@ -179,6 +217,8 @@ class VideoMytubeModel {
       'language': language,
       'video_type': videoType,
       'subtitles': subtitles,
+      'dubbing': dubbing,
+      'target_locations': targetLocations, // [BARU]: Target Geografis Disimpan ke Firestore
       'hls_version': hlsVersion,
       'hls_status': hlsStatus,
       'available_resolutions': availableResolutions,
@@ -187,9 +227,10 @@ class VideoMytubeModel {
 //............................................................................//
 
 //No ke-5....................................................................//
-//UTILITY METHODS & COPYWITH                                                 //
+//UTILITY METHODS, COPYWITH & LOCATION DATABASE (6 BENUA, 100 NEGARA & GLOBAL)//
   VideoMytubeModel copyWith({
     String? id,
+    String? channelId,
     String? title,
     String? description,
     String? videoUrl,
@@ -214,12 +255,15 @@ class VideoMytubeModel {
     String? language,
     String? videoType,
     Map<String, String>? subtitles,
+    Map<String, String>? dubbing,
+    List<String>? targetLocations, // [BARU]
     int? hlsVersion,
     String? hlsStatus,
     List<String>? availableResolutions,
   }) {
     return VideoMytubeModel(
       id: id ?? this.id,
+      channelId: channelId ?? this.channelId,
       title: title ?? this.title,
       description: description ?? this.description,
       videoUrl: videoUrl ?? this.videoUrl,
@@ -244,6 +288,8 @@ class VideoMytubeModel {
       language: language ?? this.language,
       videoType: videoType ?? this.videoType,
       subtitles: subtitles ?? this.subtitles,
+      dubbing: dubbing ?? this.dubbing,
+      targetLocations: targetLocations ?? this.targetLocations, // [BARU]
       hlsVersion: hlsVersion ?? this.hlsVersion,
       hlsStatus: hlsStatus ?? this.hlsStatus,
       availableResolutions: availableResolutions ?? this.availableResolutions,
@@ -253,5 +299,68 @@ class VideoMytubeModel {
   String get streamingUrl => (hlsUrl != null && hlsUrl!.isNotEmpty) ? hlsUrl! : videoUrl;
 
   bool get isDurationValid => durationSeconds > 0 && durationSeconds <= 180;
+} // <--- PENUTUP RESMI KELAS VideoMytubeModel
+
+/// [DATABASE LOKASI RESMI MYTUBE]: Memetakan 6 Benua & 100 Negara untuk Target Konten
+class MytubeLocationDatabase {
+  static const String globalLocation = 'Global';
+
+  // 6 Benua Resmi
+  static const List<String> continents = [
+    'Asia',
+    'Europe',
+    'North America',
+    'South America',
+    'Africa',
+    'Australia & Oceania',
+  ];
+
+  // Pemetaan 100 Negara Berdasarkan 6 Benua
+  static const Map<String, List<String>> continentCountries = {
+    'Asia': [
+      'Indonesia', 'Malaysia', 'Singapore', 'Philippines', 'Thailand',
+      'Vietnam', 'Cambodia', 'Laos', 'India', 'Pakistan',
+      'Bangladesh', 'Sri Lanka', 'Nepal', 'Japan', 'South Korea',
+      'Taiwan', 'Kazakhstan', 'Azerbaijan', 'Georgia', 'Saudi Arabia',
+      'United Arab Emirates', 'Qatar', 'Bahrain', 'Kuwait', 'Oman',
+      'Jordan', 'Lebanon', 'Iraq', 'Yemen',
+    ],
+    'Europe': [
+      'United Kingdom', 'Germany', 'France', 'Netherlands', 'Belgium',
+      'Switzerland', 'Austria', 'Ireland', 'Luxembourg', 'Liechtenstein',
+      'Sweden', 'Norway', 'Denmark', 'Finland', 'Iceland',
+      'Italy', 'Spain', 'Portugal', 'Greece', 'Cyprus',
+      'Malta', 'Poland', 'Czechia', 'Slovakia', 'Hungary',
+      'Romania', 'Bulgaria', 'Croatia', 'Serbia', 'Slovenia',
+      'Bosnia and Herzegovina', 'North Macedonia', 'Montenegro', 'Estonia', 'Latvia',
+      'Lithuania', 'Ukraine', 'Belarus', 'Turkey',
+    ],
+    'North America': [
+      'United States', 'Canada', 'Mexico', 'Costa Rica', 'Guatemala',
+      'Honduras', 'Nicaragua', 'Panama', 'El Salvador', 'Dominican Republic',
+      'Jamaica',
+    ],
+    'South America': [
+      'Brazil', 'Argentina', 'Colombia', 'Chile', 'Peru',
+      'Ecuador', 'Bolivia', 'Paraguay', 'Uruguay', 'Venezuela',
+    ],
+    'Africa': [
+      'Egypt', 'Morocco', 'Algeria', 'Tunisia', 'Libya',
+      'South Africa', 'Nigeria', 'Kenya',
+    ],
+    'Australia & Oceania': [
+      'Australia', 'New Zealand', 'Papua New Guinea',
+    ],
+  };
+
+  /// Mengambil daftar seluruh 100 negara secara terurut A-Z
+  static List<String> get allCountries {
+    final list = <String>[];
+    for (final countries in continentCountries.values) {
+      list.addAll(countries);
+    }
+    list.sort((a, b) => a.compareTo(b));
+    return list;
+  }
 }
 //............................................................................//

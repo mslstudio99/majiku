@@ -484,7 +484,7 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
   // --- 0. Grid Entertainment (Baris Paling Atas) ---
   Widget _buildEntertainmentButtonsGrid() {
     final List<Map<String, dynamic>> entertainmentItems = [
-      {'img': 'mytube.png', 'title': 'MYTUBE', 'action': () => _navigateTo(const MytubeFeedScreen())},
+      {'img': 'mytube.png', 'title': 'SHORT VIDEO', 'action': () => _navigateTo(const MytubeFeedScreen())},
       {'img': 'daily_quotes.png', 'title': 'DAILY QUOTES', 'action': () => _navigateTo(const FreeDailyQuotesScreen())},
     ];
 

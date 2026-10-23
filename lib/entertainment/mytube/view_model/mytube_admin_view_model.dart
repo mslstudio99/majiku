@@ -45,8 +45,15 @@ class MytubeAdminViewModel extends ChangeNotifier {
   XFile? _selectedVideoFile;
   XFile? get selectedVideoFile => _selectedVideoFile;
 
+  // [ANTI-FREEZE WEB]: Menyimpan byte video & thumbnail siap pakai di awal
+  Uint8List? _videoBytes;
+  Uint8List? get videoBytes => _videoBytes;
+
   XFile? _selectedThumbnailFile;
   XFile? get selectedThumbnailFile => _selectedThumbnailFile;
+
+  Uint8List? _thumbnailBytes;
+  Uint8List? get thumbnailBytes => _thumbnailBytes;
 
   int _videoDurationSeconds = 0;
   int get videoDurationSeconds => _videoDurationSeconds;
@@ -73,9 +80,10 @@ class MytubeAdminViewModel extends ChangeNotifier {
 //............................................................................//
 
 //No ke-4....................................................................//
-//VIDEO SELECTION & DURATION VALIDATION (UNIVERSAL XFILE)                    //
+//VIDEO SELECTION & DURATION VALIDATION (UNIVERSAL XFILE & PRELOADED BYTES)  //
   bool setVideoFile({
     required XFile file,
+    Uint8List? bytes,
     required int durationInSeconds,
     int maxDurationSeconds = 180, // Default 3 menit untuk Shorts, fleksibel untuk Longs
   }) {
@@ -95,19 +103,23 @@ class MytubeAdminViewModel extends ChangeNotifier {
     }
 
     _selectedVideoFile = file;
+    _videoBytes = bytes;
     _videoDurationSeconds = durationInSeconds;
     notifyListeners();
     return true;
   }
 
-  void setThumbnailFile(XFile file) {
+  void setThumbnailFile(XFile file, {Uint8List? bytes}) {
     _selectedThumbnailFile = file;
+    _thumbnailBytes = bytes;
     notifyListeners();
   }
 
   void clearSelectedFiles() {
     _selectedVideoFile = null;
+    _videoBytes = null;
     _selectedThumbnailFile = null;
+    _thumbnailBytes = null;
     _videoDurationSeconds = 0;
     _errorMessage = null;
     notifyListeners();
@@ -129,6 +141,7 @@ class MytubeAdminViewModel extends ChangeNotifier {
   Future<bool> uploadAndPublishVideo({
     required String uploaderId,
     required String uploaderEmail,
+    String? channelId,
     required String channelName,
     required String channelAvatarUrl,
     required String title,
@@ -137,6 +150,7 @@ class MytubeAdminViewModel extends ChangeNotifier {
     String category = 'Comedy & Funny',
     String language = 'English (US)',
     String videoType = 'SHORT',
+    List<String> targetLocations = const ['Global'], // [BARU]: Menerima array lokasi target topik
     String? actionButtonText,
     String? actionButtonRoute,
   }) async {
@@ -164,10 +178,28 @@ class MytubeAdminViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // 1. Membentuk Identitas Folder Manusiawi (Email + Judul Video Slug)
-      final cleanEmail = uploaderEmail.trim().toLowerCase().isNotEmpty
-          ? uploaderEmail.trim().toLowerCase()
-          : uploaderId;
+      // 1. [STRICT NEW WRITE]: Mengunci direktori penyimpanan Cloud Storage ke channelId resmi
+      String targetFolderKey = (channelId != null && channelId.trim().isNotEmpty)
+          ? channelId.trim()
+          : '';
+
+      // Auto-Resolver cerdas: Jika channelId belum dioper dari UI, ambil otomatis dari profil creator
+      if (targetFolderKey.isEmpty) {
+        try {
+          final profile = await _service.getCreatorProfile(uploaderEmail, userId: uploaderId);
+          if (profile != null && profile.channelId.isNotEmpty) {
+            targetFolderKey = profile.channelId;
+          }
+        } catch (_) {}
+      }
+
+      // Fallback darurat jika akun lama belum memiliki channelId
+      if (targetFolderKey.isEmpty) {
+        targetFolderKey = uploaderEmail.trim().toLowerCase().isNotEmpty
+            ? uploaderEmail.trim().toLowerCase()
+            : uploaderId;
+      }
+
       final titleSlug = _slugify(title);
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final uniqueSuffix = timestamp.toString().substring(timestamp.toString().length - 6);
@@ -176,41 +208,62 @@ class MytubeAdminViewModel extends ChangeNotifier {
       final videoDocId = '$titleSlug-$uniqueSuffix';
       final typeFolder = videoType.toUpperCase() == 'LONG' ? 'long_video' : 'short_video';
 
-      // Path Target di Cloud Storage: mytube/{email}/{type}/{titleSlug-uniqueSuffix}/
-      final baseFolderPath = 'mytube/$cleanEmail/$typeFolder/$videoDocId';
-      debugPrint('🚀 [MYTUBE] Uploading to Storage: $baseFolderPath');
+      // Path Target di Cloud Storage: mytube/{channelId}/{typeFolder}/{titleSlug-uniqueSuffix}/
+      final baseFolderPath = 'mytube/$targetFolderKey/$typeFolder/$videoDocId';
+      debugPrint('🚀 [MYTUBE] Target Folder: $baseFolderPath');
 
-      // 2. Upload File Video Master (master.mp4)
+      // 2. Upload File Video Master (master.mp4) dengan Telemetri Lengkap
       final videoStorageRef = _storage.ref().child('$baseFolderPath/master.mp4');
       final videoMetadata = SettableMetadata(contentType: 'video/mp4');
 
       final UploadTask uploadTask;
       if (kIsWeb) {
-        final bytes = await _selectedVideoFile!.readAsBytes();
+        debugPrint('⏳ [MYTUBE] Mempersiapkan byte video untuk Web...');
+        // [ANTI-FREEZE]: Gunakan byte yang sudah preloaded saat pickVideo agar tidak membeku
+        final Uint8List bytes = _videoBytes ?? await _selectedVideoFile!.readAsBytes();
+        final sizeMb = (bytes.lengthInBytes / (1024 * 1024)).toStringAsFixed(2);
+        debugPrint('📦 [MYTUBE] Byte video siap ($sizeMb MB / ${bytes.lengthInBytes} bytes). Memulai putData...');
         uploadTask = videoStorageRef.putData(bytes, videoMetadata);
       } else {
+        debugPrint('⏳ [MYTUBE] Memulai upload file video di Mobile...');
         uploadTask = videoStorageRef.putFile(File(_selectedVideoFile!.path), videoMetadata);
       }
 
-      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-        if (snapshot.totalBytes > 0) {
-          _uploadProgress = (snapshot.bytesTransferred / snapshot.totalBytes) * 0.85;
+      // [MONITOR LIVE & ERROR TRAP]: Mengalirkan progres secara transparan detik demi detik
+      uploadTask.snapshotEvents.listen(
+        (TaskSnapshot snapshot) {
+          if (snapshot.totalBytes > 0) {
+            final double ratio = snapshot.bytesTransferred / snapshot.totalBytes;
+            _uploadProgress = ratio * 0.85;
+            final sentMb = (snapshot.bytesTransferred / (1024 * 1024)).toStringAsFixed(2);
+            final totalMb = (snapshot.totalBytes / (1024 * 1024)).toStringAsFixed(2);
+            debugPrint('📤 [MYTUBE PROGRESS]: ${(ratio * 100).toStringAsFixed(1)}% ($sentMb MB / $totalMb MB)');
+            notifyListeners();
+          }
+        },
+        onError: (dynamic error) {
+          debugPrint('❌ [MYTUBE STORAGE STREAM ERROR]: $error');
+          _errorMessage = 'Cloud Storage menolak izin upload: $error';
+          _isUploading = false;
           notifyListeners();
-        }
-      });
+        },
+      );
 
       final videoSnapshot = await uploadTask;
+      debugPrint('✅ [MYTUBE] Video master.mp4 berhasil diunggah! Mengambil Download URL...');
       final videoDownloadUrl = await videoSnapshot.ref.getDownloadURL();
+      debugPrint('🔗 [MYTUBE] Download URL: $videoDownloadUrl');
 
       // 3. Upload File Thumbnail (thumbnail.jpg)
       String thumbnailDownloadUrl = '';
       if (_selectedThumbnailFile != null) {
+        debugPrint('🖼️ [MYTUBE] Mengunggah thumbnail pilihan user...');
         final thumbStorageRef = _storage.ref().child('$baseFolderPath/thumbnail.jpg');
         final thumbMetadata = SettableMetadata(contentType: 'image/jpeg');
 
         final UploadTask thumbTask;
         if (kIsWeb) {
-          final thumbBytes = await _selectedThumbnailFile!.readAsBytes();
+          final Uint8List thumbBytes = _thumbnailBytes ?? await _selectedThumbnailFile!.readAsBytes();
           thumbTask = thumbStorageRef.putData(thumbBytes, thumbMetadata);
         } else {
           thumbTask = thumbStorageRef.putFile(File(_selectedThumbnailFile!.path), thumbMetadata);
@@ -218,14 +271,17 @@ class MytubeAdminViewModel extends ChangeNotifier {
 
         final thumbSnapshot = await thumbTask;
         thumbnailDownloadUrl = await thumbSnapshot.ref.getDownloadURL();
+        debugPrint('✅ [MYTUBE] Thumbnail berhasil diunggah: $thumbnailDownloadUrl');
       }
 
       _uploadProgress = 0.95;
       notifyListeners();
 
-      // 4. Catat Dokumen Postingan ke Firestore
+      // 4. Catat Dokumen Postingan ke Firestore dengan channelId resmi & Target Lokasi
+      debugPrint('📝 [MYTUBE] Menyimpan dokumen video ke Firestore di saluran $targetFolderKey...');
       final newVideoPost = VideoMytubeModel(
         id: videoDocId,
+        channelId: targetFolderKey,
         title: title.trim(),
         description: description.trim(),
         videoUrl: videoDownloadUrl,
@@ -233,20 +289,21 @@ class MytubeAdminViewModel extends ChangeNotifier {
         durationSeconds: _videoDurationSeconds,
         isLandscape: isLandscape,
         uploaderId: uploaderId,
-        uploaderEmail: cleanEmail,
+        uploaderEmail: uploaderEmail.trim().toLowerCase(),
         channelName: channelName,
         channelAvatarUrl: channelAvatarUrl,
         isVerifiedAdmin: true,
         category: category,
         language: language,
         videoType: videoType,
+        targetLocations: targetLocations.isNotEmpty ? targetLocations : const ['Global'], // [BARU]: Tersimpan rapi
         createdAt: DateTime.now(),
         actionButtonText: actionButtonText?.trim().isNotEmpty == true ? actionButtonText!.trim() : null,
         actionButtonRoute: actionButtonRoute?.trim().isNotEmpty == true ? actionButtonRoute!.trim() : null,
       );
 
       await _service.createVideoPost(newVideoPost);
-      debugPrint('🎉 [MYTUBE] Video berhasil terdaftar di Firestore dengan ID: $videoDocId');
+      debugPrint('🎉 [MYTUBE] Video berhasil terdaftar di Firestore dengan ID: $videoDocId pada Channel ID: $targetFolderKey');
 
       _uploadProgress = 1.0;
       _isUploading = false;

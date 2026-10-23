@@ -26,10 +26,16 @@ import 'long_upload_content.dart';
 //WIDGET DECLARATION & STATE SETUP                                           //
 class HistoryContentScreen extends ConsumerStatefulWidget {
   final int initialTabIndex; // 0 untuk Shorts, 1 untuk Longs
+  final String? targetChannelId; // [MODE ADMIN]: Akses spesifik ID Channel
+  final String? targetChannelName; // [MODE ADMIN]: Nama Channel untuk judul
+  final String? targetCreatorEmail; // [MODE ADMIN]: Email kreator target
 
   const HistoryContentScreen({
     super.key,
     this.initialTabIndex = 0,
+    this.targetChannelId,
+    this.targetChannelName,
+    this.targetCreatorEmail,
   });
 
   @override
@@ -41,8 +47,9 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
   final FirestoreMytubeService _service = FirestoreMytubeService();
   late final TabController _tabController;
   User? _currentUser;
+  String _channelId = ''; // [JANGKAR UTAMA]: ID Channel Resmi Saluran
 
-  // Daftar 15 Kategori Resmi Terurut A-Z (Default English)
+  // [KATEGORI KONTEN]: 17 Kategori Resmi Diurutkan A-Z (Default English & Bilingual ID)
   static const List<Map<String, String>> _categories = [
     {'en': 'Cartoons & Anime', 'id': 'Kartun & Anime'},
     {'en': 'Comedy & Funny', 'id': 'Lucu'},
@@ -50,12 +57,14 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
     {'en': 'Faith & Religion', 'id': 'Religi'},
     {'en': 'Finance & Investment', 'id': 'Keuangan'},
     {'en': 'Food & Culinary', 'id': 'Kuliner'},
+    {'en': 'Health & Wellness', 'id': 'Kesehatan'}, // [BARU]: Kategori Kesehatan
     {'en': 'History', 'id': 'Sejarah'},
     {'en': 'Horror & Mystery', 'id': 'Horor & Misteri'},
     {'en': 'Music & Artists', 'id': 'Musik & Artis'},
     {'en': 'Myths & Legends', 'id': 'Mitos & Legenda'},
     {'en': 'Nature & Animals', 'id': 'Alam, Binatang & Tumbuhan'},
     {'en': 'News & Information', 'id': 'Berita'},
+    {'en': 'Places & Travel', 'id': 'Tempat & Perjalanan'},
     {'en': 'Popular Figures', 'id': 'Tokoh Populer'},
     {'en': 'Sports & Fitness', 'id': 'Olahraga'},
     {'en': 'Technology & Gadgets', 'id': 'Teknologi'},
@@ -114,6 +123,32 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
       vsync: this,
       initialIndex: widget.initialTabIndex.clamp(0, 1),
     );
+    _loadChannelIdSync();
+  }
+
+  Future<void> _loadChannelIdSync() async {
+    // [MODE ADMIN OVERRIDE]: Jika targetChannelId diberikan dari Content Management, gunakan langsung
+    if (widget.targetChannelId != null && widget.targetChannelId!.trim().isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _channelId = widget.targetChannelId!.trim();
+        });
+      }
+      return;
+    }
+
+    final email = _currentUser?.email ?? '';
+    final uid = _currentUser?.uid ?? '';
+    if (email.isEmpty && uid.isEmpty) return;
+
+    try {
+      final profile = await _service.getCreatorProfile(email, userId: uid);
+      if (profile != null && mounted) {
+        setState(() {
+          _channelId = profile.channelId;
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -142,8 +177,8 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
         ),
         content: Text(
           isIndo
-              ? 'Video "${video.title}" akan dihapus permanen dari channel Anda. Tindakan ini tidak dapat dibatalkan.'
-              : 'Video "${video.title}" will be permanently removed from your channel. This action cannot be undone.',
+              ? 'Video "${video.title}" akan dihapus permanen dari channel. Tindakan ini tidak dapat dibatalkan.'
+              : 'Video "${video.title}" will be permanently removed from this channel. This action cannot be undone.',
           style: const TextStyle(color: Colors.white70, fontSize: 13.5, height: 1.4),
         ),
         actions: [
@@ -164,7 +199,17 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
     );
 
     if (confirmed == true && mounted) {
-      final creatorKey = _currentUser?.email ?? _currentUser?.uid ?? '';
+      // [HIBRIDA]: Utamakan video.channelId, fallback ke targetChannelId, _channelId atau email
+      final creatorKey = video.channelId.trim().isNotEmpty
+          ? video.channelId.trim()
+          : (widget.targetChannelId?.trim().isNotEmpty == true
+              ? widget.targetChannelId!.trim()
+              : (_channelId.trim().isNotEmpty
+                  ? _channelId.trim()
+                  : (widget.targetCreatorEmail?.trim().isNotEmpty == true
+                      ? widget.targetCreatorEmail!.trim().toLowerCase()
+                      : (_currentUser?.email ?? _currentUser?.uid ?? ''))));
+
       await _service.deleteVideoPost(
         videoId: video.id,
         creatorKey: creatorKey,
@@ -191,6 +236,7 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
     required String newTitle,
     required String newCategory,
     required String newLanguage,
+    required List<String> newTargetLocations,
     required bool isIndo,
     required bool isAdmin,
   }) async {
@@ -199,9 +245,19 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
         // ADMIN PUSAT: Langsung terapkan perubahan ke database tanpa antrean approval
         final isLong = video.videoType.toUpperCase() == 'LONG';
         final subCol = isLong ? FirestoreMytubeService.subColLongVideo : FirestoreMytubeService.subColShortVideo;
-        final creatorKey = video.uploaderEmail.trim().toLowerCase().isNotEmpty
-            ? video.uploaderEmail.trim().toLowerCase()
-            : video.uploaderId;
+
+        // [HIBRIDA]: Prioritaskan channelId dokumen video -> targetChannelId -> _channelId -> email
+        final creatorKey = video.channelId.trim().isNotEmpty
+            ? video.channelId.trim()
+            : (widget.targetChannelId?.trim().isNotEmpty == true
+                ? widget.targetChannelId!.trim()
+                : (_channelId.trim().isNotEmpty
+                    ? _channelId.trim()
+                    : (widget.targetCreatorEmail?.trim().isNotEmpty == true
+                        ? widget.targetCreatorEmail!.trim().toLowerCase()
+                        : (video.uploaderEmail.trim().isNotEmpty
+                            ? video.uploaderEmail.trim().toLowerCase()
+                            : video.uploaderId))));
 
         await FirebaseFirestore.instance
             .collection(FirestoreMytubeService.colMytube)
@@ -212,6 +268,7 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
           'title': newTitle,
           'category': newCategory,
           'language': newLanguage,
+          'target_locations': newTargetLocations,
           'updated_at': FieldValue.serverTimestamp(),
         });
 
@@ -233,6 +290,7 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
           newTitle: newTitle,
           newCategory: newCategory,
           newLanguage: newLanguage,
+          newTargetLocations: newTargetLocations,
         );
 
         if (mounted) {
@@ -278,8 +336,24 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
     final userTier = userAsync.value?.userTier.toLowerCase() ?? '';
     final isAdmin = userTier == 'admin';
 
-    final creatorEmail = _currentUser?.email ?? '';
-    final creatorUid = _currentUser?.uid ?? '';
+    // [DUAL LOGIKA CHANNEL & KREATOR]:
+    // Jika dibuka oleh Admin (targetChannelId tersedia), pakai data channel target.
+    // Jika dibuka oleh Creator pribadi, pakai data akun yang login.
+    final effectiveChannelId = widget.targetChannelId?.trim().isNotEmpty == true
+        ? widget.targetChannelId!.trim()
+        : _channelId;
+
+    final creatorEmail = widget.targetCreatorEmail?.trim().isNotEmpty == true
+        ? widget.targetCreatorEmail!.trim().toLowerCase()
+        : (_currentUser?.email ?? '');
+
+    final creatorUid = widget.targetChannelId?.trim().isNotEmpty == true
+        ? '' // Mode Admin tidak bergantung pada UID pengguna login
+        : (_currentUser?.uid ?? '');
+
+    final appBarTitle = widget.targetChannelName?.trim().isNotEmpty == true
+        ? '${t('Content History', 'Riwayat Konten')} • ${widget.targetChannelName}'
+        : t('Content History', 'Riwayat Konten');
 
     return Scaffold(
       backgroundColor: const Color(0xFF121214),
@@ -287,8 +361,9 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
         backgroundColor: const Color(0xFF1E1E24),
         elevation: 0,
         title: Text(
-          t('Content History', 'Riwayat Konten'),
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+          appBarTitle,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          overflow: TextOverflow.ellipsis,
         ),
         bottom: TabBar(
           controller: _tabController,
@@ -312,9 +387,10 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          // Tab 1: Shorts History
+          // Tab 1: Shorts History (Sinkron Channel ID & Email Legacy)
           _buildVideoListStream(
             videoType: 'SHORT',
+            channelId: effectiveChannelId,
             creatorEmail: creatorEmail,
             creatorUid: creatorUid,
             t: t,
@@ -322,9 +398,10 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
             isAdmin: isAdmin,
           ),
 
-          // Tab 2: Longs History
+          // Tab 2: Longs History (Sinkron Channel ID & Email Legacy)
           _buildVideoListStream(
             videoType: 'LONG',
+            channelId: effectiveChannelId,
             creatorEmail: creatorEmail,
             creatorUid: creatorUid,
             t: t,
@@ -338,9 +415,10 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
 //............................................................................//
 
 //No ke-5....................................................................//
-//VIDEO LIST VIEW BUILDER (STREAMBUILDER)                                    //
+//VIDEO LIST VIEW BUILDER (STREAMBUILDER DUAL-COMPATIBILITY)                 //
   Widget _buildVideoListStream({
     required String videoType,
+    required String channelId,
     required String creatorEmail,
     required String creatorUid,
     required String Function(String, String) t,
@@ -350,6 +428,7 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
     return StreamBuilder<List<VideoMytubeModel>>(
       stream: _service.getVideosByTypeStream(
         videoType: videoType,
+        channelId: channelId,
         uploaderEmail: creatorEmail,
         uploaderId: creatorUid,
       ),
@@ -445,8 +524,11 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
 //............................................................................//
 
 //No ke-6....................................................................//
-//VIDEO CARD COMPONENT & METRICS ROW (DILENGKAPI TOMBOL EDIT)                //
+//VIDEO CARD COMPONENT & METRICS ROW (DILENGKAPI TOMBOL EDIT & SEMUA LOKASI) //
   Widget _buildVideoCard(VideoMytubeModel video, String Function(String, String) t, bool isIndo, bool isAdmin) {
+    // Ambil daftar lokasi lengkap (default Global jika kosong)
+    final locations = video.targetLocations.isNotEmpty ? video.targetLocations : const ['Global'];
+
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF1E1E24),
@@ -495,7 +577,7 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
                 ),
                 const SizedBox(width: 14),
 
-                // Info Video (Judul, Kategori, Bahasa, Status)
+                // Info Video (Judul, Kategori, Bahasa, Lokasi, Status)
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -513,13 +595,21 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
                       ),
                       const SizedBox(height: 6),
 
-                      // Badge Kategori & Bahasa
+                      // Badge Kategori, Bahasa & SELURUH Lokasi (Ditampilkan Semua)
                       Wrap(
                         spacing: 6,
                         runSpacing: 4,
                         children: [
                           _buildBadge(video.category, Colors.amberAccent),
                           _buildBadge(video.language, Colors.cyanAccent),
+                          // [TAMPILKAN SEMUA LOKASI SATU PER SATU]:
+                          ...locations.map((loc) {
+                            final isGlob = loc.toLowerCase() == 'global';
+                            return _buildBadge(
+                              isGlob ? '🌐 Global' : '📍 $loc',
+                              Colors.lightGreenAccent,
+                            );
+                          }),
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -566,7 +656,7 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
                   onPressed: () => _showPreviewDialog(video),
                 ),
 
-                // Tombol 2: Edit Video (Judul, Kategori, Bahasa)
+                // Tombol 2: Edit Video (Judul, Kategori, Bahasa, Lokasi)
                 IconButton(
                   icon: const Icon(Icons.edit_note_rounded, color: Colors.orangeAccent, size: 26),
                   tooltip: t('Edit Video Info', 'Edit Info Video'),
@@ -638,8 +728,8 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
 //............................................................................//
 
 //No ke-7....................................................................//
-//EDIT DIALOG, PREVIEW DIALOG & UTILITY HELPERS                               //
-  // --- FORMULIR DIALOG EDIT VIDEO (JUDUL, KATEGORI, BAHASA) ---
+//EDIT DIALOG, LOCATION PICKER, PREVIEW DIALOG & UTILITY HELPERS             //
+  // --- FORMULIR DIALOG EDIT VIDEO (JUDUL, KATEGORI, BAHASA, LOKASI) ---
   void _showEditDialog(
     VideoMytubeModel video,
     String Function(String, String) t,
@@ -656,6 +746,10 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
     String selectedLanguage = _languages.contains(video.language)
         ? video.language
         : _languages.first;
+
+    List<String> selectedLocations = List<String>.from(
+      video.targetLocations.isNotEmpty ? video.targetLocations : const ['Global'],
+    );
 
     bool isSubmitting = false;
 
@@ -748,7 +842,7 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
                   ),
                   const SizedBox(height: 12),
 
-                  // 2. Dropdown Kategori Video (15 Kategori)
+                  // 2. Dropdown Kategori Video (17 Kategori)
                   Text(
                     t('Category', 'Kategori'),
                     style: const TextStyle(color: Colors.white70, fontSize: 12.5, fontWeight: FontWeight.bold),
@@ -782,9 +876,9 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
                   ),
                   const SizedBox(height: 16),
 
-                  // 3. Dropdown Bahasa Video (37 Bahasa)
+                  // 3. Dropdown Bahasa Video (37 Bahasa Resmi)
                   Text(
-                    t('Language & Region', 'Bahasa & Negara'),
+                    t('Language', 'Bahasa'),
                     style: const TextStyle(color: Colors.white70, fontSize: 12.5, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 6),
@@ -813,6 +907,114 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
                       }
                     },
                   ),
+                  const SizedBox(height: 16),
+
+                  // 4. Pemilih Target Lokasi (Mendukung Multi-Lokasi Sekaligus)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        t('Target Locations', 'Target Lokasi'),
+                        style: const TextStyle(color: Colors.white70, fontSize: 12.5, fontWeight: FontWeight.bold),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          setDialogState(() {
+                            if (!selectedLocations.contains('Global')) {
+                              selectedLocations.insert(0, 'Global');
+                            }
+                          });
+                        },
+                        child: Text(
+                          t('+ Add Global', '+ Tambah Global'),
+                          style: const TextStyle(color: Colors.lightGreenAccent, fontSize: 11.5, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  InkWell(
+                    onTap: () async {
+                      final updated = await _showLocationPickerDialog(
+                        context: context,
+                        initialLocations: selectedLocations,
+                        isIndo: isIndo,
+                      );
+                      if (updated != null) {
+                        setDialogState(() {
+                          selectedLocations = updated.isEmpty ? ['Global'] : updated;
+                        });
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF141418),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.public_rounded, color: Colors.lightGreenAccent, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              selectedLocations.join(', '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.white, fontSize: 13),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(Icons.arrow_drop_down, color: Colors.white54),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Chip Visual Seluruh Lokasi Terpilih (Bisa Dihapus per Chip)
+                  if (selectedLocations.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: selectedLocations.map((loc) {
+                        final isGlob = loc.toLowerCase() == 'global';
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.lightGreenAccent.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.lightGreenAccent.withOpacity(0.3), width: 0.8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                isGlob ? '🌐 $loc' : '📍 $loc',
+                                style: const TextStyle(color: Colors.lightGreenAccent, fontSize: 10.5, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(width: 4),
+                              GestureDetector(
+                                onTap: () {
+                                  setDialogState(() {
+                                    if (selectedLocations.length > 1) {
+                                      selectedLocations.remove(loc);
+                                    } else {
+                                      // Minimal menyisakan 1 target lokasi (Global)
+                                      selectedLocations = ['Global'];
+                                    }
+                                  });
+                                },
+                                child: const Icon(Icons.close_rounded, size: 12, color: Colors.lightGreenAccent),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -842,10 +1044,16 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
                           return;
                         }
 
-                        // Cek apakah ada perubahan nyata
+                        // Cek apakah ada perubahan nyata (termasuk lokasi)
+                        final isLocationUnchanged = setEquals(
+                          selectedLocations.toSet(),
+                          video.targetLocations.toSet(),
+                        );
+
                         if (newTitle == video.title &&
                             selectedCategory == video.category &&
-                            selectedLanguage == video.language) {
+                            selectedLanguage == video.language &&
+                            isLocationUnchanged) {
                           Navigator.of(ctx).pop();
                           return;
                         }
@@ -857,6 +1065,7 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
                           newTitle: newTitle,
                           newCategory: selectedCategory,
                           newLanguage: selectedLanguage,
+                          newTargetLocations: selectedLocations,
                           isIndo: isIndo,
                           isAdmin: isAdmin,
                         );
@@ -875,6 +1084,150 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
                         isAdmin ? t('Save Now', 'Simpan Langsung') : t('Submit Request', 'Ajukan Permohonan'),
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // --- DIALOG PEMILIH MULTI-LOKASI TARGET (GLOBAL & NEGARA BEBAS BERSAMAAN) ---
+  Future<List<String>?> _showLocationPickerDialog({
+    required BuildContext context,
+    required List<String> initialLocations,
+    required bool isIndo,
+  }) async {
+    final searchController = TextEditingController();
+    List<String> tempSelected = List<String>.from(initialLocations);
+    final allCountries = MytubeLocationDatabase.allCountries;
+
+    return showDialog<List<String>>(
+      context: context,
+      builder: (dlgCtx) => StatefulBuilder(
+        builder: (context, setDlgState) {
+          final query = searchController.text.trim().toLowerCase();
+          final filteredCountries = query.isEmpty
+              ? allCountries
+              : allCountries.where((c) => c.toLowerCase().contains(query)).toList();
+
+          final isGlobal = tempSelected.contains('Global');
+
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1E1E24),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                const Icon(Icons.public_rounded, color: Colors.lightGreenAccent, size: 24),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isIndo ? 'Pilih Target Lokasi' : 'Select Target Location',
+                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: 400,
+              child: Column(
+                children: [
+                  // Kolom Pencarian Cepat
+                  TextField(
+                    controller: searchController,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: isIndo ? 'Cari negara...' : 'Search country...',
+                      hintStyle: const TextStyle(color: Colors.white38, fontSize: 12.5),
+                      prefixIcon: const Icon(Icons.search, color: Colors.white38, size: 18),
+                      filled: true,
+                      fillColor: const Color(0xFF141418),
+                      isDense: true,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                    ),
+                    onChanged: (_) => setDlgState(() {}),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Opsi Centang 'Global' (Bisa Dipilih Bersamaan dengan Negara Lain)
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Checkbox(
+                      value: isGlobal,
+                      activeColor: Colors.lightGreenAccent,
+                      checkColor: Colors.black,
+                      onChanged: (val) {
+                        setDlgState(() {
+                          if (val == true) {
+                            if (!tempSelected.contains('Global')) tempSelected.insert(0, 'Global');
+                          } else {
+                            tempSelected.remove('Global');
+                            if (tempSelected.isEmpty) tempSelected = ['Global'];
+                          }
+                        });
+                      },
+                    ),
+                    title: Text(
+                      isIndo ? '🌐 Global (Audiens Seluruh Dunia)' : '🌐 Global (Worldwide Audience)',
+                      style: TextStyle(
+                        color: isGlobal ? Colors.lightGreenAccent : Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  const Divider(color: Colors.white12, height: 1),
+
+                  // Daftar 100 Negara (Bisa Dicentang Bersamaan)
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: filteredCountries.length,
+                      itemBuilder: (context, idx) {
+                        final country = filteredCountries[idx];
+                        final isChecked = tempSelected.contains(country);
+
+                        return CheckboxListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text('📍 $country', style: const TextStyle(color: Colors.white, fontSize: 13)),
+                          value: isChecked,
+                          activeColor: Colors.lightGreenAccent,
+                          checkColor: Colors.black,
+                          onChanged: (bool? val) {
+                            setDlgState(() {
+                              if (val == true) {
+                                tempSelected.add(country);
+                              } else {
+                                tempSelected.remove(country);
+                              }
+                              // Jika kosong semua, otomatis set ke Global
+                              if (tempSelected.isEmpty) {
+                                tempSelected = ['Global'];
+                              }
+                            });
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dlgCtx).pop(null),
+                child: Text(isIndo ? 'Batal' : 'Cancel', style: const TextStyle(color: Colors.white54)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.lightGreenAccent,
+                  foregroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => Navigator.of(dlgCtx).pop(tempSelected),
+                child: Text(isIndo ? 'Terapkan' : 'Apply', style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           );
