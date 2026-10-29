@@ -148,9 +148,10 @@ class MytubeAdminViewModel extends ChangeNotifier {
     required String description,
     bool isLandscape = false,
     String category = 'Comedy & Funny',
+    List<String>? categories, // [BARU]: Menerima array 1-2 kategori terpilih
     String language = 'English (US)',
     String videoType = 'SHORT',
-    List<String> targetLocations = const ['Global'], // [BARU]: Menerima array lokasi target topik
+    List<String> targetLocations = const ['Global'],
     String? actionButtonText,
     String? actionButtonRoute,
   }) async {
@@ -219,7 +220,6 @@ class MytubeAdminViewModel extends ChangeNotifier {
       final UploadTask uploadTask;
       if (kIsWeb) {
         debugPrint('⏳ [MYTUBE] Mempersiapkan byte video untuk Web...');
-        // [ANTI-FREEZE]: Gunakan byte yang sudah preloaded saat pickVideo agar tidak membeku
         final Uint8List bytes = _videoBytes ?? await _selectedVideoFile!.readAsBytes();
         final sizeMb = (bytes.lengthInBytes / (1024 * 1024)).toStringAsFixed(2);
         debugPrint('📦 [MYTUBE] Byte video siap ($sizeMb MB / ${bytes.lengthInBytes} bytes). Memulai putData...');
@@ -277,7 +277,13 @@ class MytubeAdminViewModel extends ChangeNotifier {
       _uploadProgress = 0.95;
       notifyListeners();
 
-      // 4. Catat Dokumen Postingan ke Firestore dengan channelId resmi & Target Lokasi
+      // [KUNCI KATEGORI GANDA 1-2]: Pastikan categories terisi list dan category terisi elemen primer
+      final List<String> effectiveCategories = (categories != null && categories.isNotEmpty)
+          ? categories
+          : [category];
+      final String primaryCategory = effectiveCategories.first;
+
+      // 4. Catat Dokumen Postingan ke Firestore dengan channelId resmi, Kategori Ganda & Target Lokasi
       debugPrint('📝 [MYTUBE] Menyimpan dokumen video ke Firestore di saluran $targetFolderKey...');
       final newVideoPost = VideoMytubeModel(
         id: videoDocId,
@@ -293,10 +299,11 @@ class MytubeAdminViewModel extends ChangeNotifier {
         channelName: channelName,
         channelAvatarUrl: channelAvatarUrl,
         isVerifiedAdmin: true,
-        category: category,
+        category: primaryCategory,
+        categories: effectiveCategories, // [BARU]: Terdaftar resmi di Firestore
         language: language,
         videoType: videoType,
-        targetLocations: targetLocations.isNotEmpty ? targetLocations : const ['Global'], // [BARU]: Tersimpan rapi
+        targetLocations: targetLocations.isNotEmpty ? targetLocations : const ['Global'],
         createdAt: DateTime.now(),
         actionButtonText: actionButtonText?.trim().isNotEmpty == true ? actionButtonText!.trim() : null,
         actionButtonRoute: actionButtonRoute?.trim().isNotEmpty == true ? actionButtonRoute!.trim() : null,

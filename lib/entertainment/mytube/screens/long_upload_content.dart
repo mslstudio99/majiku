@@ -59,8 +59,8 @@ class _LongUploadContentScreenState extends ConsumerState<LongUploadContentScree
   String _channelName = 'Majiku Official';
   String _channelAvatarUrl = '';
 
-  // Kategori & Bahasa Default
-  String _selectedCategory = 'Comedy & Funny';
+  // [KATEGORI GANDA 1-2]: Mendukung pemilihan 1 sampai 2 kategori sekaligus
+  List<String> _selectedCategories = ['Comedy & Funny'];
   String _selectedLanguage = 'English (US)';
 
   // [BARU - TOPIC LOCATION]: Default 'Global' selalu aktif tercentang
@@ -74,7 +74,7 @@ class _LongUploadContentScreenState extends ConsumerState<LongUploadContentScree
     {'en': 'Faith & Religion', 'id': 'Religi'},
     {'en': 'Finance & Investment', 'id': 'Keuangan'},
     {'en': 'Food & Culinary', 'id': 'Kuliner'},
-    {'en': 'Health & Wellness', 'id': 'Kesehatan'}, // [BARU]: Kategori Kesehatan
+    {'en': 'Health & Wellness', 'id': 'Kesehatan'},
     {'en': 'History', 'id': 'Sejarah'},
     {'en': 'Horror & Mystery', 'id': 'Horor & Misteri'},
     {'en': 'Music & Artists', 'id': 'Musik & Artis'},
@@ -359,6 +359,11 @@ class _LongUploadContentScreenState extends ConsumerState<LongUploadContentScree
         ? _selectedLocations
         : [MytubeLocationDatabase.globalLocation];
 
+    // [VALIDASI KATEGORI GANDA 1-2]: Pastikan minimal ada 1 kategori terpilih
+    final effectiveCategories = _selectedCategories.isNotEmpty
+        ? _selectedCategories
+        : const ['Comedy & Funny'];
+
     final success = await _viewModel.uploadAndPublishVideo(
       uploaderId: _currentUser!.uid,
       uploaderEmail: _currentUser!.email ?? '',
@@ -368,10 +373,11 @@ class _LongUploadContentScreenState extends ConsumerState<LongUploadContentScree
       title: _titleController.text.trim(),
       description: _descController.text.trim(),
       isLandscape: true, // Long Video selalu Landscape
-      category: _selectedCategory,
+      category: effectiveCategories.first, // Kategori primer untuk backward-compatibility
+      categories: effectiveCategories,     // [BARU]: Meneruskan array 1-2 kategori terpilih
       language: _selectedLanguage,
       videoType: 'LONG',
-      targetLocations: effectiveLocations, // [BARU]: Meneruskan target geografis konten
+      targetLocations: effectiveLocations,
       actionButtonText: _actionTextController.text.trim(),
       actionButtonRoute: _actionRouteController.text.trim(),
     );
@@ -544,15 +550,44 @@ class _LongUploadContentScreenState extends ConsumerState<LongUploadContentScree
                 _buildThumbnailPickerCard(t),
                 const SizedBox(height: 22),
 
-                // --- SEKSI 1: 17 KATEGORI KONTEN TERURUT A-Z (HIGH CONTRAST CHIPS) ---
+                // --- SEKSI 1: 17 KATEGORI KONTEN TERURUT A-Z (MULTI-PILIH 1-2 KATEGORI) ---
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      t('CONTENT CATEGORY (1-2 CATEGORIES)', 'KATEGORI KONTEN (PILIH 1-2)'),
+                      style: const TextStyle(
+                        color: Colors.orangeAccent,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.orangeAccent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.orangeAccent.withOpacity(0.4), width: 0.8),
+                      ),
+                      child: Text(
+                        '${_selectedCategories.length}/2 ${t('Selected', 'Dipilih')}',
+                        style: const TextStyle(
+                          color: Colors.orangeAccent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
                 Text(
-                  t('CONTENT CATEGORY (A-Z)', 'KATEGORI KONTEN (A-Z)'),
-                  style: const TextStyle(
-                    color: Colors.orangeAccent,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.1,
+                  t(
+                    'Select 1 to 2 categories that best represent your long video topic.',
+                    'Pilih 1 sampai 2 kategori yang paling mewakili topik video panjang Anda.',
                   ),
+                  style: const TextStyle(color: Colors.white38, fontSize: 11.5),
                 ),
                 const SizedBox(height: 10),
                 Wrap(
@@ -561,7 +596,7 @@ class _LongUploadContentScreenState extends ConsumerState<LongUploadContentScree
                   children: _categories.map((cat) {
                     final catKey = cat['en']!;
                     final catLabel = isIndo ? cat['id']! : cat['en']!;
-                    final isSelected = _selectedCategory == catKey;
+                    final isSelected = _selectedCategories.contains(catKey);
 
                     return ChoiceChip(
                       label: Text(
@@ -582,9 +617,45 @@ class _LongUploadContentScreenState extends ConsumerState<LongUploadContentScree
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       onSelected: (selected) {
-                        if (selected) {
-                          setState(() => _selectedCategory = catKey);
-                        }
+                        setState(() {
+                          if (selected) {
+                            if (_selectedCategories.length < 2) {
+                              _selectedCategories.add(catKey);
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    isIndo
+                                        ? 'Maksimal memilih 2 kategori. Hapus salah satu terlebih dahulu.'
+                                        : 'Maximum 2 categories. Deselect one first.',
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                  duration: const Duration(seconds: 2),
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                              );
+                            }
+                          } else {
+                            if (_selectedCategories.length > 1) {
+                              _selectedCategories.remove(catKey);
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    isIndo
+                                        ? 'Minimal harus memilih 1 kategori.'
+                                        : 'At least 1 category must be selected.',
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                  duration: const Duration(seconds: 2),
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                              );
+                            }
+                          }
+                        });
                       },
                     );
                   }).toList(),

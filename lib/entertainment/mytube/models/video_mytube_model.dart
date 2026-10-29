@@ -35,13 +35,19 @@ class VideoMytubeModel {
   final String? actionButtonText;
   final String? actionButtonRoute;
 
+  // [KATEGORI GANDA ANTI-REGRESI]: category (primer) & categories (1-2 kategori terpilih)
   final String category;
+  final List<String> categories;
+
   final String language;
   final String videoType; // 'SHORT' atau 'LONG'
-  final Map<String, String>? subtitles; // Peta URL WebVTT {"en": "url...", "id": "url...", "hi": "url..."}
+  final Map<String, String>? subtitles; // Peta URL WebVTT {"en": "url...", "id": "url..."}
 
-  // [BARU - MLA DUBBING]: Peta URL Audio MP3 Dubbing {"en": "url...", "id": "url...", "ja": "url..."}
+  // [BARU - MLA DUBBING]: Peta URL Audio MP3 Dubbing {"en": "url...", "id": "url..."}
   final Map<String, String>? dubbing;
+
+  // [BARU - EKOSISTEM TERPUSAT TITLES/]: Peta URL file teks judul terjemahan (.txt) di Storage
+  final Map<String, String>? titles; // {"id": "https://.../titles/id.txt", "en": "...", ...}
 
   // [BARU - TOPIC LOCATION]: Target Geografis Konten (Default: ['Global'])
   final List<String> targetLocations;
@@ -75,10 +81,12 @@ class VideoMytubeModel {
     this.actionButtonText,
     this.actionButtonRoute,
     this.category = 'Comedy & Funny',
+    this.categories = const ['Comedy & Funny'], // [BARU]: Default 1 kategori
     this.language = 'English (US)',
     this.videoType = 'SHORT',
     this.subtitles,
     this.dubbing,
+    this.titles,
     this.targetLocations = const ['Global'], // [BARU]: Default selalu mencakup audiens Global
     this.hlsVersion = 1,
     this.hlsStatus = 'READY',
@@ -130,7 +138,34 @@ class VideoMytubeModel {
       );
     }
 
-    // [BARU]: Deserialisasi Target Lokasi Konten (Default: ['Global'])
+    // Deserialisasi Peta URL File Judul Terpusat di Storage
+    Map<String, String>? parsedTitles;
+    if (map['titles'] != null && map['titles'] is Map) {
+      parsedTitles = Map<String, String>.from(
+        (map['titles'] as Map).map(
+          (key, value) => MapEntry(key.toString(), value.toString()),
+        ),
+      );
+    }
+
+    // [BACKWARD COMPATIBLE]: Deserialisasi Kategori Ganda (categories) & Tunggal (category)
+    List<String> parsedCategories = const ['Comedy & Funny'];
+    if (map['categories'] != null && map['categories'] is List) {
+      parsedCategories = List<String>.from(
+        (map['categories'] as List).map((e) => e.toString()),
+      );
+      if (parsedCategories.isEmpty && map['category'] != null) {
+        parsedCategories = [map['category'].toString().trim()];
+      }
+    } else if (map['category'] != null && map['category'].toString().trim().isNotEmpty) {
+      parsedCategories = [map['category'].toString().trim()];
+    }
+
+    final primaryCategory = parsedCategories.isNotEmpty
+        ? parsedCategories.first
+        : (map['category'] as String? ?? 'Comedy & Funny');
+
+    // Deserialisasi Target Lokasi Konten (Default: ['Global'])
     List<String> parsedLocations = const ['Global'];
     if (map['target_locations'] != null && map['target_locations'] is List) {
       parsedLocations = List<String>.from(
@@ -175,12 +210,14 @@ class VideoMytubeModel {
       createdAt: parsedDate,
       actionButtonText: map['action_button_text'],
       actionButtonRoute: map['action_button_route'],
-      category: map['category'] as String? ?? 'Comedy & Funny',
+      category: primaryCategory,
+      categories: parsedCategories, // [BARU]: Tersimpan rapi sebagai array 1-2 kategori
       language: map['language'] as String? ?? 'English (US)',
       videoType: determinedType,
       subtitles: parsedSubtitles,
       dubbing: parsedDubbing,
-      targetLocations: parsedLocations, // [BARU]
+      titles: parsedTitles,
+      targetLocations: parsedLocations,
       hlsVersion: (map['hls_version'] as num?)?.toInt() ?? 1,
       hlsStatus: map['hls_status']?.toString() ?? 'READY',
       availableResolutions: parsedResolutions,
@@ -214,11 +251,13 @@ class VideoMytubeModel {
       'action_button_text': actionButtonText,
       'action_button_route': actionButtonRoute,
       'category': category,
+      'categories': categories.isNotEmpty ? categories : [category], // [BARU]: Disimpan ganda
       'language': language,
       'video_type': videoType,
       'subtitles': subtitles,
       'dubbing': dubbing,
-      'target_locations': targetLocations, // [BARU]: Target Geografis Disimpan ke Firestore
+      'titles': titles,
+      'target_locations': targetLocations,
       'hls_version': hlsVersion,
       'hls_status': hlsStatus,
       'available_resolutions': availableResolutions,
@@ -252,15 +291,20 @@ class VideoMytubeModel {
     String? actionButtonText,
     String? actionButtonRoute,
     String? category,
+    List<String>? categories, // [BARU]
     String? language,
     String? videoType,
     Map<String, String>? subtitles,
     Map<String, String>? dubbing,
-    List<String>? targetLocations, // [BARU]
+    Map<String, String>? titles,
+    List<String>? targetLocations,
     int? hlsVersion,
     String? hlsStatus,
     List<String>? availableResolutions,
   }) {
+    final effectiveCategories = categories ?? this.categories;
+    final effectivePrimaryCategory = category ?? (effectiveCategories.isNotEmpty ? effectiveCategories.first : this.category);
+
     return VideoMytubeModel(
       id: id ?? this.id,
       channelId: channelId ?? this.channelId,
@@ -284,12 +328,14 @@ class VideoMytubeModel {
       createdAt: createdAt ?? this.createdAt,
       actionButtonText: actionButtonText ?? this.actionButtonText,
       actionButtonRoute: actionButtonRoute ?? this.actionButtonRoute,
-      category: category ?? this.category,
+      category: effectivePrimaryCategory,
+      categories: effectiveCategories,
       language: language ?? this.language,
       videoType: videoType ?? this.videoType,
       subtitles: subtitles ?? this.subtitles,
       dubbing: dubbing ?? this.dubbing,
-      targetLocations: targetLocations ?? this.targetLocations, // [BARU]
+      titles: titles ?? this.titles,
+      targetLocations: targetLocations ?? this.targetLocations,
       hlsVersion: hlsVersion ?? this.hlsVersion,
       hlsStatus: hlsStatus ?? this.hlsStatus,
       availableResolutions: availableResolutions ?? this.availableResolutions,

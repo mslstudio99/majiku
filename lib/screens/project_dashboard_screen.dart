@@ -14,7 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../providers/config_provider.dart';
 
 // --- [ENTERTAINMENT] Impor Layar Mytube ---
-import '../entertainment/mytube/screens/mytube_feed_screen.dart';
+import '../entertainment/mytube/screens/mytube_home_screen.dart';
 
 // --- [BARU] Impor Layar Generator (Menu Utama) ---
 import '../screens_naraku/generator_konten_short_screen.dart'; // Narrative
@@ -484,7 +484,8 @@ class _ProjectDashboardScreenState extends ConsumerState<ProjectDashboardScreen>
   // --- 0. Grid Entertainment (Baris Paling Atas) ---
   Widget _buildEntertainmentButtonsGrid() {
     final List<Map<String, dynamic>> entertainmentItems = [
-      {'img': 'mytube.png', 'title': 'SHORT VIDEO', 'action': () => _navigateTo(const MytubeFeedScreen())},
+      // [PINTU MASUK MYTUBE]: Sekarang langsung membuka Beranda Katalog MyTube (MytubeHomeScreen)
+      {'img': 'mytube.png', 'title': 'SHORT VIDEO', 'action': () => _navigateTo(const MytubeHomeScreen())},
       {'img': 'daily_quotes.png', 'title': 'DAILY QUOTES', 'action': () => _navigateTo(const FreeDailyQuotesScreen())},
     ];
 

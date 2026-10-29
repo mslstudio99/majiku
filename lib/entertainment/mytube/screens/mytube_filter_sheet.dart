@@ -11,20 +11,29 @@ import '../models/video_mytube_model.dart';
 import '../view_model/mytube_feed_view_model.dart';
 
 class MytubeFilterSheet extends StatefulWidget {
-  final MytubeFeedViewModel viewModel;
+  final MytubeFeedViewModel? viewModel;
+  final String? initialCategory;
+  final String? initialLocation;
+  final void Function(String? category, String? location)? onApplyFilter;
   final String Function(String, String) t;
   final bool isIndo;
 
   const MytubeFilterSheet({
     super.key,
-    required this.viewModel,
+    this.viewModel,
+    this.initialCategory,
+    this.initialLocation,
+    this.onApplyFilter,
     required this.t,
     required this.isIndo,
   });
 
   static void show({
     required BuildContext context,
-    required MytubeFeedViewModel viewModel,
+    MytubeFeedViewModel? viewModel,
+    String? initialCategory,
+    String? initialLocation,
+    void Function(String? category, String? location)? onApplyFilter,
     required String Function(String, String) t,
     required bool isIndo,
   }) {
@@ -38,6 +47,9 @@ class MytubeFilterSheet extends StatefulWidget {
       ),
       builder: (ctx) => MytubeFilterSheet(
         viewModel: viewModel,
+        initialCategory: initialCategory ?? viewModel?.selectedCategory,
+        initialLocation: initialLocation ?? viewModel?.selectedLocation,
+        onApplyFilter: onApplyFilter,
         t: t,
         isIndo: isIndo,
       ),
@@ -89,8 +101,8 @@ class _MytubeFilterSheetState extends State<MytubeFilterSheet> {
   @override
   void initState() {
     super.initState();
-    _tempCategory = widget.viewModel.selectedCategory;
-    _tempLocation = widget.viewModel.selectedLocation;
+    _tempCategory = widget.initialCategory ?? widget.viewModel?.selectedCategory;
+    _tempLocation = widget.initialLocation ?? widget.viewModel?.selectedLocation;
 
     _continentScrollController.addListener(_updateContinentScrollIndicators);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -184,7 +196,10 @@ class _MytubeFilterSheetState extends State<MytubeFilterSheet> {
                           _tempCategory = null;
                           _tempLocation = null;
                         });
-                        widget.viewModel.clearAllFilters();
+                        if (widget.onApplyFilter != null) {
+                          widget.onApplyFilter!(null, null);
+                        }
+                        widget.viewModel?.clearAllFilters();
                       },
                       child: Text(
                         t('Reset', 'Reset'),
@@ -505,9 +520,14 @@ class _MytubeFilterSheetState extends State<MytubeFilterSheet> {
                     elevation: 2,
                   ),
                   onPressed: () {
-                    widget.viewModel.setCategoryFilter(_tempCategory);
-                    widget.viewModel.setLanguageFilter(null);
-                    widget.viewModel.setLocationFilter(_tempLocation);
+                    if (widget.onApplyFilter != null) {
+                      widget.onApplyFilter!(_tempCategory, _tempLocation);
+                    }
+                    if (widget.viewModel != null) {
+                      widget.viewModel!.setCategoryFilter(_tempCategory);
+                      widget.viewModel!.setLanguageFilter(null);
+                      widget.viewModel!.setLocationFilter(_tempLocation);
+                    }
                     Navigator.of(context).pop();
                   },
                   child: Text(t('Apply Filter', 'Terapkan Filter'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),

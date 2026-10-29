@@ -230,17 +230,22 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
     }
   }
 
-  // Eksekusi Simpan Edit: Creator Mengajukan Permohonan (Pending), Admin Langsung Terapkan
+  // Eksekusi Simpan Edit: Creator Mengajukan Permohonan (Pending), Admin Langsung Terapkan (Sinkron 1-2 Kategori)
   Future<void> _submitEditVideo({
     required VideoMytubeModel video,
     required String newTitle,
-    required String newCategory,
+    required List<String> newCategories, // [BARU]: Mendukung 1-2 Kategori Sekaligus
     required String newLanguage,
     required List<String> newTargetLocations,
     required bool isIndo,
     required bool isAdmin,
   }) async {
     try {
+      final effectiveCategories = newCategories.isNotEmpty
+          ? newCategories
+          : (video.categories.isNotEmpty ? video.categories : [video.category]);
+      final primaryCategory = effectiveCategories.first;
+
       if (isAdmin) {
         // ADMIN PUSAT: Langsung terapkan perubahan ke database tanpa antrean approval
         final isLong = video.videoType.toUpperCase() == 'LONG';
@@ -266,7 +271,8 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
             .doc(video.id)
             .update({
           'title': newTitle,
-          'category': newCategory,
+          'category': primaryCategory, // Kategori primer
+          'categories': effectiveCategories, // [SINKRONISASI FIRESTORE]: Array 1-2 kategori
           'language': newLanguage,
           'target_locations': newTargetLocations,
           'updated_at': FieldValue.serverTimestamp(),
@@ -288,7 +294,7 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
         await _service.submitEditRequest(
           currentVideo: video,
           newTitle: newTitle,
-          newCategory: newCategory,
+          newCategory: primaryCategory,
           newLanguage: newLanguage,
           newTargetLocations: newTargetLocations,
         );
@@ -529,6 +535,11 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
     // Ambil daftar lokasi lengkap (default Global jika kosong)
     final locations = video.targetLocations.isNotEmpty ? video.targetLocations : const ['Global'];
 
+    // [DUKUNGAN 1-2 KATEGORI KONTEN]: Ekstraksi kategori resmi secara aman dari categories array
+    final categories = video.categories.isNotEmpty
+        ? video.categories
+        : (video.category.trim().isNotEmpty ? [video.category.trim()] : const ['Comedy & Funny']);
+
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF1E1E24),
@@ -595,12 +606,13 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
                       ),
                       const SizedBox(height: 6),
 
-                      // Badge Kategori, Bahasa & SELURUH Lokasi (Ditampilkan Semua)
+                      // Badge Kategori (1-2 Kategori Mandiri), Bahasa & SELURUH Lokasi (Ditampilkan Semua)
                       Wrap(
                         spacing: 6,
                         runSpacing: 4,
                         children: [
-                          _buildBadge(video.category, Colors.amberAccent),
+                          // [KOTAK KATEGORI MANDIRI]: 1 atau 2 Kategori ditampilkan semua
+                          ...categories.map((cat) => _buildBadge(cat, Colors.amberAccent)),
                           _buildBadge(video.language, Colors.cyanAccent),
                           // [TAMPILKAN SEMUA LOKASI SATU PER SATU]:
                           ...locations.map((loc) {
@@ -656,7 +668,7 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
                   onPressed: () => _showPreviewDialog(video),
                 ),
 
-                // Tombol 2: Edit Video (Judul, Kategori, Bahasa, Lokasi)
+                // Tombol 2: Edit Video (Judul, Kategori 1-2, Bahasa, Lokasi)
                 IconButton(
                   icon: const Icon(Icons.edit_note_rounded, color: Colors.orangeAccent, size: 26),
                   tooltip: t('Edit Video Info', 'Edit Info Video'),
@@ -729,7 +741,7 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
 
 //No ke-7....................................................................//
 //EDIT DIALOG, LOCATION PICKER, PREVIEW DIALOG & UTILITY HELPERS             //
-  // --- FORMULIR DIALOG EDIT VIDEO (JUDUL, KATEGORI, BAHASA, LOKASI) ---
+  // --- FORMULIR DIALOG EDIT VIDEO (JUDUL, 1-2 KATEGORI, BAHASA, LOKASI) ---
   void _showEditDialog(
     VideoMytubeModel video,
     String Function(String, String) t,
@@ -738,10 +750,12 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
   ) {
     final titleController = TextEditingController(text: video.title);
     
-    // Validasi nilai awal agar ada dalam daftar master
-    String selectedCategory = _categories.any((c) => c['en'] == video.category)
-        ? video.category
-        : _categories.first['en']!;
+    // [MULTI-KATEGORI 1-2]: Ambil dari video.categories atau fallback ke video.category
+    List<String> selectedCategories = List<String>.from(
+      video.categories.isNotEmpty
+          ? video.categories
+          : (video.category.trim().isNotEmpty ? [video.category.trim()] : ['Comedy & Funny']),
+    );
 
     String selectedLanguage = _languages.contains(video.language)
         ? video.language
@@ -842,37 +856,104 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
                   ),
                   const SizedBox(height: 12),
 
-                  // 2. Dropdown Kategori Video (17 Kategori)
-                  Text(
-                    t('Category', 'Kategori'),
-                    style: const TextStyle(color: Colors.white70, fontSize: 12.5, fontWeight: FontWeight.bold),
+                  // 2. Pemilih Kategori Video (Pilih 1 - 2 Kategori)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        t('Category (Select 1-2)', 'Kategori (Pilih 1-2)'),
+                        style: const TextStyle(color: Colors.white70, fontSize: 12.5, fontWeight: FontWeight.bold),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.amberAccent.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.amberAccent.withOpacity(0.3), width: 0.8),
+                        ),
+                        child: Text(
+                          '${selectedCategories.length}/2',
+                          style: const TextStyle(color: Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 6),
-                  DropdownButtonFormField<String>(
-                    value: selectedCategory,
-                    dropdownColor: const Color(0xFF1E1E24),
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: const Color(0xFF141418),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: Colors.white24),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 180),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF141418),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white24),
                     ),
-                    items: _categories.map((cat) {
-                      final label = isIndo ? cat['id']! : cat['en']!;
-                      return DropdownMenuItem<String>(
-                        value: cat['en']!,
-                        child: Text(label),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setDialogState(() => selectedCategory = val);
-                      }
-                    },
+                    child: SingleChildScrollView(
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: _categories.map((cat) {
+                          final catKey = cat['en']!;
+                          final catLabel = isIndo ? cat['id']! : cat['en']!;
+                          final isSelected = selectedCategories.contains(catKey);
+
+                          return ChoiceChip(
+                            label: Text(catLabel),
+                            labelStyle: TextStyle(
+                              color: isSelected ? Colors.black : Colors.white,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              fontSize: 11.5,
+                            ),
+                            selected: isSelected,
+                            selectedColor: Colors.amberAccent,
+                            backgroundColor: const Color(0xFF22222A),
+                            side: BorderSide(
+                              color: isSelected ? Colors.amberAccent : Colors.white24,
+                              width: 0.8,
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            onSelected: (selected) {
+                              setDialogState(() {
+                                if (selected) {
+                                  if (selectedCategories.length < 2) {
+                                    selectedCategories.add(catKey);
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          isIndo
+                                              ? 'Maksimal memilih 2 kategori.'
+                                              : 'Maximum 2 categories.',
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                        duration: const Duration(seconds: 2),
+                                      ),
+                                    );
+                                  }
+                                } else {
+                                  if (selectedCategories.length > 1) {
+                                    selectedCategories.remove(catKey);
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          isIndo
+                                              ? 'Minimal harus memilih 1 kategori.'
+                                              : 'At least 1 category must be selected.',
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                        duration: const Duration(seconds: 2),
+                                      ),
+                                    );
+                                  }
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 16),
 
@@ -1044,14 +1125,19 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
                           return;
                         }
 
-                        // Cek apakah ada perubahan nyata (termasuk lokasi)
+                        // Cek apakah ada perubahan nyata (termasuk lokasi & kategori ganda)
                         final isLocationUnchanged = setEquals(
                           selectedLocations.toSet(),
                           video.targetLocations.toSet(),
                         );
 
+                        final isCategoriesUnchanged = setEquals(
+                          selectedCategories.toSet(),
+                          (video.categories.isNotEmpty ? video.categories : [video.category]).toSet(),
+                        );
+
                         if (newTitle == video.title &&
-                            selectedCategory == video.category &&
+                            isCategoriesUnchanged &&
                             selectedLanguage == video.language &&
                             isLocationUnchanged) {
                           Navigator.of(ctx).pop();
@@ -1063,7 +1149,7 @@ class _HistoryContentScreenState extends ConsumerState<HistoryContentScreen>
                         await _submitEditVideo(
                           video: video,
                           newTitle: newTitle,
-                          newCategory: selectedCategory,
+                          newCategories: selectedCategories,
                           newLanguage: selectedLanguage,
                           newTargetLocations: selectedLocations,
                           isIndo: isIndo,

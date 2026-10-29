@@ -8,7 +8,7 @@ description: "Majiku — Proyek Flutter dengan integrasi Firestore dan Audio Tim
 publish_to: 'none' 
 
 # [MODIFIKASI] Versi dinaikkan untuk update rilis Play Store & penimpaan track lama
-version: 5.6.32+64
+version: 5.9.35+67
 
 environment:
   sdk: '>=3.2.6 <4.0.0'
